@@ -6,6 +6,8 @@
 let intakesData = [];
 let supabaseClient = null;
 let soundEnabled = true;
+let loyalPhones = new Set(); // Set of owner_phone strings that have registered > 1 times in database
+let duplicateIds = new Set(); // Set of record IDs that are duplicates (same phone, same day, same pet_name)
 
 // Date navigation state
 let viewDate = new Date(); // The date currently being viewed
@@ -14,6 +16,10 @@ let isAllDates = false; // true if showing all dates
 
 // Status filter state: 'all' | 'new' | 'done'
 let currentStatusFilter = 'all';
+
+// Pagination state variables
+let currentPage = 1;
+const itemsPerPage = 20;
 
 // DOM Elements
 const loadingSpinner = document.getElementById("loading-spinner");
@@ -79,8 +85,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // 4. Load initial entries
-    await fetchInitialIntakes();
+    // 4. Load loyal phone numbers and initial entries in parallel (speeds up initial page load!)
+    await Promise.all([
+        fetchLoyalPhones(),
+        fetchInitialIntakes()
+    ]);
 
     // 5. Subscribe to Supabase Realtime changes
     setupRealtimeSubscription();
@@ -115,6 +124,7 @@ async function fetchInitialIntakes() {
         if (error) throw error;
 
         intakesData = data || [];
+        currentPage = 1;
         calculateStatistics(intakesData);
         applyStatusFilter();
     } catch (e) {
@@ -122,6 +132,72 @@ async function fetchInitialIntakes() {
         showErrorState(`Không thể tải dữ liệu: ${e.message || e}`);
     } finally {
         loadingSpinner.style.display = "none";
+    }
+}
+
+// --- Fetch loyal phones (registered more than once in database) ---
+async function fetchLoyalPhones() {
+    if (!supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('pet_intakes')
+            .select('owner_phone');
+        if (error) throw error;
+
+        const counts = {};
+        if (data) {
+            data.forEach(r => {
+                if (r.owner_phone) {
+                    const phone = r.owner_phone.trim();
+                    counts[phone] = (counts[phone] || 0) + 1;
+                }
+            });
+        }
+
+        loyalPhones.clear();
+        for (const [phone, count] of Object.entries(counts)) {
+            if (count > 1) {
+                loyalPhones.add(phone);
+            }
+        }
+    } catch (e) {
+        console.error("GAIA Dashboard: Error fetching loyal phones:", e);
+    }
+}
+
+// --- Analyze duplicates in intakesData (same phone, same day, same pet name) ---
+function analyzeDuplicates() {
+    duplicateIds.clear();
+    const groups = {}; // key format: phone_date_petname -> array of ids
+
+    intakesData.forEach(record => {
+        if (!record.owner_phone || !record.pet_name) return;
+
+        const phone = record.owner_phone.trim();
+        const petName = record.pet_name.trim().toLowerCase();
+        
+        // Extract date part (YYYY-MM-DD) from created_at or date_signed
+        let dateStr = "";
+        if (record.created_at) {
+            dateStr = record.created_at.substring(0, 10);
+        } else if (record.date_signed) {
+            dateStr = record.date_signed.substring(0, 10);
+        }
+
+        if (!dateStr) return;
+
+        const key = `${phone}_${dateStr}_${petName}`;
+        if (!groups[key]) {
+            groups[key] = [];
+        }
+        groups[key].push(record.id);
+    });
+
+    // Mark IDs with group size > 1 as duplicates
+    for (const ids of Object.values(groups)) {
+        if (ids.length > 1) {
+            ids.forEach(id => duplicateIds.add(id));
+        }
     }
 }
 
@@ -174,7 +250,7 @@ function setupRealtimeSubscription() {
 }
 
 // --- Handle Incoming Realtime Entries ---
-function handleIncomingIntake(newRecord) {
+async function handleIncomingIntake(newRecord) {
     // Only show on the current viewed date
     const recDate = new Date(newRecord.created_at);
     const recDay = new Date(recDate); recDay.setHours(0, 0, 0, 0);
@@ -186,6 +262,9 @@ function handleIncomingIntake(newRecord) {
         if (!exists) {
             // Add to global state array at the beginning
             intakesData.unshift(newRecord);
+
+            // Update database-wide loyal phones list
+            await fetchLoyalPhones();
 
             // Calculate updated statistics
             calculateStatistics(intakesData);
@@ -239,10 +318,14 @@ function handleIncomingUpdate(updatedRecord) {
 }
 
 // --- Handle Incoming Realtime Deletions ---
-function handleIncomingDelete(oldRecord) {
+async function handleIncomingDelete(oldRecord) {
     const idx = intakesData.findIndex(r => r.id === oldRecord.id);
     if (idx !== -1) {
         intakesData.splice(idx, 1);
+
+        // Update database-wide loyal phones list
+        await fetchLoyalPhones();
+
         calculateStatistics(intakesData);
         applyStatusFilter();
         
@@ -305,6 +388,9 @@ function getPhotosArray(petPhotoString) {
 
 // --- Status Filter and Rendering ---
 function applyStatusFilter() {
+    // Analyze duplicates across full dataset before filtering/pagination
+    analyzeDuplicates();
+
     let filtered;
     if (currentStatusFilter === 'new') {
         filtered = intakesData.filter(r => !r.trang_thai || r.trang_thai === 'new');
@@ -313,7 +399,147 @@ function applyStatusFilter() {
     } else {
         filtered = intakesData;
     }
-    renderAllIntakes(filtered);
+
+    // Apply search filter if query exists (now integrated into the filter data flow)
+    const query = searchInput.value.toLowerCase().trim();
+    if (query) {
+        filtered = filtered.filter(record => 
+            (record.owner_name && record.owner_name.toLowerCase().includes(query)) ||
+            (record.owner_phone && record.owner_phone.toLowerCase().includes(query)) ||
+            (record.pet_name && record.pet_name.toLowerCase().includes(query)) ||
+            (record.pet_breed && record.pet_breed.toLowerCase().includes(query))
+        );
+    }
+
+    const totalItems = filtered.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+
+    // Safety check for currentPage bounds
+    if (currentPage > totalPages) {
+        currentPage = totalPages;
+    }
+    if (currentPage < 1) {
+        currentPage = 1;
+    }
+
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedItems = filtered.slice(startIndex, startIndex + itemsPerPage);
+
+    renderAllIntakes(paginatedItems);
+    renderPagination(totalItems);
+}
+
+// --- Pagination Renderer ---
+function renderPagination(totalItems) {
+    const container = document.getElementById("pagination-container");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    if (totalPages <= 1) {
+        // Hide pagination if only 1 page or empty
+        return;
+    }
+
+    // Previous Page Button
+    const prevBtn = document.createElement("button");
+    prevBtn.className = "pagination-btn pagination-btn-arrow";
+    prevBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>`;
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.addEventListener("click", () => {
+        if (currentPage > 1) {
+            currentPage--;
+            applyStatusFilter();
+            scrollToIntakesList();
+        }
+    });
+    container.appendChild(prevBtn);
+
+    // Page Numbers
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // First page and dots if startPage > 1
+    if (startPage > 1) {
+        const firstBtn = document.createElement("button");
+        firstBtn.className = `pagination-btn ${currentPage === 1 ? 'active' : ''}`;
+        firstBtn.textContent = "1";
+        firstBtn.addEventListener("click", () => {
+            currentPage = 1;
+            applyStatusFilter();
+            scrollToIntakesList();
+        });
+        container.appendChild(firstBtn);
+
+        if (startPage > 2) {
+            const dots = document.createElement("span");
+            dots.className = "pagination-dots";
+            dots.textContent = "...";
+            container.appendChild(dots);
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const btn = document.createElement("button");
+        btn.className = `pagination-btn ${currentPage === i ? 'active' : ''}`;
+        btn.textContent = i;
+        btn.addEventListener("click", () => {
+            currentPage = i;
+            applyStatusFilter();
+            scrollToIntakesList();
+        });
+        container.appendChild(btn);
+    }
+
+    // Last page and dots if endPage < totalPages
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const dots = document.createElement("span");
+            dots.className = "pagination-dots";
+            dots.textContent = "...";
+            container.appendChild(dots);
+        }
+
+        const lastBtn = document.createElement("button");
+        lastBtn.className = `pagination-btn ${currentPage === totalPages ? 'active' : ''}`;
+        lastBtn.textContent = totalPages;
+        lastBtn.addEventListener("click", () => {
+            currentPage = totalPages;
+            applyStatusFilter();
+            scrollToIntakesList();
+        });
+        container.appendChild(lastBtn);
+    }
+
+    // Next Page Button
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "pagination-btn pagination-btn-arrow";
+    nextBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.addEventListener("click", () => {
+        if (currentPage < totalPages) {
+            currentPage++;
+            applyStatusFilter();
+            scrollToIntakesList();
+        }
+    });
+    container.appendChild(nextBtn);
+}
+
+// Helper to scroll smoothly to the top of the intakes list when changing page
+function scrollToIntakesList() {
+    const listEl = document.getElementById("intakes-list");
+    if (listEl) {
+        const yOffset = -120; 
+        const y = listEl.getBoundingClientRect().top + window.pageYOffset + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+    }
 }
 
 // --- Rendering Intakes Cards ---
@@ -326,7 +552,11 @@ function renderAllIntakes(records) {
         // Context-aware empty state
         const h3 = noDataPlaceholder.querySelector("h3");
         const p = noDataPlaceholder.querySelector("p");
-        if (currentStatusFilter === 'new') {
+        const query = searchInput.value.toLowerCase().trim();
+        if (query) {
+            if (h3) h3.textContent = "Không tìm thấy kết quả phù hợp";
+            if (p) p.textContent = "Hãy kiểm tra lại từ khóa tìm kiếm của bạn.";
+        } else if (currentStatusFilter === 'new') {
             if (h3) h3.textContent = "Không có ca nào chưa xử lý";
             if (p) p.textContent = "Tất cả đã được đánh dấu xử lý!";
         } else if (currentStatusFilter === 'done') {
@@ -355,6 +585,28 @@ function createIntakeCard(record) {
     card.className = `intake-card ${isDone ? 'card-status-done' : 'card-status-new'}`;
     card.setAttribute("data-id", record.id);
     card.setAttribute("data-status", isDone ? 'done' : 'new');
+
+    // Loyal customer detection (only show for 'new' status, not 'done')
+    const isLoyal = record.owner_phone && loyalPhones.has(record.owner_phone.trim()) && (!record.trang_thai || record.trang_thai === 'new');
+    const loyalBadgeHTML = isLoyal 
+        ? `<span class="customer-loyal-badge" title="Khách hàng đã đăng ký nhiều lần">(Khách quen)</span>`
+        : ``;
+
+    // Duplicate detection
+    const isDuplicate = duplicateIds.has(record.id);
+    const duplicateHTML = isDuplicate
+        ? `<div class="duplicate-indicator-wrap">
+            <span class="duplicate-exclamation" title="Trùng số điện thoại, ngày đăng ký và tên thú cưng trong ngày">!</span>
+            <button class="btn-delete-duplicate" data-id="${record.id}" title="Xóa ca khai báo trùng lặp này">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            </button>
+           </div>`
+        : ``;
 
     // Parse time
     const localTimeStr = formatDateTime(record.created_at || record.date_signed);
@@ -406,8 +658,11 @@ function createIntakeCard(record) {
         ${coverHTML}
         <div class="card-body-wrap">
             <div class="card-top">
-                <div class="pet-details-brief">
-                    <h3>${escapeHtml(record.pet_name)}</h3>
+                <div class="pet-details-brief" style="width: 100%;">
+                    <div class="pet-name-row">
+                        <h3>${escapeHtml(record.pet_name)}</h3>
+                        ${duplicateHTML}
+                    </div>
                     <p class="pet-breed-tag">${escapeHtml(record.pet_breed)}</p>
                 </div>
                 <div class="card-top-right">
@@ -422,7 +677,7 @@ function createIntakeCard(record) {
                 </div>
                 <div class="owner-row">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="owner-icon"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                    <span>SĐT: <strong>${escapeHtml(record.owner_phone)}</strong></span>
+                    <span>SĐT: <strong>${escapeHtml(record.owner_phone)}</strong>${loyalBadgeHTML}</span>
                 </div>
             </div>
             <div class="card-bottom-tags">
@@ -436,9 +691,9 @@ function createIntakeCard(record) {
         </div>
     `;
 
-    // Click on card body (but NOT on the toggle button) triggers modal view popup
+    // Click on card body (but NOT on the toggle button or delete button) triggers modal view popup
     card.addEventListener("click", (e) => {
-        if (e.target.closest(".btn-toggle-status")) return; // Don't open modal on button click
+        if (e.target.closest(".btn-toggle-status") || e.target.closest(".btn-delete-duplicate")) return; // Don't open modal on button click
         openIntakeDetails(record);
     });
 
@@ -451,7 +706,89 @@ function createIntakeCard(record) {
         });
     }
 
+    // Delete duplicate button
+    const deleteDupBtn = card.querySelector(".btn-delete-duplicate");
+    if (deleteDupBtn) {
+        deleteDupBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            await deleteDuplicateRecord(record, deleteDupBtn);
+        });
+    }
+
     return card;
+}
+
+// --- Custom Confirm Modal Promise ---
+function showCustomConfirm(message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById("confirm-delete-modal");
+        const textEl = document.getElementById("confirm-delete-text");
+        const btnCancel = document.getElementById("btn-confirm-delete-cancel");
+        const btnOk = document.getElementById("btn-confirm-delete-ok");
+
+        if (!modal || !textEl || !btnCancel || !btnOk) {
+            resolve(confirm(message));
+            return;
+        }
+
+        textEl.textContent = message;
+        modal.classList.add("show");
+
+        const cleanUp = (value) => {
+            modal.classList.remove("show");
+            btnOk.removeEventListener("click", onOk);
+            btnCancel.removeEventListener("click", onCancel);
+            resolve(value);
+        };
+
+        const onOk = () => cleanUp(true);
+        const onCancel = () => cleanUp(false);
+
+        btnOk.addEventListener("click", onOk);
+        btnCancel.addEventListener("click", onCancel);
+
+        // Also clean up/cancel if clicked outside card (on overlay backdrop)
+        modal.onclick = (e) => {
+            if (e.target === modal) cleanUp(false);
+        };
+    });
+}
+
+// --- Delete Duplicate Record ---
+async function deleteDuplicateRecord(record, btnEl) {
+    const confirmMsg = `Bạn có chắc chắn muốn xóa vĩnh viễn ca khai báo trùng lặp này của bé ${record.pet_name} (SĐT: ${record.owner_phone}) không?`;
+    const isConfirmed = await showCustomConfirm(confirmMsg);
+    if (!isConfirmed) return;
+
+    // Disable button & show loading state
+    btnEl.disabled = true;
+    const originalHTML = btnEl.innerHTML;
+    btnEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 0.8s linear infinite;width:12px;height:12px"><circle cx="12" cy="12" r="10" stroke-dasharray="30" stroke-dashoffset="5"/></svg>`;
+
+    try {
+        if (supabaseClient) {
+            const { error } = await supabaseClient
+                .from('pet_intakes')
+                .delete()
+                .eq('id', record.id);
+            
+            if (error) throw error;
+        }
+
+        // Local fallback in case realtime delay or disconnect occurs
+        const idx = intakesData.findIndex(r => r.id === record.id);
+        if (idx !== -1) {
+            intakesData.splice(idx, 1);
+            await fetchLoyalPhones();
+            calculateStatistics(intakesData);
+            applyStatusFilter();
+        }
+    } catch (e) {
+        console.error('GAIA Dashboard: Error deleting duplicate:', e);
+        btnEl.disabled = false;
+        btnEl.innerHTML = originalHTML;
+        alert(`Lỗi khi xóa ca trùng lặp: ${e.message || e}`);
+    }
 }
 
 // --- Toggle Status (Mới ↔ Đã xử lý) ---
@@ -724,8 +1061,8 @@ function setupEventListeners() {
 
     // Realtime search bar dynamic filtering
     searchInput.addEventListener("input", () => {
-        const query = searchInput.value.toLowerCase().trim();
-        filterCards(query);
+        currentPage = 1;
+        applyStatusFilter();
     });
 
     // Close modal on pressing the Escape key
@@ -741,11 +1078,21 @@ function setupEventListeners() {
     if (prevBtn) prevBtn.addEventListener('click', () => navigateDate(-1));
     if (nextBtn) nextBtn.addEventListener('click', () => navigateDate(1));
 
-    // 'All Dates' button click handler
+    // 'All Dates' / 'Today' toggle button click handler
     const dateAllBtn = document.getElementById('date-all-btn');
     if (dateAllBtn) {
         dateAllBtn.addEventListener('click', () => {
-            isAllDates = true;
+            if (isAllDates) {
+                // If showing all, toggle back to Today
+                isAllDates = false;
+                viewDate = new Date();
+                viewDate.setHours(0, 0, 0, 0);
+                syncDatePickerInput();
+            } else {
+                // If showing specific date, toggle to All Dates
+                isAllDates = true;
+            }
+            currentPage = 1;
             updateDateDisplay();
             fetchInitialIntakes();
         });
@@ -754,10 +1101,8 @@ function setupEventListeners() {
     // Calendar picker: clicking the calendar icon opens native date picker
     const datePickerInput = document.getElementById('date-picker-input');
     if (datePickerInput) {
-        // Set max to today so future dates are grayed out in picker
         const todayISO = new Date().toISOString().split('T')[0];
-        datePickerInput.max = todayISO;
-        // Set initial value to today
+        // Set initial value to today (but allow future dates)
         datePickerInput.value = todayISO;
 
         datePickerInput.addEventListener('change', () => {
@@ -769,11 +1114,8 @@ function setupEventListeners() {
             const picked = new Date(y, m - 1, d);
             picked.setHours(0, 0, 0, 0);
 
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            if (picked.getTime() > today.getTime()) return; // Safety: no future
-
             viewDate = picked;
+            currentPage = 1;
             updateDateDisplay();
             fetchInitialIntakes();
         });
@@ -786,9 +1128,26 @@ function setupEventListeners() {
             document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             currentStatusFilter = tab.getAttribute('data-filter');
+            currentPage = 1;
             applyStatusFilter();
         });
     });
+
+    // Floating Back to Top Button
+    const backToTopBtn = document.getElementById("back-to-top-btn");
+    if (backToTopBtn) {
+        window.addEventListener("scroll", () => {
+            if (window.pageYOffset > 300) {
+                backToTopBtn.classList.add("show");
+            } else {
+                backToTopBtn.classList.remove("show");
+            }
+        });
+
+        backToTopBtn.addEventListener("click", () => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+    }
 
     // Clipboard Click-to-Copy event delegation
     detailsModal.addEventListener("click", (e) => {
@@ -840,38 +1199,10 @@ function showCopiedTooltip(button) {
     }, 1500);
 }
 
+// --- Search filtering helper ---
 function filterCards(query) {
-    const cards = intakesList.querySelectorAll(".intake-card");
-    let visibleCount = 0;
-
-    cards.forEach(card => {
-        const cardId = parseInt(card.getAttribute("data-id"));
-        const record = intakesData.find(item => item.id === cardId);
-
-        if (record) {
-            const matchesQuery =
-                record.owner_name.toLowerCase().includes(query) ||
-                record.owner_phone.toLowerCase().includes(query) ||
-                record.pet_name.toLowerCase().includes(query) ||
-                record.pet_breed.toLowerCase().includes(query);
-
-            if (matchesQuery) {
-                card.style.display = "flex";
-                visibleCount++;
-            } else {
-                card.style.display = "none";
-            }
-        }
-    });
-
-    // Manage placeholder visibility if zero matches found
-    if (visibleCount === 0 && intakesData.length > 0) {
-        noDataPlaceholder.style.display = "flex";
-        noDataPlaceholder.querySelector("h3").textContent = "Không tìm thấy kết quả phù hợp";
-        noDataPlaceholder.querySelector("p").textContent = "Hãy kiểm tra lại từ khóa tìm kiếm của bạn.";
-    } else if (intakesData.length > 0) {
-        noDataPlaceholder.style.display = "none";
-    }
+    currentPage = 1;
+    applyStatusFilter();
 }
 
 // --- Statistical Summary Calculations ---
@@ -894,8 +1225,15 @@ function updateDateDisplay() {
     today.setHours(0, 0, 0, 0);
     const isToday = viewDate.getTime() === today.getTime();
 
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateStr = viewDate.toLocaleDateString('vi-VN', options);
+    const isMobile = window.innerWidth <= 600;
+    const options = isMobile
+        ? { day: '2-digit', month: '2-digit', year: 'numeric' }
+        : { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+
+    let dateStr = viewDate.toLocaleDateString('vi-VN', options);
+    if (isMobile) {
+        dateStr = "Ngày " + dateStr;
+    }
     const statDateEl = document.getElementById('stat-date');
     const labelEl = document.getElementById('date-nav-label');
     const nextBtn = document.getElementById('date-next-btn');
@@ -905,8 +1243,10 @@ function updateDateDisplay() {
     if (allBtn) {
         if (isAllDates) {
             allBtn.classList.add('active');
+            allBtn.textContent = "Hôm nay";
         } else {
             allBtn.classList.remove('active');
+            allBtn.textContent = "Tất cả";
         }
     }
 
@@ -933,12 +1273,12 @@ function updateDateDisplay() {
         statDateEl.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
     if (labelEl) {
-        labelEl.textContent = isToday ? 'Hôm nay' : 'Ngày đã chọn';
+        labelEl.textContent = isToday ? 'Hôm nay' : (viewDate.getTime() > today.getTime() ? 'Kế hoạch tương lai' : 'Ngày đã chọn');
     }
-    // Disable next button if already at today
+    // Allow selecting future dates (do not disable nextBtn at today)
     if (nextBtn) {
-        nextBtn.disabled = isToday;
-        nextBtn.style.opacity = isToday ? '0.3' : '1';
+        nextBtn.disabled = false;
+        nextBtn.style.opacity = '1';
     }
     if (prevBtn) {
         prevBtn.disabled = false;
@@ -953,11 +1293,6 @@ function navigateDate(delta) {
 
     const newDate = new Date(viewDate);
     newDate.setDate(newDate.getDate() + delta);
-
-    // Don't allow navigation to future days
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (newDate.getTime() > today.getTime()) return;
 
     viewDate = newDate;
     updateDateDisplay();
