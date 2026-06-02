@@ -8,6 +8,7 @@ let supabaseClient = null;
 let soundEnabled = true;
 let loyalPhones = new Set(); // Set of owner_phone strings that have registered > 1 times in database
 let duplicateIds = new Set(); // Set of record IDs that are duplicates (same phone, same day, same pet_name)
+let activeIntakeRecord = null; // The record currently opened in the details modal
 
 // Date navigation state
 let viewDate = new Date(); // The date currently being viewed
@@ -828,6 +829,7 @@ async function toggleCardStatus(record, cardEl, btnEl) {
 
 // --- Open Detailed Modal View ---
 function openIntakeDetails(record) {
+    activeIntakeRecord = record;
     modalPatientId.textContent = `#ID-${record.id}`;
 
     // Owner Details
@@ -1054,9 +1056,67 @@ function setupEventListeners() {
         }
     });
 
-    // Native printing layout trigger
+    // PDF direct download trigger
     modalPrintBtn.addEventListener("click", () => {
-        window.print();
+        if (!activeIntakeRecord) return;
+        
+        const petName = activeIntakeRecord.pet_name || "Pet";
+        
+        // Format date: YYYY-MM-DD to DD-MM-YYYY
+        let rawDate = activeIntakeRecord.created_at || activeIntakeRecord.date_signed || new Date().toISOString();
+        if (rawDate.includes("T")) {
+            rawDate = rawDate.split("T")[0];
+        }
+        const dateParts = rawDate.split("-");
+        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
+        
+        const element = document.getElementById('print-form-container');
+        
+        // Show loading state
+        const originalText = modalPrintBtn.innerHTML;
+        modalPrintBtn.disabled = true;
+        modalPrintBtn.innerHTML = `<span>Đang tải...</span>`;
+        
+        // Temporarily display off-screen for html2pdf to render
+        element.style.setProperty('display', 'block', 'important');
+        element.style.position = 'absolute';
+        element.style.left = '-9999px';
+        element.style.top = '0';
+        element.style.width = '800px';
+        
+        const options = {
+            margin:       [15, 12, 15, 12],
+            filename:     `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, logging: false },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        
+        html2pdf().set(options).from(element).save().then(() => {
+            // Restore styles
+            element.style.display = '';
+            element.style.position = '';
+            element.style.left = '';
+            element.style.top = '';
+            element.style.width = '';
+            
+            modalPrintBtn.disabled = false;
+            modalPrintBtn.innerHTML = originalText;
+        }).catch(err => {
+            console.error("Direct PDF download failed, falling back to window.print():", err);
+            // Restore styles
+            element.style.display = '';
+            element.style.position = '';
+            element.style.left = '';
+            element.style.top = '';
+            element.style.width = '';
+            
+            modalPrintBtn.disabled = false;
+            modalPrintBtn.innerHTML = originalText;
+            
+            // Fallback
+            window.print();
+        });
     });
 
     // Realtime search bar dynamic filtering

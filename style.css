@@ -1415,3 +1415,64 @@ input, textarea, select, button {
     transform: translateY(0);
     opacity: 0.9;
 }
+
+/* --- Autofill Unknown Quick Buttons --- */
+.btn-autofill-unknown {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #ef4444;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 10;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: var(--transition-smooth);
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.08);
+}
+
+.btn-autofill-unknown:hover {
+    background-color: #fecaca;
+    border-color: #ef4444;
+    transform: translateY(-50%) scale(1.05);
+}
+
+.btn-autofill-unknown:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+/* Adjust position for Textareas */
+.input-group textarea ~ .btn-autofill-unknown {
+    top: 24px;
+    transform: none;
+}
+
+.input-group textarea ~ .btn-autofill-unknown:hover {
+    transform: scale(1.05);
+}
+
+.input-group textarea ~ .btn-autofill-unknown:active {
+    transform: scale(0.95);
+}
+
+/* Show only when the input placeholder is shown (empty state) */
+.input-group input:placeholder-shown ~ .btn-autofill-unknown,
+.input-group textarea:placeholder-shown ~ .btn-autofill-unknown {
+    display: flex;
+}
+
+/* Photo Upload Invalid Border */
+.input-photo-group.invalid .photo-upload-box {
+    border-color: var(--error) !important;
+    background-color: rgba(239, 68, 68, 0.02) !important;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15) !important;
+}
+

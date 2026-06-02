@@ -261,6 +261,7 @@
                                     <!-- Dynamic previews injected via JS -->
                                 </div>
                             </div>
+                            <span class="error-msg" id="photo-error-msg" style="display: none;">Vui lòng tải lên ít nhất 1 hình ảnh thú cưng</span>
                         </div>
                     </div>
                 </div>
@@ -378,29 +379,35 @@
 
                         <!-- Medical History -->
                         <div class="input-group">
-                            <textarea id="medical-history" name="medicalHistory" placeholder=" " rows="2"></textarea>
+                            <textarea id="medical-history" name="medicalHistory" required placeholder=" " rows="2"></textarea>
                             <label for="medical-history">
                                 <span class="label-primary" data-key="label_medical_history">Các vấn đề sức khoẻ</span>
                                 <span class="label-sub">Medical History | 既往歴</span>
                             </label>
+                            <button type="button" class="btn-autofill-unknown" tabindex="-1">✗ <span data-key="choice_unknown">Không rõ</span></button>
+                            <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
                         </div>
 
                         <!-- Allergies -->
                         <div class="input-group">
-                            <textarea id="allergies" name="allergies" placeholder=" " rows="2"></textarea>
+                            <textarea id="allergies" name="allergies" required placeholder=" " rows="2"></textarea>
                             <label for="allergies">
                                 <span class="label-primary" data-key="label_allergies">Dị ứng (thức ăn / thuốc)</span>
                                 <span class="label-sub">Allergies (Food / Medicine) | アレルギー・食べ物・薬</span>
                             </label>
+                            <button type="button" class="btn-autofill-unknown" tabindex="-1">✗ <span data-key="choice_unknown">Không rõ</span></button>
+                            <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
                         </div>
 
                         <!-- Current Medications -->
                         <div class="input-group">
-                            <textarea id="current-meds" name="currentMeds" placeholder=" " rows="2"></textarea>
+                            <textarea id="current-meds" name="currentMeds" required placeholder=" " rows="2"></textarea>
                             <label for="current-meds">
                                 <span class="label-primary" data-key="label_current_meds">Thuốc / Thực phẩm bổ sung đang dùng</span>
                                 <span class="label-sub">Current meds/supplements | 現在服用中の薬</span>
                             </label>
+                            <button type="button" class="btn-autofill-unknown" tabindex="-1">✗ <span data-key="choice_unknown">Không rõ</span></button>
+                            <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
                         </div>
 
                         <!-- Daily Diet -->
@@ -803,6 +810,8 @@
 
     <!-- Supabase CDN Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- html2pdf.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <!-- Cấu hình môi trường -->
     <script src="env.js"></script>
     <!-- Script JS -->

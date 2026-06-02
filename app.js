@@ -52,7 +52,8 @@ const translations = {
         error_required: "Vui lòng điền thông tin này",
         error_phone: "Số điện thoại không hợp lệ",
         error_consent: "Bạn cần đồng ý với điều khoản này",
-        error_signature: "Vui lòng ký tên của bạn"
+        error_signature: "Vui lòng ký tên của bạn",
+        error_photo_required: "Vui lòng tải lên ít nhất 1 hình ảnh thú cưng"
     },
     en: {
         title: "Owner & Pet Profile",
@@ -104,7 +105,8 @@ const translations = {
         error_required: "This field is required",
         error_phone: "Invalid phone number format",
         error_consent: "You must agree to these terms",
-        error_signature: "Your signature is required"
+        error_signature: "Your signature is required",
+        error_photo_required: "Please upload at least 1 pet photo"
     },
     ja: {
         title: "ペット・飼い主様 登録",
@@ -156,7 +158,8 @@ const translations = {
         error_required: "この項目は必須です",
         error_phone: "電話番号が正しくありません",
         error_consent: "同意ボックスにチェックを入れてください",
-        error_signature: "署名を入力してください"
+        error_signature: "署名を入力してください",
+        error_photo_required: "ペットの写真を少なくとも1枚アップロードしてください"
     }
 };
 
@@ -352,6 +355,30 @@ function setupEventListeners() {
         });
     });
 
+    // Click delegation for Autofill "Không rõ" buttons (btn-autofill-unknown)
+    form.addEventListener("click", (e) => {
+        const btn = e.target.closest(".btn-autofill-unknown");
+        if (btn) {
+            e.preventDefault();
+            const inputGroup = btn.closest(".input-group");
+            if (inputGroup) {
+                const input = inputGroup.querySelector("input, textarea");
+                if (input) {
+                    // Get translated value for "Không rõ"
+                    const unknownText = translations[currentLang].choice_unknown;
+                    input.value = unknownText;
+                    
+                    // Trigger input and change events to save draft and clear validation error
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                    input.dispatchEvent(new Event("change", { bubbles: true }));
+                    
+                    // Trigger dynamic pulse effect
+                    triggerAutofillEffect(input);
+                }
+            }
+        }
+    });
+
     // Phone Number Autocomplete from past registrations (using 'input' for instant keystroke feedback!)
     const ownerPhoneInput = document.getElementById("owner-phone");
     if (ownerPhoneInput) {
@@ -432,7 +459,61 @@ function setupEventListeners() {
 
     modalDownloadBtn.addEventListener("click", () => {
         populatePrintForm();
-        window.print();
+        
+        const petName = document.getElementById("pet-name").value.trim() || "Pet";
+        
+        // Format date: YYYY-MM-DD to DD-MM-YYYY
+        const rawDate = document.getElementById("form-date").value || new Date().toISOString().split("T")[0];
+        const dateParts = rawDate.split("-");
+        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
+        
+        const element = document.getElementById('print-form-container');
+        
+        // Show loading state
+        const originalText = modalDownloadBtn.innerHTML;
+        modalDownloadBtn.disabled = true;
+        modalDownloadBtn.innerHTML = `<span>Đang tải...</span>`;
+        
+        // Temporarily display off-screen for html2pdf to render
+        element.style.setProperty('display', 'block', 'important');
+        element.style.position = 'absolute';
+        element.style.left = '-9999px';
+        element.style.top = '0';
+        element.style.width = '800px';
+        
+        const options = {
+            margin:       [15, 12, 15, 12],
+            filename:     `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, logging: false },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        
+        html2pdf().set(options).from(element).save().then(() => {
+            // Restore styles
+            element.style.display = '';
+            element.style.position = '';
+            element.style.left = '';
+            element.style.top = '';
+            element.style.width = '';
+            
+            modalDownloadBtn.disabled = false;
+            modalDownloadBtn.innerHTML = originalText;
+        }).catch(err => {
+            console.error("Direct PDF download failed, falling back to window.print():", err);
+            // Restore styles
+            element.style.display = '';
+            element.style.position = '';
+            element.style.left = '';
+            element.style.top = '';
+            element.style.width = '';
+            
+            modalDownloadBtn.disabled = false;
+            modalDownloadBtn.innerHTML = originalText;
+            
+            // Fallback
+            window.print();
+        });
     });
 
     function populatePrintForm() {
@@ -819,7 +900,24 @@ function validateStep(stepNum) {
         }
     });
 
-    // 3. Step 4 custom validation (Signature Canvas)
+    // 3. Step 2 custom validation (Pet Photos - at least 1 photo required)
+    if (stepNum === 2) {
+        const photoGroup = document.querySelector(".input-photo-group");
+        const photoError = document.getElementById("photo-error-msg");
+        if (petPhotosArray.length === 0) {
+            isValid = false;
+            if (photoGroup) photoGroup.classList.add("invalid");
+            if (photoError) {
+                photoError.textContent = translations[currentLang].error_photo_required || "Vui lòng tải lên ít nhất 1 hình ảnh";
+                photoError.style.display = "block";
+            }
+        } else {
+            if (photoGroup) photoGroup.classList.remove("invalid");
+            if (photoError) photoError.style.display = "none";
+        }
+    }
+
+    // 4. Step 4 custom validation (Signature Canvas)
     if (stepNum === 4) {
         if (!hasSigned) {
             isValid = false;
@@ -1332,6 +1430,14 @@ function renderPetPhotoPreviews() {
     if (!previewsGrid || !uploadBox) return;
 
     previewsGrid.innerHTML = "";
+
+    // Clear validation error instantly if photos exist
+    const photoGroup = document.querySelector(".input-photo-group");
+    const photoError = document.getElementById("photo-error-msg");
+    if (petPhotosArray.length > 0) {
+        if (photoGroup) photoGroup.classList.remove("invalid");
+        if (photoError) photoError.style.display = "none";
+    }
 
     if (petPhotosArray.length === 0) {
         previewsGrid.style.display = "none";
