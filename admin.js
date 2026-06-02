@@ -10,6 +10,7 @@ let soundEnabled = true;
 // Date navigation state
 let viewDate = new Date(); // The date currently being viewed
 viewDate.setHours(0, 0, 0, 0);
+let isAllDates = false; // true if showing all dates
 
 // Status filter state: 'all' | 'new' | 'done'
 let currentStatusFilter = 'all';
@@ -95,18 +96,21 @@ async function fetchInitialIntakes() {
         noDataPlaceholder.style.display = "none";
         intakesList.style.display = "none";
 
-        // Build date range: from 00:00:00 to 23:59:59 of viewDate
-        const dayStart = new Date(viewDate);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(viewDate);
-        dayEnd.setHours(23, 59, 59, 999);
+        let query = supabaseClient.from('pet_intakes').select('*');
 
-        const { data, error } = await supabaseClient
-            .from('pet_intakes')
-            .select('*')
-            .gte('created_at', dayStart.toISOString())
-            .lte('created_at', dayEnd.toISOString())
-            .order('created_at', { ascending: false });
+        if (!isAllDates) {
+            // Build date range: from 00:00:00 to 23:59:59 of viewDate
+            const dayStart = new Date(viewDate);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(viewDate);
+            dayEnd.setHours(23, 59, 59, 999);
+
+            query = query
+                .gte('created_at', dayStart.toISOString())
+                .lte('created_at', dayEnd.toISOString());
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) throw error;
 
@@ -137,6 +141,22 @@ function setupRealtimeSubscription() {
                     handleIncomingIntake(payload.new);
                 }
             )
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'pet_intakes' },
+                (payload) => {
+                    console.log("GAIA Dashboard: Realtime update received!", payload.new);
+                    handleIncomingUpdate(payload.new);
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: 'DELETE', schema: 'public', table: 'pet_intakes' },
+                (payload) => {
+                    console.log("GAIA Dashboard: Realtime delete received!", payload.old);
+                    handleIncomingDelete(payload.old);
+                }
+            )
             .subscribe((status) => {
                 console.log("GAIA Dashboard: Realtime subscription status:", status);
                 const indicator = document.querySelector(".status-indicator");
@@ -160,22 +180,81 @@ function handleIncomingIntake(newRecord) {
     const recDay = new Date(recDate); recDay.setHours(0, 0, 0, 0);
     const viewDay = new Date(viewDate); viewDay.setHours(0, 0, 0, 0);
 
-    if (recDay.getTime() === viewDay.getTime()) {
-        // Add to global state array at the beginning
-        intakesData.unshift(newRecord);
+    if (isAllDates || recDay.getTime() === viewDay.getTime()) {
+        // Avoid duplicates if we already fetched/added it
+        const exists = intakesData.some(r => r.id === newRecord.id);
+        if (!exists) {
+            // Add to global state array at the beginning
+            intakesData.unshift(newRecord);
 
-        // Calculate updated statistics
+            // Calculate updated statistics
+            calculateStatistics(intakesData);
+
+            // Re-apply current filter (which will also render)
+            applyStatusFilter();
+
+            // Play synthesized bell alert chime
+            playAlertPing();
+
+            // Toggle empty state placeholder off if active
+            noDataPlaceholder.style.display = "none";
+            intakesList.style.display = "grid";
+        }
+    }
+}
+
+// --- Handle Incoming Realtime Updates ---
+function handleIncomingUpdate(updatedRecord) {
+    const idx = intakesData.findIndex(r => r.id === updatedRecord.id);
+    if (idx !== -1) {
+        // Update local data with the updated record from database
+        intakesData[idx] = updatedRecord;
+        
+        // Recalculate statistics and re-apply current filter & render
         calculateStatistics(intakesData);
-
-        // Re-apply current filter (which will also render)
         applyStatusFilter();
+        
+        // If details modal is open for this updated record, refresh the modal view
+        const detailsModal = document.getElementById("details-modal");
+        const modalPatientId = document.getElementById("modal-patient-id");
+        if (detailsModal && detailsModal.classList.contains("show") && modalPatientId) {
+            const currentModalId = modalPatientId.textContent.replace("#ID-", "");
+            if (parseInt(currentModalId) === updatedRecord.id) {
+                // Refresh modal with new data
+                openIntakeDetails(updatedRecord);
+            }
+        }
+    } else {
+        // If it's a new record or updated record that fits our current date but we don't have it yet
+        const recDate = new Date(updatedRecord.created_at);
+        const recDay = new Date(recDate); recDay.setHours(0, 0, 0, 0);
+        const viewDay = new Date(viewDate); viewDay.setHours(0, 0, 0, 0);
 
-        // Play synthesized bell alert chime
-        playAlertPing();
+        if (isAllDates || recDay.getTime() === viewDay.getTime()) {
+            intakesData.unshift(updatedRecord);
+            calculateStatistics(intakesData);
+            applyStatusFilter();
+        }
+    }
+}
 
-        // Toggle empty state placeholder off if active
-        noDataPlaceholder.style.display = "none";
-        intakesList.style.display = "grid";
+// --- Handle Incoming Realtime Deletions ---
+function handleIncomingDelete(oldRecord) {
+    const idx = intakesData.findIndex(r => r.id === oldRecord.id);
+    if (idx !== -1) {
+        intakesData.splice(idx, 1);
+        calculateStatistics(intakesData);
+        applyStatusFilter();
+        
+        // Close modal if deleted record was being viewed
+        const detailsModal = document.getElementById("details-modal");
+        const modalPatientId = document.getElementById("modal-patient-id");
+        if (detailsModal && detailsModal.classList.contains("show") && modalPatientId) {
+            const currentModalId = modalPatientId.textContent.replace("#ID-", "");
+            if (parseInt(currentModalId) === oldRecord.id) {
+                detailsModal.classList.remove("show");
+            }
+        }
     }
 }
 
@@ -662,6 +741,16 @@ function setupEventListeners() {
     if (prevBtn) prevBtn.addEventListener('click', () => navigateDate(-1));
     if (nextBtn) nextBtn.addEventListener('click', () => navigateDate(1));
 
+    // 'All Dates' button click handler
+    const dateAllBtn = document.getElementById('date-all-btn');
+    if (dateAllBtn) {
+        dateAllBtn.addEventListener('click', () => {
+            isAllDates = true;
+            updateDateDisplay();
+            fetchInitialIntakes();
+        });
+    }
+
     // Calendar picker: clicking the calendar icon opens native date picker
     const datePickerInput = document.getElementById('date-picker-input');
     if (datePickerInput) {
@@ -674,6 +763,7 @@ function setupEventListeners() {
         datePickerInput.addEventListener('change', () => {
             const val = datePickerInput.value; // 'YYYY-MM-DD'
             if (!val) return;
+            isAllDates = false;
             // Parse as local date (avoid UTC shift)
             const [y, m, d] = val.split('-').map(Number);
             const picked = new Date(y, m - 1, d);
@@ -809,6 +899,34 @@ function updateDateDisplay() {
     const statDateEl = document.getElementById('stat-date');
     const labelEl = document.getElementById('date-nav-label');
     const nextBtn = document.getElementById('date-next-btn');
+    const prevBtn = document.getElementById('date-prev-btn');
+    const allBtn = document.getElementById('date-all-btn');
+
+    if (allBtn) {
+        if (isAllDates) {
+            allBtn.classList.add('active');
+        } else {
+            allBtn.classList.remove('active');
+        }
+    }
+
+    if (isAllDates) {
+        if (statDateEl) {
+            statDateEl.textContent = "Tất cả các ngày";
+        }
+        if (labelEl) {
+            labelEl.textContent = "Tất cả thời gian";
+        }
+        if (nextBtn) {
+            nextBtn.disabled = true;
+            nextBtn.style.opacity = '0.3';
+        }
+        if (prevBtn) {
+            prevBtn.disabled = false;
+            prevBtn.style.opacity = '1';
+        }
+        return;
+    }
 
     if (statDateEl) {
         // Capitalize first letter
@@ -822,9 +940,17 @@ function updateDateDisplay() {
         nextBtn.disabled = isToday;
         nextBtn.style.opacity = isToday ? '0.3' : '1';
     }
+    if (prevBtn) {
+        prevBtn.disabled = false;
+        prevBtn.style.opacity = '1';
+    }
 }
 
 function navigateDate(delta) {
+    if (isAllDates) {
+        isAllDates = false;
+    }
+
     const newDate = new Date(viewDate);
     newDate.setDate(newDate.getDate() + delta);
 
@@ -859,7 +985,12 @@ function formatDateTime(isoString) {
     if (!isoString) return "-";
     try {
         const date = new Date(isoString);
-        return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${hours}:${minutes} - ${day}/${month}/${year}`;
     } catch (e) {
         return "-";
     }
