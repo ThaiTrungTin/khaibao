@@ -477,15 +477,16 @@ function setupEventListeners() {
         // Temporarily display off-screen for html2pdf to render
         element.style.setProperty('display', 'block', 'important');
         element.style.position = 'absolute';
-        element.style.left = '-9999px';
+        element.style.left = '0';
         element.style.top = '0';
+        element.style.zIndex = '-9999';
         element.style.width = '800px';
         
         const options = {
             margin:       [15, 12, 15, 12],
             filename:     `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, logging: false },
+            html2canvas:  { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0 },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         
@@ -495,6 +496,7 @@ function setupEventListeners() {
             element.style.position = '';
             element.style.left = '';
             element.style.top = '';
+            element.style.zIndex = '';
             element.style.width = '';
             
             modalDownloadBtn.disabled = false;
@@ -506,6 +508,7 @@ function setupEventListeners() {
             element.style.position = '';
             element.style.left = '';
             element.style.top = '';
+            element.style.zIndex = '';
             element.style.width = '';
             
             modalDownloadBtn.disabled = false;
