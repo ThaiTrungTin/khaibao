@@ -459,69 +459,7 @@ function setupEventListeners() {
 
     modalDownloadBtn.addEventListener("click", () => {
         populatePrintForm();
-        
-        const petName = document.getElementById("pet-name").value.trim() || "Pet";
-        
-        // Format date: YYYY-MM-DD to DD-MM-YYYY
-        const rawDate = document.getElementById("form-date").value || new Date().toISOString().split("T")[0];
-        const dateParts = rawDate.split("-");
-        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
-        
-        const element = document.getElementById('print-form-container');
-        
-        // Show loading state
-        const originalText = modalDownloadBtn.innerHTML;
-        modalDownloadBtn.disabled = true;
-        modalDownloadBtn.innerHTML = `<span>Đang tải...</span>`;
-        
-        // Temporarily display off-screen and remove print-only class for html2pdf to render
-        element.classList.remove('print-only-layout');
-        element.style.setProperty('display', 'block', 'important');
-        element.style.position = 'absolute';
-        element.style.left = '0';
-        element.style.top = '0';
-        element.style.zIndex = '-9999';
-        element.style.width = '800px';
-        
-        setTimeout(() => {
-            const options = {
-                margin:       [15, 12, 15, 12],
-                filename:     `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0 },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-            
-            html2pdf().set(options).from(element).save().then(() => {
-                // Restore styles
-                element.classList.add('print-only-layout');
-                element.style.display = '';
-                element.style.position = '';
-                element.style.left = '';
-                element.style.top = '';
-                element.style.zIndex = '';
-                element.style.width = '';
-                
-                modalDownloadBtn.disabled = false;
-                modalDownloadBtn.innerHTML = originalText;
-            }).catch(err => {
-                console.error("Direct PDF download failed, falling back to window.print():", err);
-                // Restore styles
-                element.classList.add('print-only-layout');
-                element.style.display = '';
-                element.style.position = '';
-                element.style.left = '';
-                element.style.top = '';
-                element.style.zIndex = '';
-                element.style.width = '';
-                
-                modalDownloadBtn.disabled = false;
-                modalDownloadBtn.innerHTML = originalText;
-                
-                // Fallback
-                window.print();
-            });
-        }, 150);
+        window.print();
     });
 
     function populatePrintForm() {

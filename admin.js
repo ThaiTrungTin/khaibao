@@ -1059,72 +1059,7 @@ function setupEventListeners() {
     // PDF direct download trigger
     modalPrintBtn.addEventListener("click", () => {
         if (!activeIntakeRecord) return;
-        
-        const petName = activeIntakeRecord.pet_name || "Pet";
-        
-        // Format date: YYYY-MM-DD to DD-MM-YYYY
-        let rawDate = activeIntakeRecord.created_at || activeIntakeRecord.date_signed || new Date().toISOString();
-        if (rawDate.includes("T")) {
-            rawDate = rawDate.split("T")[0];
-        }
-        const dateParts = rawDate.split("-");
-        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
-        
-        const element = document.getElementById('print-form-container');
-        
-        // Show loading state
-        const originalText = modalPrintBtn.innerHTML;
-        modalPrintBtn.disabled = true;
-        modalPrintBtn.innerHTML = `<span>Đang tải...</span>`;
-        
-        // Temporarily display off-screen and remove print-only class for html2pdf to render
-        element.classList.remove('print-only-layout');
-        element.style.setProperty('display', 'block', 'important');
-        element.style.position = 'absolute';
-        element.style.left = '0';
-        element.style.top = '0';
-        element.style.zIndex = '-9999';
-        element.style.width = '800px';
-        
-        setTimeout(() => {
-            const options = {
-                margin:       [15, 12, 15, 12],
-                filename:     `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0 },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-            
-            html2pdf().set(options).from(element).save().then(() => {
-                // Restore styles
-                element.classList.add('print-only-layout');
-                element.style.display = '';
-                element.style.position = '';
-                element.style.left = '';
-                element.style.top = '';
-                element.style.zIndex = '';
-                element.style.width = '';
-                
-                modalPrintBtn.disabled = false;
-                modalPrintBtn.innerHTML = originalText;
-            }).catch(err => {
-                console.error("Direct PDF download failed, falling back to window.print():", err);
-                // Restore styles
-                element.classList.add('print-only-layout');
-                element.style.display = '';
-                element.style.position = '';
-                element.style.left = '';
-                element.style.top = '';
-                element.style.zIndex = '';
-                element.style.width = '';
-                
-                modalPrintBtn.disabled = false;
-                modalPrintBtn.innerHTML = originalText;
-                
-                // Fallback
-                window.print();
-            });
-        }, 150);
+        window.print();
     });
 
     // Realtime search bar dynamic filtering
