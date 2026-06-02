@@ -459,7 +459,19 @@ function setupEventListeners() {
 
     modalDownloadBtn.addEventListener("click", () => {
         populatePrintForm();
+        
+        const petName = document.getElementById("pet-name").value.trim() || "Pet";
+        const rawDate = document.getElementById("form-date").value || new Date().toISOString().split("T")[0];
+        const dateParts = rawDate.split("-");
+        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
+        
+        const originalTitle = document.title;
+        document.title = `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City`;
+        
         window.print();
+        
+        // Restore title after print dialog closes
+        setTimeout(() => { document.title = originalTitle; }, 1000);
     });
 
     function populatePrintForm() {

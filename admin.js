@@ -1059,7 +1059,20 @@ function setupEventListeners() {
     // PDF direct download trigger
     modalPrintBtn.addEventListener("click", () => {
         if (!activeIntakeRecord) return;
+        
+        const petName = activeIntakeRecord.pet_name || "Pet";
+        let rawDate = activeIntakeRecord.created_at || activeIntakeRecord.date_signed || new Date().toISOString();
+        if (rawDate.includes("T")) rawDate = rawDate.split("T")[0];
+        const dateParts = rawDate.split("-");
+        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
+        
+        const originalTitle = document.title;
+        document.title = `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City`;
+        
         window.print();
+        
+        // Restore title after print dialog closes
+        setTimeout(() => { document.title = originalTitle; }, 1000);
     });
 
     // Realtime search bar dynamic filtering
