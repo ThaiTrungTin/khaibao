@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GAIA Animal Hospital Ho Chi Minh City - Form G22</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Link CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Floating Leaves Decorative Elements -->
+        <div class="leaf leaf-1"></div>
+        <div class="leaf leaf-2"></div>
+
+        <!-- Header Area -->
+        <header class="app-header">
+            <div class="header-banner-area">
+                <img src="Form - G22_files/image002.png" alt="GAIA Animal Hospital" class="gaia-header-banner">
+            </div>
+            
+            <div class="header-top" style="justify-content: flex-end; margin-bottom: 12px;">
+                <!-- Language Selector -->
+                <div class="lang-selector">
+                    <button class="lang-btn active" data-lang="vi">VI</button>
+                    <button class="lang-btn" data-lang="en">EN</button>
+                    <button class="lang-btn" data-lang="ja">JA</button>
+                </div>
+            </div>
+
+            <!-- Form Title -->
+            <div class="header-title-section">
+                <h1 id="main-title" data-key="title">Thông tin Chủ & Thú cưng</h1>
+                <p id="sub-title" class="sub-translation" data-key="subtitle">Owner & Pet Information | 飼い主様・ペット情報</p>
+            </div>
+
+            
+            <!-- Progress Tracker -->
+            <div class="progress-container">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: 25%;"></div>
+                </div>
+                <div class="steps-indicator">
+                    <div class="step-dot active" data-step="1">
+                        <span class="step-num">1</span>
+                        <span class="step-label" data-key="step_owner">Chủ nuôi</span>
+                    </div>
+                    <div class="step-dot" data-step="2">
+                        <span class="step-num">2</span>
+                        <span class="step-label" data-key="step_pet">Thú cưng</span>
+                    </div>
+                    <div class="step-dot" data-step="3">
+                        <span class="step-num">3</span>
+                        <span class="step-label" data-key="step_medical">Y tế</span>
+                    </div>
+                    <div class="step-dot" data-step="4">
+                        <span class="step-num">4</span>
+                        <span class="step-label" data-key="step_confirm">Xác nhận</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Form Element -->
+        <form id="gaia-intake-form" class="form-wizard" novalidate>
+            
+            <!-- HONEYPOT ANTI-SPAM: Hidden field - real users never fill this, bots do -->
+            <div style="position:absolute;left:-9999px;top:-9999px;opacity:0;pointer-events:none;height:0;overflow:hidden;" aria-hidden="true" tabindex="-1">
+                <label for="hp-website">Website (do not fill this)</label>
+                <input type="text" id="hp-website" name="website" autocomplete="off" tabindex="-1">
+                <input type="text" id="hp-email" name="email_address" autocomplete="off" tabindex="-1">
+            </div>
+
+            <!-- STEP 1: OWNER INFORMATION -->
+            <section class="wizard-step active" id="step-1">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="card-header-icon"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        </div>
+                        <div>
+                            <h2 data-key="section_owner">Thông tin Chủ thú cưng</h2>
+                            <p class="section-sub">Owner Information | 飼い主様情報</p>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Phone Number -->
+                        <div class="input-group">
+                            <input type="tel" id="owner-phone" name="ownerPhone" required placeholder=" " pattern="[0-9\s\-\+\(\)]{9,15}">
+                            <label for="owner-phone">
+                                <span class="label-primary" data-key="label_owner_phone">Số điện thoại</span>
+                                <span class="label-sub">Phone Number | 電話番号</span>
+                            </label>
+                            <span class="error-msg" data-key="error_phone">Số điện thoại không hợp lệ</span>
+                        </div>
+
+                        <!-- Owner Name -->
+                        <div class="input-group">
+                            <input type="text" id="owner-name" name="ownerName" required placeholder=" ">
+                            <label for="owner-name">
+                                <span class="label-primary" data-key="label_owner_name">Tên chủ thú cưng</span>
+                                <span class="label-sub">Owner Name | 飼い主名</span>
+                            </label>
+                            <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
+                        </div>
+
+                        <!-- Address -->
+                        <div class="input-group">
+                            <textarea id="owner-address" name="ownerAddress" required placeholder=" " rows="3"></textarea>
+                            <label for="owner-address">
+                                <span class="label-primary" data-key="label_owner_address">Địa chỉ</span>
+                                <span class="label-sub">Address | 住所</span>
+                            </label>
+                            <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 2: PET INFORMATION -->
+            <section class="wizard-step" id="step-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="card-header-icon">
+                                <path d="M12 13c-1.66 0-3 1.34-3 3 0 2 2 3.5 3 3.5s3-1.5 3-3.5c0-1.66-1.34-3-3-3z"/>
+                                <path d="M5 14c-.83 0-1.5.67-1.5 1.5S4.17 17 5 17s1.5-.67 1.5-1.5S5.83 14 5 14z"/>
+                                <path d="M19 14c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5S19.83 14 19 14z"/>
+                                <circle cx="8" cy="8" r="1.5"/>
+                                <circle cx="16" cy="8" r="1.5"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 data-key="section_pet">Thông tin Thú cưng</h2>
+                            <p class="section-sub">Pet Information | ペット情報</p>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Pet Name -->
+                        <div class="input-group">
+                            <input type="text" id="pet-name" name="petName" required placeholder=" ">
+                            <label for="pet-name">
+                                <span class="label-primary" data-key="label_pet_name">Tên thú cưng</span>
+                                <span class="label-sub">Pet's Name | ペット名</span>
+                            </label>
+                            <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
+                        </div>
+
+                        <!-- Species/Breed -->
+                        <div class="input-group">
+                            <input type="text" id="pet-breed" name="petBreed" required placeholder=" ">
+                            <label for="pet-breed">
+                                <span class="label-primary" data-key="label_pet_breed">Loài / Giống</span>
+                                <span class="label-sub">Species/Breed | 種類・品種</span>
+                            </label>
+                            <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
+                        </div>
+
+                        <!-- Two Column Layout: Weight and Age -->
+                        <div class="form-grid-2">
+                            <!-- Weight -->
+                            <div class="input-group">
+                                <input type="number" step="0.1" min="0" id="pet-weight" name="petWeight" required placeholder=" ">
+                                <label for="pet-weight">
+                                    <span class="label-primary" data-key="label_pet_weight">Cân nặng (kg)</span>
+                                    <span class="label-sub">Weight | 体重</span>
+                                </label>
+                                <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
+                            </div>
+
+                            <!-- Age -->
+                            <div class="input-group">
+                                <input type="number" step="0.1" min="0" id="pet-age" name="petAge" required placeholder=" ">
+                                <label for="pet-age">
+                                    <span class="label-primary">Tuổi (năm)</span>
+                                    <span class="label-sub">Age (years) | 年齢</span>
+                                </label>
+                                <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
+                            </div>
+                        </div>
+
+                        <!-- Gender Status -->
+                        <div class="segmented-control-group">
+                            <span class="control-group-title">
+                                <span class="label-primary">Giới tính</span>
+                                <span class="label-sub">Gender | 性別</span>
+                            </span>
+                            <div class="segmented-control">
+                                <input type="radio" id="gender-male" name="petGender" value="Đực" required>
+                                <label for="gender-male">
+                                    <span class="btn-text-primary">Đực</span>
+                                    <span class="btn-text-sub">Male | オス</span>
+                                </label>
+
+                                <input type="radio" id="gender-female" name="petGender" value="Cái">
+                                <label for="gender-female">
+                                    <span class="btn-text-primary">Cái</span>
+                                    <span class="btn-text-sub">Female | メス</span>
+                                </label>
+
+                                <input type="radio" id="gender-other" name="petGender" value="Khác">
+                                <label for="gender-other">
+                                    <span class="btn-text-primary">Khác</span>
+                                    <span class="btn-text-sub">Other | その他</span>
+                                </label>
+                            </div>
+                            <span class="error-msg" style="display: none; font-size: 0.75rem; font-weight: 600; color: var(--error); margin-top: 4px; padding-left: 8px;">Vui lòng chọn giới tính</span>
+                        </div>
+
+                        <!-- Neutered Status -->
+                        <div class="segmented-control-group">
+                            <span class="control-group-title">
+                                <span class="label-primary" data-key="title_neutered">Trạng thái triệt sản</span>
+                                <span class="label-sub">Neutered Status | 去勢・避妊</span>
+                            </span>
+                            <div class="segmented-control">
+                                <input type="radio" id="neutered-yes" name="petNeutered" value="yes" required>
+                                <label for="neutered-yes">
+                                    <span class="btn-text-primary" data-key="option_neutered_yes">Đã triệt sản</span>
+                                    <span class="btn-text-sub">Neutered | 去勢済み</span>
+                                </label>
+
+                                <input type="radio" id="neutered-no" name="petNeutered" value="no">
+                                <label for="neutered-no">
+                                    <span class="btn-text-primary" data-key="option_neutered_no">Chưa triệt sản</span>
+                                    <span class="btn-text-sub">Not Neutered | 未去勢</span>
+                                </label>
+                            </div>
+                            <span class="error-msg" style="display: none; font-size: 0.75rem; font-weight: 600; color: var(--error); margin-top: 4px; padding-left: 8px;">Vui lòng chọn trạng thái triệt sản</span>
+                        </div>
+
+                        <!-- Color/Markings -->
+                        <div class="input-group">
+                            <input type="text" id="pet-color" name="petColor" required placeholder=" ">
+                            <label for="pet-color">
+                                <span class="label-primary" data-key="label_pet_color">Màu sắc / Đặc điểm</span>
+                                <span class="label-sub">Color/Markings | 毛色・特徴</span>
+                            </label>
+                            <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
+                        </div>
+
+                        <!-- Pet Photo Upload -->
+                        <div class="input-photo-group">
+                            <span class="control-group-title">
+                                <span class="label-primary">Hình ảnh Thú cưng (Tối đa 5 ảnh)</span>
+                                <span class="label-sub">Pet Photos (Max 5) | ペットの写真</span>
+                            </span>
+                            <div class="photo-upload-container">
+                                <input type="file" id="pet-photo-input" accept="image/*" multiple style="display: none;">
+                                <div class="photo-upload-box" id="photo-upload-box" onclick="document.getElementById('pet-photo-input').click()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:32px; height:32px; color: var(--text-muted); opacity: 0.8;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                    <span style="font-size:0.85rem; font-weight:700; color: var(--text-muted); margin-top: 8px;">Chụp ảnh hoặc Chọn nhiều ảnh</span>
+                                </div>
+                                <div class="photo-previews-grid" id="photo-previews-grid" style="display: none; margin-top: 15px;">
+                                    <!-- Dynamic previews injected via JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 3: MEDICAL & DIET -->
+            <section class="wizard-step" id="step-3">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="card-header-icon"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                        </div>
+                        <div>
+                            <h2 data-key="section_medical">Y tế & Chế độ ăn</h2>
+                            <p class="section-sub">Medical & Diet | 医療と食事</p>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Core Vaccine -->
+                        <div class="radio-card-group">
+                            <span class="control-group-title">
+                                <span class="label-primary" data-key="label_vaccine_core">Vaccine bệnh (Core Vaccine)</span>
+                                <span class="label-sub">混合ワクチン</span>
+                            </span>
+                            <div class="radio-cards">
+                                <div class="radio-card">
+                                    <input type="radio" id="vac-core-yes" name="vaccineCore" value="yes" required>
+                                    <label for="vac-core-yes">
+                                        <span class="choice-title" data-key="choice_yes">Có</span>
+                                        <span class="choice-sub">Yes | 済</span>
+                                    </label>
+                                </div>
+                                <div class="radio-card">
+                                    <input type="radio" id="vac-core-no" name="vaccineCore" value="no">
+                                    <label for="vac-core-no">
+                                        <span class="choice-title" data-key="choice_no">Không</span>
+                                        <span class="choice-sub">No | 未</span>
+                                    </label>
+                                </div>
+                                <div class="radio-card">
+                                    <input type="radio" id="vac-core-unknown" name="vaccineCore" value="unknown">
+                                    <label for="vac-core-unknown">
+                                        <span class="choice-title" data-key="choice_unknown">Không rõ</span>
+                                        <span class="choice-sub">No info | 情報なし</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <span class="error-msg" style="display: none; font-size: 0.75rem; font-weight: 600; color: var(--error); margin-top: 4px; padding-left: 8px;">Vui lòng chọn thông tin vắc-xin bệnh</span>
+                        </div>
+
+                        <!-- Rabies Vaccine -->
+                        <div class="radio-card-group">
+                            <span class="control-group-title">
+                                <span class="label-primary" data-key="label_vaccine_rabies">Vaccine dại (Rabies Vaccine)</span>
+                                <span class="label-sub">狂犬病ワクチン</span>
+                            </span>
+                            <div class="radio-cards">
+                                <div class="radio-card">
+                                    <input type="radio" id="vac-rabies-yes" name="vaccineRabies" value="yes" required>
+                                    <label for="vac-rabies-yes">
+                                        <span class="choice-title" data-key="choice_yes">Có</span>
+                                        <span class="choice-sub">Yes | 済</span>
+                                    </label>
+                                </div>
+                                <div class="radio-card">
+                                    <input type="radio" id="vac-rabies-no" name="vaccineRabies" value="no">
+                                    <label for="vac-rabies-no">
+                                        <span class="choice-title" data-key="choice_no">Không</span>
+                                        <span class="choice-sub">No | 未</span>
+                                    </label>
+                                </div>
+                                <div class="radio-card">
+                                    <input type="radio" id="vac-rabies-unknown" name="vaccineRabies" value="unknown">
+                                    <label for="vac-rabies-unknown">
+                                        <span class="choice-title" data-key="choice_unknown">Không rõ</span>
+                                        <span class="choice-sub">No info | 情報なし</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <span class="error-msg" style="display: none; font-size: 0.75rem; font-weight: 600; color: var(--error); margin-top: 4px; padding-left: 8px;">Vui lòng chọn thông tin vắc-xin dại</span>
+                        </div>
+
+                        <!-- Parasite Prevention -->
+                        <div class="radio-card-group">
+                            <span class="control-group-title">
+                                <span class="label-primary" data-key="label_parasite">Phòng Ký sinh trùng</span>
+                                <span class="label-sub">Parasite Prevention | 寄生虫予防</span>
+                            </span>
+                            <div class="radio-cards">
+                                <div class="radio-card">
+                                    <input type="radio" id="para-yes" name="parasitePrev" value="yes" required>
+                                    <label for="para-yes">
+                                        <span class="choice-title" data-key="choice_yes">Có</span>
+                                        <span class="choice-sub">Yes | 済</span>
+                                    </label>
+                                </div>
+                                <div class="radio-card">
+                                    <input type="radio" id="para-no" name="parasitePrev" value="no">
+                                    <label for="para-no">
+                                        <span class="choice-title" data-key="choice_no">Không</span>
+                                        <span class="choice-sub">No | 未</span>
+                                    </label>
+                                </div>
+                                <div class="radio-card">
+                                    <input type="radio" id="para-unknown" name="parasitePrev" value="unknown">
+                                    <label for="para-unknown">
+                                        <span class="choice-title" data-key="choice_unknown">Không rõ</span>
+                                        <span class="choice-sub">No info | 情報なし</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <span class="error-msg" style="display: none; font-size: 0.75rem; font-weight: 600; color: var(--error); margin-top: 4px; padding-left: 8px;">Vui lòng chọn thông tin phòng ký sinh trùng</span>
+                        </div>
+
+                        <!-- Medical History -->
+                        <div class="input-group">
+                            <textarea id="medical-history" name="medicalHistory" placeholder=" " rows="2"></textarea>
+                            <label for="medical-history">
+                                <span class="label-primary" data-key="label_medical_history">Các vấn đề sức khoẻ</span>
+                                <span class="label-sub">Medical History | 既往歴</span>
+                            </label>
+                        </div>
+
+                        <!-- Allergies -->
+                        <div class="input-group">
+                            <textarea id="allergies" name="allergies" placeholder=" " rows="2"></textarea>
+                            <label for="allergies">
+                                <span class="label-primary" data-key="label_allergies">Dị ứng (thức ăn / thuốc)</span>
+                                <span class="label-sub">Allergies (Food / Medicine) | アレルギー・食べ物・薬</span>
+                            </label>
+                        </div>
+
+                        <!-- Current Medications -->
+                        <div class="input-group">
+                            <textarea id="current-meds" name="currentMeds" placeholder=" " rows="2"></textarea>
+                            <label for="current-meds">
+                                <span class="label-primary" data-key="label_current_meds">Thuốc / Thực phẩm bổ sung đang dùng</span>
+                                <span class="label-sub">Current meds/supplements | 現在服用中の薬</span>
+                            </label>
+                        </div>
+
+                        <!-- Daily Diet -->
+                        <div class="checkbox-card-group">
+                            <span class="control-group-title">
+                                <span class="label-primary" data-key="label_diet">Chế độ ăn hằng ngày</span>
+                                <span class="label-sub">Diet | 普段の食事</span>
+                            </span>
+                            <div class="checkbox-cards">
+                                <div class="checkbox-card">
+                                    <input type="checkbox" id="diet-wet" name="diet" value="wet">
+                                    <label for="diet-wet">
+                                        <span class="custom-checkbox"></span>
+                                        <span class="choice-title" data-key="diet_wet">Thức ăn ướt</span>
+                                        <span class="choice-sub">Wet food | ウェットフード</span>
+                                    </label>
+                                </div>
+                                <div class="checkbox-card">
+                                    <input type="checkbox" id="diet-dry" name="diet" value="dry">
+                                    <label for="diet-dry">
+                                        <span class="custom-checkbox"></span>
+                                        <span class="choice-title" data-key="diet_dry">Thức ăn khô</span>
+                                        <span class="choice-sub">Dry food | ドรายフード</span>
+                                    </label>
+                                </div>
+                                <div class="checkbox-card">
+                                    <input type="checkbox" id="diet-homemade" name="diet" value="homemade">
+                                    <label for="diet-homemade">
+                                        <span class="custom-checkbox"></span>
+                                        <span class="choice-title" data-key="diet_homemade">Thức ăn tự làm</span>
+                                        <span class="choice-sub">Homemade | 手作り食</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 4: DECLARATION & SIGNATURE -->
+            <section class="wizard-step" id="step-4">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="card-header-icon"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        </div>
+                        <div>
+                            <h2 data-key="section_confirm">Cam kết & Chữ ký</h2>
+                            <p class="section-sub">Declaration & Signature | 署名</p>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Declaration 1 -->
+                        <div class="consent-checkbox-wrap">
+                            <input type="checkbox" id="consent-accuracy" name="consentAccuracy" required>
+                            <label for="consent-accuracy">
+                                <span class="custom-checkbox"></span>
+                                <span class="consent-text">
+                                    <strong class="label-primary" data-key="consent_accuracy_text">Tôi xác nhận rằng các thông tin trên là hoàn toàn chính xác.</strong>
+                                    <span class="consent-sub">I confirm that the above information is accurate | 上記の内容が正確であることを確認します</span>
+                                </span>
+                            </label>
+                            <span class="error-msg" data-key="error_consent">Bạn cần xác nhận nội dung này</span>
+                        </div>
+
+                        <!-- Declaration 2 -->
+                        <div class="consent-checkbox-wrap">
+                            <input type="checkbox" id="consent-storage" name="consentStorage" required>
+                            <label for="consent-storage">
+                                <span class="custom-checkbox"></span>
+                                <span class="consent-text">
+                                    <strong class="label-primary" data-key="consent_storage_text">Tôi đồng ý để GAIA lưu trữ thông tin này (bao gồm cả nội dung ghi âm trao đổi chuyên môn) cho mục đích chăm sóc thú cưng và liên hệ.</strong>
+                                    <span class="consent-sub">I agree to allow GAIA to store this information (including recorded professional consultation content) for follow-up communication | GAIAが保存することに同意します</span>
+                                </span>
+                            </label>
+                            <span class="error-msg" data-key="error_consent">Bạn cần đồng ý với điều khoản này</span>
+                        </div>
+
+                        <!-- Interactive Signature Pad -->
+                        <div class="signature-pad-wrap">
+                            <span class="control-group-title">
+                                <span class="label-primary" data-key="label_signature">Chữ ký khách hàng</span>
+                                <span class="label-sub">Signature | 署名</span>
+                            </span>
+                            <div class="signature-canvas-container">
+                                <canvas id="signature-canvas"></canvas>
+                                <button type="button" id="clear-sig-btn" class="btn-clear-sig">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                                    <span data-key="btn_clear_signature">Xóa chữ ký</span>
+                                </button>
+                            </div>
+                            <span class="error-msg" id="sig-error-msg" data-key="error_signature">Vui lòng ký tên của bạn</span>
+                        </div>
+
+                        <!-- Date Picker -->
+                        <div class="input-group">
+                            <input type="date" id="form-date" name="formDate" required placeholder=" ">
+                            <label for="form-date">
+                                <span class="label-primary" data-key="label_date">Ngày ký</span>
+                                <span class="label-sub">Date | 日付</span>
+                            </label>
+                            <span class="error-msg" data-key="error_required">Vui lòng chọn ngày</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bottom Navigation Bar -->
+            <footer class="form-navigation">
+                <button type="button" id="prev-btn" class="nav-btn btn-secondary" style="display: none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><line x1="19" x2="5" y1="12" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    <span data-key="btn_prev">Quay lại</span>
+                </button>
+                <button type="button" id="next-btn" class="nav-btn btn-primary">
+                    <span data-key="btn_next">Tiếp tục</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><line x1="5" x2="19" y1="12" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                </button>
+                <button type="submit" id="submit-btn" class="nav-btn btn-success" style="display: none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span data-key="btn_submit">Gửi thông tin</span>
+                </button>
+            </footer>
+        </form>
+    </div>
+
+    <!-- Success Modal Dialog -->
+    <div id="success-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="success-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="checkmark-icon"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <h2 data-key="success_title">Gửi thành công!</h2>
+            <p id="success-desc" data-key="success_desc">Cảm ơn bạn. Thông tin của bạn đã được tiếp nhận thành công tại hệ thống GAIA Animal Hospital Ho Chi Minh City.</p>
+            <div class="modal-actions">
+                <button type="button" id="modal-download-btn" class="modal-btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+                    <span data-key="btn_download_pdf">Tải file PDF</span>
+                </button>
+                <button type="button" id="modal-close-btn" class="modal-btn btn-secondary">
+                    <span data-key="btn_close">Đóng</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dedicated High-Fidelity Print Template (Hidden on screen, shown in print) -->
+    <div id="print-form-container" class="print-only-layout">
+        <!-- Brand Header -->
+        <div class="print-brand-header">
+            <img src="Form - G22_files/image002.png" alt="GAIA Logo" class="print-brand-logo">
+        </div>
+        
+        <table class="print-table" style="width: 100%; border-collapse: collapse; border: 1.5px solid #000000; font-family: 'Times New Roman', Times, serif;">
+            <!-- Section 1: Owner Info Header -->
+            <tr class="table-header-row">
+                <td colspan="9" style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
+                    Thông tin Chủ thú cưng <span style="font-size: 10pt; font-weight: normal; font-style: italic;">(Owner Information)(飼い主様情報)</span>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="6" style="width: 60%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Tên chủ thú cưng:</strong> <span id="print-owner-name" style="font-weight: bold; font-size: 11.5pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Owner)(飼い主)</div>
+                </td>
+                <td colspan="3" style="width: 40%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Số điện thoại:</strong> <span id="print-owner-phone" style="font-weight: bold; font-size: 11.5pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Phone number)(電話番号)</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Địa chỉ:</strong> <span id="print-owner-address" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Address)(住所)</div>
+                </td>
+            </tr>
+            
+            <!-- Section 2: Pet Info Header -->
+            <tr class="table-header-row">
+                <td colspan="9" style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
+                    Thông tin Thú cưng <span style="font-size: 10pt; font-weight: normal; font-style: italic;">(Pet Information)(ペット情報)</span>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="7" style="width: 63%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Tên thú cưng:</strong> <span id="print-pet-name" style="font-weight: bold; font-size: 11.5pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Pet's name)(ペット名)</div>
+                </td>
+                <td colspan="2" style="width: 37%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Cân nặng:</strong> <span id="print-pet-weight" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Weight)(体重)</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="5" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Tuổi/Giới tính:</strong> <span id="print-pet-age-gender" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Age/Gender)(年齢・性別)</div>
+                </td>
+                <td colspan="4" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                        <div>
+                            <span id="print-pet-neutered-yes" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Đã triệt sản</strong>
+                        </div>
+                        <div>
+                            <span id="print-pet-neutered-no" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Chưa triệt sản</strong>
+                        </div>
+                    </div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px; display: flex; justify-content: space-between;">
+                        <span>(Neutered)(去勢済み)</span>
+                        <span>(Not neutered)(未去勢)</span>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3" style="width: 42%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Loài/Giống:</strong> <span id="print-pet-breed" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Species/Breed)(種類・品種)</div>
+                </td>
+                <td colspan="6" style="width: 58%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Màu sắc/Đặc điểm:</strong> <span id="print-pet-color" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Color/Markings)(毛色・特徴)</div>
+                </td>
+            </tr>
+            
+            <!-- Section 3: Vaccines -->
+            <tr>
+                <td rowspan="2" colspan="1" style="width: 25%; vertical-align: middle; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Tiêm phòng vắc-xin:</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Vaccination)<br>(ワクチン接種)</div>
+                </td>
+                <td colspan="3" style="width: 25%; vertical-align: top; text-align: center; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Vaccine bệnh</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000;">(Core vaccine)</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000;">(混合ワクチン)</div>
+                </td>
+                <td colspan="5" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                        <div>
+                            <span id="print-vac-core-yes" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Có</strong>
+                        </div>
+                        <div>
+                            <span id="print-vac-core-no" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Không</strong>
+                        </div>
+                        <div>
+                            <span id="print-vac-core-unknown" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Không rõ</strong>
+                        </div>
+                    </div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px; display: flex; justify-content: space-between;">
+                        <span>(Yes)(済)</span>
+                        <span>(No)(未)</span>
+                        <span>(No info)(情報なし)</span>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3" style="width: 25%; vertical-align: top; text-align: center; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Vaccine dại</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000;">(Rabies vaccine)</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000;">(狂犬病ワクチン)</div>
+                </td>
+                <td colspan="5" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                        <div>
+                            <span id="print-vac-rabies-yes" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Có</strong>
+                        </div>
+                        <div>
+                            <span id="print-vac-rabies-no" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Không</strong>
+                        </div>
+                        <div>
+                            <span id="print-vac-rabies-unknown" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Không rõ</strong>
+                        </div>
+                    </div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px; display: flex; justify-content: space-between;">
+                        <span>(Yes)(済)</span>
+                        <span>(No)(未)</span>
+                        <span>(No info)(情報なし)</span>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="4" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Phòng Ký sinh trùng:</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Parasite prevention)(寄生虫予防)</div>
+                </td>
+                <td colspan="5" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                        <div>
+                            <span id="print-parasite-yes" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Có</strong>
+                        </div>
+                        <div>
+                            <span id="print-parasite-no" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Không</strong>
+                        </div>
+                        <div>
+                            <span id="print-parasite-unknown" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Không rõ</strong>
+                        </div>
+                    </div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px; display: flex; justify-content: space-between;">
+                        <span>(Yes)(済)</span>
+                        <span>(No)(未)</span>
+                        <span>(No info)(情報なし)</span>
+                    </div>
+                </td>
+            </tr>
+            
+            <!-- Section 4: Medical History -->
+            <tr>
+                <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Các vấn đề sức khoẻ:</strong>
+                    <div id="print-med-history" class="print-textarea-val" style="min-height: 45px; font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; padding: 4px 0; margin-top: 2px;">-</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Medical history)(既往歴)</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Dị ứng (thức ăn/thuốc):</strong>
+                    <div id="print-allergies" class="print-textarea-val" style="min-height: 45px; font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; padding: 4px 0; margin-top: 2px;">-</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Allergies/Food - Medicine)(アレルギー・食べ物・薬)</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Thuốc/Thực phẩm bổ sung đang sử dụng:</strong>
+                    <div id="print-meds" class="print-textarea-val" style="min-height: 45px; font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; padding: 4px 0; margin-top: 2px;">-</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Current medications/supplements)(現在服用中の薬・サプリメント)</div>
+                </td>
+            </tr>
+            
+            <!-- Section 5: Diet -->
+            <tr>
+                <td colspan="1" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Thức ăn hàng ngày:</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Diet)(普段の食事)</div>
+                </td>
+                <td colspan="4" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <span id="print-diet-wet" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Thức ăn ướt</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Wet food)(ウェットフード)</div>
+                </td>
+                <td colspan="3" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <span id="print-diet-dry" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Thức ăn khô</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Dry food)(ドライフード)</div>
+                </td>
+                <td colspan="1" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <span id="print-diet-homemade" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span> <strong>Thức ăn tự làm</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Homemade food)(手作り食)</div>
+                </td>
+            </tr>
+            
+            <!-- Section 6: Consent -->
+            <tr class="table-header-row">
+                <td colspan="9" style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
+                    Cam kết của khách hàng <span style="font-size: 10pt; font-weight: normal; font-style: italic;">(Customer Declaration)(ご署名)</span>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="9" style="padding: 12px 15px; vertical-align: top; border: 1px solid #000000;">
+                    <!-- Consent 1 -->
+                    <div style="margin-bottom: 12px; line-height: 1.4;">
+                        <span id="print-consent-accuracy" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px; vertical-align: middle;">☐</span>
+                        <strong style="font-size: 10.5pt; vertical-align: middle;">Tôi xác nhận rằng các thông tin trên là chính xác.</strong>
+                        <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-left: 24px; margin-top: 2px;">
+                            (I confirm that the above information is accurate)(上記の内容が正確であることを確認します)
+                        </div>
+                    </div>
+                    
+                    <!-- Consent 2 -->
+                    <div style="margin-bottom: 20px; line-height: 1.4;">
+                        <span id="print-consent-storage" style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px; vertical-align: middle;">☐</span>
+                        <strong style="font-size: 10.5pt; vertical-align: middle;">Tôi đồng ý để GAIA lưu trữ thông tin này (bao gồm nội dung ghi âm trao đổi về chuyên môn) cho mục đích chăm sóc thú cưng và liên hệ.</strong>
+                        <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-left: 24px; margin-top: 2px;">
+                            [I agree to allow GAIA to store this information (including recorded professional consultation content) for the purpose of pet care and follow-up communication]<br>
+                            [ペット of ケアおよび連絡の目的で、この情報（専門的な相談内容の録音を含む）を GAIA が保存することに同意します]
+                        </div>
+                    </div>
+                    
+                    <!-- Signatures Grid -->
+                    <div style="border-top: 1px solid #000000; margin-top: 15px; padding-top: 15px; display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="width: 45%;">
+                            <strong>Ngày (Date)(日付) :</strong> 
+                            <span id="print-date" style="font-weight: bold; font-size: 11pt; border-bottom: 1px dotted #000; padding: 0 10px; display: inline-block; min-width: 150px; text-align: center;">-</span>
+                        </div>
+                        <div style="width: 45%; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <strong>Chữ ký (Signature)(署名)</strong>
+                            <div style="margin-top: 8px; width: 180px; height: 75px; display: flex; align-items: center; justify-content: center; background: #fff;">
+                                <img id="print-sig-img" src="" alt="Signature" style="max-height: 100%; max-width: 100%; object-fit: contain; filter: contrast(1.3) grayscale(1);">
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Dedicated Attachment Page for Pet Photos (Prints if photos are loaded) -->
+        <div id="print-photos-section" style="margin-top: 30px; page-break-before: auto;">
+            <h4 style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; text-align: left; border-bottom: 2px solid #000000; padding-bottom: 6px; margin-bottom: 15px; text-transform: uppercase; font-weight: bold; color: #000000;">HÌNH ẢNH THÚ CƯNG ĐÍNH KÈM / ATTACHED PET PHOTOS</h4>
+            <div id="print-photos-grid" style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: flex-start;">
+                <!-- Photos dynamically injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Supabase CDN Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Cấu hình môi trường -->
+    <script src="env.js"></script>
+    <!-- Script JS -->
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAIA Animal Hospital Ho Chi Minh City - Admin Realtime Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- CSS Style sheets -->
+    <link rel="stylesheet" href="admin-style.css">
+</head>
+
+<body>
+    <div class="dashboard-container">
+
+        <!-- Header / Topbar Section -->
+        <header class="dashboard-header">
+            <div class="brand-section">
+                <div class="logo-wrap">
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQfZlyZoMKUpHV2xiHp5ye-OgqCT0_MYlHEIA&s"
+                        alt="GAIA Logo" class="brand-logo">
+                </div>
+                <div class="brand-text">
+                    <h1>GAIA Animal Hospital Ho Chi Minh City</h1>
+                    <p class="brand-subtitle">No. 2D, 22 Road, Hiep Binh Ward, Ho Chi Minh City</p>
+                </div>
+            </div>
+
+            <!-- Header Controls -->
+            <div class="header-controls">
+                <!-- Sound control Toggle -->
+                <div class="sound-toggle-wrap">
+                    <button id="sound-toggle-btn" class="control-btn active" title="Bật/Tắt âm thanh thông báo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            class="btn-icon icon-sound-on">
+                            <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                        </svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            class="btn-icon icon-sound-off" style="display: none;">
+                            <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                            <line x1="23" x2="1" y1="1" y2="23"></line>
+                        </svg>
+                        <span>Âm thanh: Bật</span>
+                    </button>
+                </div>
+
+                <!-- Connection status lamp -->
+                <div class="status-indicator-wrap">
+                    <div class="status-indicator live">
+                        <span class="status-pulse"></span>
+                        <span class="status-text">LIVE</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Stats Summary Bar (STICKY) -->
+        <section class="stats-summary-grid sticky-stats">
+            <!-- Status Filter Tabs -->
+            <div class="stats-card status-filter-card">
+                <div class="status-filter-tabs">
+                    <button class="status-tab active" data-filter="all" id="tab-all">
+                        <span class="tab-label">Tất cả</span>
+                        <span class="tab-count" id="count-all">0</span>
+                    </button>
+                    <button class="status-tab tab-new" data-filter="new" id="tab-new">
+                        <span class="tab-label">Mới</span>
+                        <span class="tab-count" id="count-new">0</span>
+                    </button>
+                    <button class="status-tab tab-done" data-filter="done" id="tab-done">
+                        <span class="tab-label">Đã xử lý</span>
+                        <span class="tab-count" id="count-done">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Clickable Date Navigator Card -->
+            <div class="stats-card date-nav-card" id="date-nav-card">
+                <button class="date-nav-arrow" id="date-prev-btn" title="Ngày trước">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+                <!-- Calendar icon wraps hidden date input for native picker -->
+                <div class="date-nav-icon-wrap" title="Chọn ngày">
+                    <div class="stats-icon bg-blue date-nav-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect>
+                            <line x1="16" x2="16" y1="2" y2="6"></line>
+                            <line x1="8" x2="8" y1="2" y2="6"></line>
+                            <line x1="3" x2="21" y1="10" y2="10"></line>
+                        </svg>
+                    </div>
+                    <input type="date" id="date-picker-input" class="date-picker-hidden" aria-label="Chọn ngày">
+                </div>
+                <div class="stats-info">
+                    <h3 class="stats-value date-nav-value" id="stat-date">- / -</h3>
+                    <p class="stats-label" id="date-nav-label">Thời gian</p>
+                </div>
+                <button class="date-nav-arrow" id="date-next-btn" title="Ngày sau">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="stats-card search-card-wrap">
+                <div class="search-input-group">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" x2="16.65" y1="21" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="dashboard-search" placeholder="Tìm kiếm nhanh chủ, bé, số điện thoại...">
+                </div>
+            </div>
+        </section>
+
+
+        <!-- Main Cards Grid Area -->
+        <main class="cards-grid-section">
+            <div id="loading-spinner" class="spinner-container">
+                <div class="glow-spinner"></div>
+                <p>Đang tải danh sách từ cơ sở dữ liệu...</p>
+            </div>
+
+            <div id="no-data-placeholder" class="no-data-card" style="display: none;">
+                <div class="empty-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </div>
+                <h3>Chưa có ca đăng ký nào hôm nay</h3>
+                <p>Mở trang đăng ký gửi form!</p>
+            </div>
+
+            <!-- Dynamic grid container -->
+            <div id="intakes-list" class="intakes-grid"></div>
+        </main>
+    </div>
+
+    <!-- Details View Modal -->
+    <div id="details-modal" class="modal-overlay">
+        <div class="modal-card detail-view-card">
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <span class="patient-id" id="modal-patient-id">#ID</span>
+                    <h2>Thông Tin Chi Tiết Ca Đăng Ký</h2>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="modal-print-btn" class="modal-action-btn btn-print">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                            <rect x="6" y="14" width="12" height="8"></rect>
+                        </svg>
+                        <span>In hồ sơ (PDF)</span>
+                    </button>
+                    <button type="button" id="modal-close-btn" class="modal-close-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" x2="6" y1="6" y2="18"></line>
+                            <line x1="6" x2="18" y1="6" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Content (Two Columns Intake Form View) -->
+            <div class="modal-content print-area" id="print-content">
+                <div class="print-header-brand" style="display: none;">
+                    <img src="Form - G22_files/image002.png" alt="GAIA Logo" style="max-height: 50px;">
+                    <div style="text-align: right;">
+                        <h2 style="margin: 0; color: #1b4332;">GAIA ANIMAL HOSPITAL</h2>
+                        <p style="margin: 0; font-size: 12px; color: #666;">Bản ghi nhận thông tin Chủ & Thú cưng</p>
+                    </div>
+                </div>
+
+                <div class="detail-two-col">
+                    <!-- Left Stack: Owner Info & Pet Info Stacks -->
+                    <div class="detail-left-stack">
+                        <!-- Owner Info -->
+                        <div class="detail-col">
+                            <h3 class="col-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    class="col-title-icon">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                Thông tin Chủ nuôi
+                            </h3>
+                            <div class="info-table">
+                                <div class="info-row">
+                                    <span class="info-label">Tên chủ:</span>
+                                    <div class="info-value-wrap">
+                                        <span class="info-value text-highlight" id="detail-owner-name">-</span>
+                                        <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                class="copy-icon">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                </path>
+                                            </svg></button>
+                                    </div>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Điện thoại:</span>
+                                    <div class="info-value-wrap">
+                                        <span class="info-value text-highlight" id="detail-owner-phone">-</span>
+                                        <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                class="copy-icon">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                </path>
+                                            </svg></button>
+                                    </div>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Địa chỉ:</span>
+                                    <div class="info-value-wrap">
+                                        <span class="info-value" id="detail-owner-address">-</span>
+                                        <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                class="copy-icon">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                </path>
+                                            </svg></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pet Info -->
+                        <div class="detail-col">
+                            <h3 class="col-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" class="col-title-icon">
+                                    <path
+                                        d="M12 13c-1.66 0-3 1.34-3 3 0 2 2 3.5 3 3.5s3-1.5 3-3.5c0-1.66-1.34-3-3-3z" />
+                                    <path d="M5 14c-.83 0-1.5.67-1.5 1.5S4.17 17 5 17s1.5-.67 1.5-1.5S5.83 14 5 14z" />
+                                    <path
+                                        d="M19 14c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5S19.83 14 19 14z" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="16" cy="8" r="1.5" />
+                                </svg>
+                                Thông tin Thú cưng
+                            </h3>
+                            <div class="info-table">
+                                <div class="info-row">
+                                    <span class="info-label">Tên bé:</span>
+                                    <div class="info-value-wrap">
+                                        <span class="info-value text-highlight" id="detail-pet-name">-</span>
+                                        <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                class="copy-icon">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                </path>
+                                            </svg></button>
+                                    </div>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Loài / Giống:</span>
+                                    <div class="info-value-wrap">
+                                        <span class="info-value" id="detail-pet-breed">-</span>
+                                        <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                class="copy-icon">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                </path>
+                                            </svg></button>
+                                    </div>
+                                </div>
+                                <div class="info-row-grid">
+                                    <div class="info-row">
+                                        <span class="info-label">Cân nặng:</span>
+                                        <div class="info-value-wrap">
+                                            <span class="info-value" id="detail-pet-weight">-</span>
+                                            <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" class="copy-icon">
+                                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                    </path>
+                                                </svg></button>
+                                        </div>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="info-label">Tuổi/Giới tính:</span>
+                                        <div class="info-value-wrap">
+                                            <span class="info-value" id="detail-pet-age-gender">-</span>
+                                            <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" class="copy-icon">
+                                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                    </path>
+                                                </svg></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Triệt sản:</span>
+                                    <div class="info-value-wrap">
+                                        <span class="info-value badge" id="detail-pet-neutered">-</span>
+                                        <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                class="copy-icon">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                </path>
+                                            </svg></button>
+                                    </div>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Màu sắc/Đặc điểm:</span>
+                                    <div class="info-value-wrap">
+                                        <span class="info-value" id="detail-pet-color">-</span>
+                                        <button type="button" class="btn-copy-field" title="Sao chép"><svg
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                class="copy-icon">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1">
+                                                </path>
+                                            </svg></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Pet Photos Gallery (Prominent dedicated side) -->
+                    <div class="detail-right-gallery" id="detail-pet-photo-container" style="display: none;">
+                        <h3 class="col-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                class="col-title-icon">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <polyline points="21 15 16 10 5 21"></polyline>
+                            </svg>
+                            Hình ảnh thú cưng
+                        </h3>
+                        <div class="detail-gallery-wrap">
+                            <div class="detail-active-photo-box">
+                                <img id="detail-active-photo-img" src="" alt="Ảnh thú cưng">
+                            </div>
+                            <div id="detail-photo-thumbnails-grid" class="thumbnails-grid">
+                                <!-- Thumbnails dynamically injected -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Medical and Vaccines -->
+                <div class="detail-full-col">
+                    <h3 class="col-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            class="col-title-icon">
+                            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+                            <path d="m9 12 2 2 4-4"></path>
+                        </svg>
+                        Y tế & Phòng ngừa
+                    </h3>
+                    <div class="vaccine-row-badges">
+                        <div class="vaccine-badge-item">
+                            <span class="vac-label">Core Vaccine:</span>
+                            <div class="info-value-wrap">
+                                <span id="detail-vac-core" class="badge-status">-</span>
+                                <button type="button" class="btn-copy-field" title="Sao chép"><svg viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" class="copy-icon">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg></button>
+                            </div>
+                        </div>
+                        <div class="vaccine-badge-item">
+                            <span class="vac-label">Rabies Vaccine:</span>
+                            <div class="info-value-wrap">
+                                <span id="detail-vac-rabies" class="badge-status">-</span>
+                                <button type="button" class="btn-copy-field" title="Sao chép"><svg viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" class="copy-icon">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg></button>
+                            </div>
+                        </div>
+                        <div class="vaccine-badge-item">
+                            <span class="vac-label">Ký sinh trùng:</span>
+                            <div class="info-value-wrap">
+                                <span id="detail-vac-parasite" class="badge-status">-</span>
+                                <button type="button" class="btn-copy-field" title="Sao chép"><svg viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" class="copy-icon">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="medical-text-grid">
+                        <div class="medical-text-card">
+                            <div class="medical-card-header"
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <h4 style="margin-bottom: 0;">Các vấn đề sức khoẻ</h4>
+                                <button type="button" class="btn-copy-field" title="Sao chép"><svg viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" class="copy-icon">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg></button>
+                            </div>
+                            <p id="detail-med-history">-</p>
+                        </div>
+                        <div class="medical-text-card">
+                            <div class="medical-card-header"
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <h4 style="margin-bottom: 0;">Dị ứng thuốc/thức ăn</h4>
+                                <button type="button" class="btn-copy-field" title="Sao chép"><svg viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" class="copy-icon">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg></button>
+                            </div>
+                            <p id="detail-allergies">-</p>
+                        </div>
+                        <div class="medical-text-card">
+                            <div class="medical-card-header"
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <h4 style="margin-bottom: 0;">Thuốc đang dùng</h4>
+                                <button type="button" class="btn-copy-field" title="Sao chép"><svg viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" class="copy-icon">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg></button>
+                            </div>
+                            <p id="detail-meds">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Daily Diet -->
+                <div class="detail-full-col">
+                    <h3 class="col-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            class="col-title-icon">
+                            <path d="M3 12h18"></path>
+                            <path d="M3 6h18"></path>
+                            <path d="M3 18h18"></path>
+                        </svg>
+                        Chế độ dinh dưỡng hằng ngày
+                    </h3>
+                    <div id="detail-diet-tags" class="diet-tags-wrap">
+                        <!-- Diet tags dynamically injected -->
+                    </div>
+                </div>
+
+                <!-- Section 5: Consent & Client Signature -->
+                <div class="detail-signature-block">
+                    <div class="consent-info-list">
+                        <div class="consent-info-item">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                class="check-icon">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <span>Xác nhận thông tin khai báo chính xác hoàn toàn.</span>
+                        </div>
+                        <div class="consent-info-item">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                class="check-icon">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <span>Đồng ý cho GAIA lưu trữ thông tin chăm sóc thú cưng.</span>
+                        </div>
+                        <div class="date-signed-text">
+                            <span>Ngày ký: </span>
+                            <div class="info-value-wrap" style="display: inline-flex; align-items: center; gap: 6px;">
+                                <strong id="detail-date-signed" class="info-value">-</strong>
+                                <button type="button" class="btn-copy-field" title="Sao chép"><svg viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" class="copy-icon">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="signature-box-display">
+                        <span class="sig-label">Chữ ký khách hàng</span>
+                        <div class="signature-img-container">
+                            <img id="detail-signature-img" src="" alt="Chữ ký khách hàng">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dedicated High-Fidelity Print Template (Hidden on screen, shown in print) -->
+    <div id="print-form-container" class="print-only-layout">
+        <!-- Brand Header -->
+        <div class="print-brand-header">
+            <img src="Form - G22_files/image002.png" alt="GAIA Logo" class="print-brand-logo">
+        </div>
+
+        <table class="print-table"
+            style="width: 100%; border-collapse: collapse; border: 1.5px solid #000000; font-family: 'Times New Roman', Times, serif;">
+            <!-- Section 1: Owner Info Header -->
+            <tr class="table-header-row">
+                <td colspan="9"
+                    style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
+                    Thông tin Chủ thú cưng <span
+                        style="font-size: 10pt; font-weight: normal; font-style: italic;">(Owner
+                        Information)(飼い主様情報)</span>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="6" style="width: 60%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Tên chủ thú cưng:</strong> <span id="print-owner-name"
+                        style="font-weight: bold; font-size: 11.5pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Owner)(飼い主)</div>
+                </td>
+                <td colspan="3" style="width: 40%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Số điện thoại:</strong> <span id="print-owner-phone"
+                        style="font-weight: bold; font-size: 11.5pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Phone
+                        number)(電話番号)</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Địa chỉ:</strong> <span id="print-owner-address" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Address)(住所)</div>
+                </td>
+            </tr>
+
+            <!-- Section 2: Pet Info Header -->
+            <tr class="table-header-row">
+                <td colspan="9"
+                    style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
+                    Thông tin Thú cưng <span style="font-size: 10pt; font-weight: normal; font-style: italic;">(Pet
+                        Information)(ペット情報)</span>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="7" style="width: 63%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Tên thú cưng:</strong> <span id="print-pet-name"
+                        style="font-weight: bold; font-size: 11.5pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Pet's name)(ペット名)
+                    </div>
+                </td>
+                <td colspan="2" style="width: 37%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Cân nặng:</strong> <span id="print-pet-weight" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Weight)(体重)</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="5" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Tuổi/Giới tính:</strong> <span id="print-pet-age-gender" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Age/Gender)(年齢・性別)
+                    </div>
+                </td>
+                <td colspan="4" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                        <div>
+                            <span id="print-pet-neutered-yes"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Đã triệt sản</strong>
+                        </div>
+                        <div>
+                            <span id="print-pet-neutered-no"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Chưa triệt sản</strong>
+                        </div>
+                    </div>
+                    <div
+                        style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px; display: flex; justify-content: space-between;">
+                        <span>(Neutered)(去勢済み)</span>
+                        <span>(Not neutered)(未去勢)</span>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3" style="width: 42%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Loài/Giống:</strong> <span id="print-pet-breed" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">
+                        (Species/Breed)(種類・品種)</div>
+                </td>
+                <td colspan="6" style="width: 58%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Màu sắc/Đặc điểm:</strong> <span id="print-pet-color" style="font-size: 11pt;"></span>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">
+                        (Color/Markings)(毛色・特徴)</div>
+                </td>
+            </tr>
+
+            <!-- Section 3: Vaccines -->
+            <tr>
+                <td rowspan="2" colspan="1"
+                    style="width: 25%; vertical-align: middle; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Tiêm phòng vắc-xin:</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">
+                        (Vaccination)<br>(ワクチン接種)</div>
+                </td>
+                <td colspan="3"
+                    style="width: 25%; vertical-align: top; text-align: center; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Vaccine bệnh</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000;">(Core vaccine)</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000;">(混合ワクチン)</div>
+                </td>
+                <td colspan="5" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                        <div>
+                            <span id="print-vac-core-yes"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Có</strong>
+                        </div>
+                        <div>
+                            <span id="print-vac-core-no"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Không</strong>
+                        </div>
+                        <div>
+                            <span id="print-vac-core-unknown"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Không rõ</strong>
+                        </div>
+                    </div>
+                    <div
+                        style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px; display: flex; justify-content: space-between;">
+                        <span>(Yes)(済)</span>
+                        <span>(No)(未)</span>
+                        <span>(No info)(情報なし)</span>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3"
+                    style="width: 25%; vertical-align: top; text-align: center; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Vaccine dại</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000;">(Rabies vaccine)</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000;">(狂犬病ワクチン)</div>
+                </td>
+                <td colspan="5" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                        <div>
+                            <span id="print-vac-rabies-yes"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Có</strong>
+                        </div>
+                        <div>
+                            <span id="print-vac-rabies-no"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Không</strong>
+                        </div>
+                        <div>
+                            <span id="print-vac-rabies-unknown"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Không rõ</strong>
+                        </div>
+                    </div>
+                    <div
+                        style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px; display: flex; justify-content: space-between;">
+                        <span>(Yes)(済)</span>
+                        <span>(No)(未)</span>
+                        <span>(No info)(情報なし)</span>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="4" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Phòng Ký sinh trùng:</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Parasite
+                        prevention)(寄生虫予防)</div>
+                </td>
+                <td colspan="5" style="width: 50%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                        <div>
+                            <span id="print-parasite-yes"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Có</strong>
+                        </div>
+                        <div>
+                            <span id="print-parasite-no"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Không</strong>
+                        </div>
+                        <div>
+                            <span id="print-parasite-unknown"
+                                style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                            <strong>Không rõ</strong>
+                        </div>
+                    </div>
+                    <div
+                        style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px; display: flex; justify-content: space-between;">
+                        <span>(Yes)(済)</span>
+                        <span>(No)(未)</span>
+                        <span>(No info)(情報なし)</span>
+                    </div>
+                </td>
+            </tr>
+
+            <!-- Section 4: Medical History -->
+            <tr>
+                <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Các vấn đề sức khoẻ:</strong>
+                    <div id="print-med-history" class="print-textarea-val"
+                        style="min-height: 45px; font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; padding: 4px 0; margin-top: 2px;">
+                        -</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Medical
+                        history)(既往歴)</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Dị ứng (thức ăn/thuốc):</strong>
+                    <div id="print-allergies" class="print-textarea-val"
+                        style="min-height: 45px; font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; padding: 4px 0; margin-top: 2px;">
+                        -</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Allergies/Food -
+                        Medicine)(アレルギー・食べ物・薬)</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Thuốc/Thực phẩm bổ sung đang sử dụng:</strong>
+                    <div id="print-meds" class="print-textarea-val"
+                        style="min-height: 45px; font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; padding: 4px 0; margin-top: 2px;">
+                        -</div>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Current
+                        medications/supplements)(現在服用中の薬・サプリメント)</div>
+                </td>
+            </tr>
+
+            <!-- Section 5: Diet -->
+            <tr>
+                <td colspan="1" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <strong>Thức ăn hàng ngày:</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Diet)(普段の食事)</div>
+                </td>
+                <td colspan="4" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <span id="print-diet-wet"
+                        style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                    <strong>Thức ăn ướt</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Wet food)(ウェットフード)
+                    </div>
+                </td>
+                <td colspan="3" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <span id="print-diet-dry"
+                        style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                    <strong>Thức ăn khô</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Dry food)(ドライフード)
+                    </div>
+                </td>
+                <td colspan="1" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
+                    <span id="print-diet-homemade"
+                        style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px;">☐</span>
+                    <strong>Thức ăn tự làm</strong>
+                    <div style="font-style: italic; font-size: 9.5pt; color: #000; margin-top: 4px;">(Homemade
+                        food)(手作り食)</div>
+                </td>
+            </tr>
+
+            <!-- Section 6: Consent -->
+            <tr class="table-header-row">
+                <td colspan="9"
+                    style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
+                    Cam kết của khách hàng <span
+                        style="font-size: 10pt; font-weight: normal; font-style: italic;">(Customer
+                        Declaration)(ご署名)</span>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="9" style="padding: 12px 15px; vertical-align: top; border: 1px solid #000000;">
+                    <!-- Consent 1 -->
+                    <div style="margin-bottom: 12px; line-height: 1.4;">
+                        <span id="print-consent-accuracy"
+                            style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px; vertical-align: middle;">☐</span>
+                        <strong style="font-size: 10.5pt; vertical-align: middle;">Tôi xác nhận rằng các thông tin trên
+                            là chính xác.</strong>
+                        <div
+                            style="font-style: italic; font-size: 9.5pt; color: #000; margin-left: 24px; margin-top: 2px;">
+                            (I confirm that the above information is accurate)(上記の内容が正確であることを確認します)
+                        </div>
+                    </div>
+
+                    <!-- Consent 2 -->
+                    <div style="margin-bottom: 20px; line-height: 1.4;">
+                        <span id="print-consent-storage"
+                            style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px; vertical-align: middle;">☐</span>
+                        <strong style="font-size: 10.5pt; vertical-align: middle;">Tôi đồng ý để GAIA lưu trữ thông tin
+                            này (bao gồm nội dung ghi âm trao đổi về chuyên môn) cho mục đích chăm sóc thú cưng và liên
+                            hệ.</strong>
+                        <div
+                            style="font-style: italic; font-size: 9.5pt; color: #000; margin-left: 24px; margin-top: 2px;">
+                            [I agree to allow GAIA to store this information (including recorded professional
+                            consultation content) for the purpose of pet care and follow-up communication]<br>
+                            [ペットのケアおよび連絡の目的で、この情報（専門的な相談内容の録音を含む）を GAIA が保存することに同意します]
+                        </div>
+                    </div>
+
+                    <!-- Signatures Grid -->
+                    <div
+                        style="border-top: 1px solid #000000; margin-top: 15px; padding-top: 15px; display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="width: 45%;">
+                            <strong>Ngày (Date)(日付) :</strong>
+                            <span id="print-date"
+                                style="font-weight: bold; font-size: 11pt; border-bottom: 1px dotted #000; padding: 0 10px; display: inline-block; min-width: 150px; text-align: center;">-</span>
+                        </div>
+                        <div
+                            style="width: 45%; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <strong>Chữ ký (Signature)(署名)</strong>
+                            <div
+                                style="margin-top: 8px; width: 180px; height: 75px; display: flex; align-items: center; justify-content: center; background: #fff;">
+                                <img id="print-sig-img" src="" alt="Signature"
+                                    style="max-height: 100%; max-width: 100%; object-fit: contain; filter: contrast(1.3) grayscale(1);">
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Dedicated Attachment Page for Pet Photos (Prints if photos are loaded) -->
+        <div id="print-photos-section" style="margin-top: 30px; page-break-before: auto;">
+            <h4
+                style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; text-align: left; border-bottom: 2px solid #000000; padding-bottom: 6px; margin-bottom: 15px; text-transform: uppercase; font-weight: bold; color: #000000;">
+                HÌNH ẢNH THÚ CƯNG ĐÍNH KÈM / ATTACHED PET PHOTOS</h4>
+            <div id="print-photos-grid" style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: flex-start;">
+                <!-- Photos dynamically injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Supabase CDN Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Environmental Configuration -->
+    <script src="env.js"></script>
+    <!-- Script Logic Dashboard -->
+    <script src="admin.js"></script>
+</body>
+
+</html>
