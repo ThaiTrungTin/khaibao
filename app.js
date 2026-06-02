@@ -474,7 +474,8 @@ function setupEventListeners() {
         modalDownloadBtn.disabled = true;
         modalDownloadBtn.innerHTML = `<span>Đang tải...</span>`;
         
-        // Temporarily display off-screen for html2pdf to render
+        // Temporarily display off-screen and remove print-only class for html2pdf to render
+        element.classList.remove('print-only-layout');
         element.style.setProperty('display', 'block', 'important');
         element.style.position = 'absolute';
         element.style.left = '0';
@@ -492,6 +493,7 @@ function setupEventListeners() {
         
         html2pdf().set(options).from(element).save().then(() => {
             // Restore styles
+            element.classList.add('print-only-layout');
             element.style.display = '';
             element.style.position = '';
             element.style.left = '';
@@ -504,6 +506,7 @@ function setupEventListeners() {
         }).catch(err => {
             console.error("Direct PDF download failed, falling back to window.print():", err);
             // Restore styles
+            element.classList.add('print-only-layout');
             element.style.display = '';
             element.style.position = '';
             element.style.left = '';
