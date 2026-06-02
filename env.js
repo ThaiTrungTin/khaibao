@@ -7,7 +7,4 @@
 // 3. Sao chép "Project URL" dán vào trường 'url' bên dưới.
 // 4. Sao chép "anon public API key" dán vào trường 'anonKey' bên dưới.
 
-const SUPABASE_CONFIG = {
-    url: "https://zbuvpurdwatdxltapgbg.supabase.co",
-    anonKey: "sb_publishable_BTIhC4F8A2CmG0Iq6U7faQ_jgrEzpyt"
-};
+const _0x5e5c0f = _0x5fd2; function _0x4d35() { const _0x2f6b4c = ['10996FmvFhS', 'https://zbuvpurdwatdxltapgbg.supabase.co', 'sb_publishable_BTIhC4F8A2CmG0Iq6U7faQ_jgrEzpyt', '660789YRONqG', '843JDWwIl', '2436762ucEtWo', '5031684CGBpmR', '20635XttARe', '168gVZxAr', '24048MVbqJN', '3849610VBYXBr']; _0x4d35 = function () { return _0x2f6b4c; }; return _0x4d35(); } function _0x5fd2(_0x5d4881, _0x4974f7) { _0x5d4881 = _0x5d4881 - 0xee; const _0x4d35fe = _0x4d35(); let _0x5fd2c1 = _0x4d35fe[_0x5d4881]; return _0x5fd2c1; } (function (_0x1e7e6c, _0x43f67b) { const _0x5692f3 = _0x5fd2, _0x1f8d50 = _0x1e7e6c(); while (!![]) { try { const _0x2db99c = parseInt(_0x5692f3(0xef)) / 0x1 + -parseInt(_0x5692f3(0xf1)) / 0x2 + -parseInt(_0x5692f3(0xf7)) / 0x3 * (parseInt(_0x5692f3(0xf3)) / 0x4) + parseInt(_0x5692f3(0xf2)) / 0x5 + -parseInt(_0x5692f3(0xf8)) / 0x6 + -parseInt(_0x5692f3(0xee)) / 0x7 + parseInt(_0x5692f3(0xf0)) / 0x8 * (parseInt(_0x5692f3(0xf6)) / 0x9); if (_0x2db99c === _0x43f67b) break; else _0x1f8d50['push'](_0x1f8d50['shift']()); } catch (_0x1cb31a) { _0x1f8d50['push'](_0x1f8d50['shift']()); } } }(_0x4d35, 0x67436)); const SUPABASE_CONFIG = { 'url': _0x5e5c0f(0xf4), 'anonKey': _0x5e5c0f(0xf5) };
