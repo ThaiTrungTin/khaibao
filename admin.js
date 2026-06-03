@@ -296,8 +296,17 @@ async function handleIncomingIntake(newRecord) {
 function handleIncomingUpdate(updatedRecord) {
     const idx = intakesData.findIndex(r => r.id === updatedRecord.id);
     if (idx !== -1) {
-        // Update local data with the updated record from database
-        intakesData[idx] = updatedRecord;
+        // Prevent Supabase Realtime from omitting TOASTed columns (like long strings/photos)
+        const oldRecord = intakesData[idx];
+        const mergedRecord = { ...oldRecord, ...updatedRecord };
+        
+        // Preserve old photo if realtime payload omitted it
+        if (oldRecord.pet_photo && !updatedRecord.pet_photo) {
+            mergedRecord.pet_photo = oldRecord.pet_photo;
+        }
+
+        // Update local data with the merged record
+        intakesData[idx] = mergedRecord;
         
         // Recalculate statistics and re-apply current filter & render
         calculateStatistics(intakesData);
@@ -308,9 +317,9 @@ function handleIncomingUpdate(updatedRecord) {
         const modalPatientId = document.getElementById("modal-patient-id");
         if (detailsModal && detailsModal.classList.contains("show") && modalPatientId) {
             const currentModalId = modalPatientId.textContent.replace("#ID-", "");
-            if (parseInt(currentModalId) === updatedRecord.id) {
-                // Refresh modal with new data
-                openIntakeDetails(updatedRecord);
+            if (parseInt(currentModalId) === mergedRecord.id) {
+                // Refresh modal with merged data
+                openIntakeDetails(mergedRecord);
             }
         }
     } else {
