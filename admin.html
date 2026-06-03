@@ -14,7 +14,7 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQfZlyZoMKUpHV2xiHp5ye-OgqCT0_MYlHEIA&s">
     <!-- CSS Style sheets -->
-    <link rel="stylesheet" href="admin-style.css">
+    <link rel="stylesheet" href="admin-style.css?v=3">
 </head>
 
 <body>
@@ -955,7 +955,13 @@
             </button>
         </div>
         <div class="lightbox-image-wrap">
+            <button type="button" id="lightbox-prev" class="lightbox-nav-btn lightbox-prev-btn" title="Ảnh trước">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="24" height="24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
             <img id="lightbox-img" src="" alt="Xem ảnh" draggable="false">
+            <button type="button" id="lightbox-next" class="lightbox-nav-btn lightbox-next-btn" title="Ảnh tiếp theo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="24" height="24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
         </div>
     </div>
 
@@ -968,7 +974,7 @@
     <!-- Environmental Configuration -->
     <script src="env.js"></script>
     <!-- Script Logic Dashboard -->
-    <script src="admin.js"></script>
+    <script src="admin.js?v=3"></script>
 </body>
 
 </html>

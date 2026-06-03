@@ -1316,6 +1316,9 @@ function setupEventListeners() {
     const lightboxZoomLabel = document.getElementById("lightbox-zoom-level");
     const lightboxDownload = document.getElementById("lightbox-download");
     const lightboxClose = document.getElementById("lightbox-close");
+    const lightboxPrev = document.getElementById("lightbox-prev");
+    const lightboxNext = document.getElementById("lightbox-next");
+    
     let lightboxZoom = 1;
     let activePhotoIndex = 0; // 0-based index of current photo
     const ZOOM_STEP = 0.25;
@@ -1329,6 +1332,22 @@ function setupEventListeners() {
         lightboxImg.style.transform = "scale(1)";
         lightboxZoomLabel.textContent = "100%";
         activePhotoIndex = index;
+
+        // Control displaying nav buttons based on total images
+        if (activeIntakeRecord) {
+            const photosArray = getPhotosArray(activeIntakeRecord.pet_photo);
+            if (photosArray.length > 1) {
+                if (lightboxPrev) lightboxPrev.style.display = "flex";
+                if (lightboxNext) lightboxNext.style.display = "flex";
+            } else {
+                if (lightboxPrev) lightboxPrev.style.display = "none";
+                if (lightboxNext) lightboxNext.style.display = "none";
+            }
+        } else {
+            if (lightboxPrev) lightboxPrev.style.display = "none";
+            if (lightboxNext) lightboxNext.style.display = "none";
+        }
+
         lightbox.classList.add("show");
     }
 
@@ -1342,6 +1361,31 @@ function setupEventListeners() {
         lightboxZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
         lightboxImg.style.transform = `scale(${lightboxZoom})`;
         lightboxZoomLabel.textContent = `${Math.round(lightboxZoom * 100)}%`;
+    }
+
+    function navigateLightbox(direction) {
+        if (!activeIntakeRecord) return;
+        const photosArray = getPhotosArray(activeIntakeRecord.pet_photo);
+        if (photosArray.length <= 1) return;
+
+        let newIdx = activePhotoIndex + direction;
+        if (newIdx < 0) {
+            newIdx = photosArray.length - 1;
+        } else if (newIdx >= photosArray.length) {
+            newIdx = 0;
+        }
+
+        activePhotoIndex = newIdx;
+        
+        // Fading effect transition
+        lightboxImg.style.opacity = "0";
+        setTimeout(() => {
+            lightboxImg.src = photosArray[newIdx];
+            lightboxZoom = 1;
+            lightboxImg.style.transform = "scale(1)";
+            lightboxZoomLabel.textContent = "100%";
+            lightboxImg.style.opacity = "1";
+        }, 150);
     }
 
     // Click on active photo to open lightbox
@@ -1380,6 +1424,10 @@ function setupEventListeners() {
     if (lightboxZoomIn) lightboxZoomIn.addEventListener("click", () => setLightboxZoom(lightboxZoom + ZOOM_STEP));
     if (lightboxZoomOut) lightboxZoomOut.addEventListener("click", () => setLightboxZoom(lightboxZoom - ZOOM_STEP));
     if (lightboxClose) lightboxClose.addEventListener("click", closeLightbox);
+    
+    // Lightbox navigation controls
+    if (lightboxPrev) lightboxPrev.addEventListener("click", () => navigateLightbox(-1));
+    if (lightboxNext) lightboxNext.addEventListener("click", () => navigateLightbox(1));
 
     // Mouse wheel zoom
     if (lightbox) {
@@ -1468,6 +1516,12 @@ function setupEventListeners() {
             } else {
                 detailsModal.classList.remove("show");
                 if (qrModal) qrModal.classList.remove("show");
+            }
+        } else if (lightbox && lightbox.classList.contains("show")) {
+            if (e.key === "ArrowLeft") {
+                navigateLightbox(-1);
+            } else if (e.key === "ArrowRight") {
+                navigateLightbox(1);
             }
         }
     });

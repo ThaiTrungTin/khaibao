@@ -2253,13 +2253,14 @@ body {
     position: fixed;
     inset: 0;
     z-index: 99999;
-    background: rgba(0, 0, 0, 0.92);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(0, 0, 0, 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    padding: 24px 24px 0 24px;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.25s ease, visibility 0.25s ease;
@@ -2272,20 +2273,18 @@ body {
 
 /* Toolbar */
 .lightbox-toolbar {
-    position: absolute;
-    top: 18px;
-    left: 50%;
-    transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     background: rgba(15, 23, 42, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 14px;
-    padding: 6px 10px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 6px 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     z-index: 10;
+    flex-shrink: 0; /* Keep size */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .lightbox-btn {
@@ -2324,10 +2323,10 @@ body {
 }
 
 .lightbox-zoom-label {
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: 700;
     color: #94a3b8;
-    min-width: 42px;
+    min-width: 46px;
     text-align: center;
     font-family: var(--font-jakarta);
     user-select: none;
@@ -2339,18 +2338,74 @@ body {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 100%;
-    overflow: auto;
-    padding: 80px 24px 24px;
+    flex-grow: 1;
+    position: relative;
+    padding: 12px 0 24px;
+    overflow: visible; /* Let navigation buttons float outside wrap bounds if needed */
 }
 
 .lightbox-image-wrap img {
     max-width: 90vw;
-    max-height: 85vh;
+    max-height: 80vh;
     object-fit: contain;
-    border-radius: 8px;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 10px;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
     transform-origin: center center;
     user-select: none;
     -webkit-user-drag: none;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+/* Navigation buttons */
+.lightbox-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(15, 23, 42, 0.8);
+    color: #e2e8f0;
+    cursor: pointer;
+    display: none; /* Controlled dynamically by JS */
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 10;
+}
+
+.lightbox-nav-btn:hover {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #fff;
+    transform: translateY(-50%) scale(1.08);
+}
+
+.lightbox-nav-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+.lightbox-prev-btn {
+    left: 24px;
+}
+
+.lightbox-next-btn {
+    right: 24px;
+}
+
+/* Adjust size on smaller screens */
+@media (max-width: 768px) {
+    .lightbox-nav-btn {
+        width: 44px;
+        height: 44px;
+    }
+    .lightbox-prev-btn {
+        left: 12px;
+    }
+    .lightbox-next-btn {
+        right: 12px;
+    }
 }
