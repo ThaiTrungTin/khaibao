@@ -2243,3 +2243,114 @@ body {
     font-family: var(--font-jakarta);
     user-select: all;
 }
+
+/* --- Image Lightbox Viewer --- */
+.detail-active-photo-box {
+    cursor: pointer;
+}
+
+.image-lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(0, 0, 0, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.image-lightbox-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Toolbar */
+.lightbox-toolbar {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 6px 10px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 10;
+}
+
+.lightbox-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.lightbox-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    transform: scale(1.08);
+}
+
+.lightbox-btn:active {
+    transform: scale(0.95);
+}
+
+.lightbox-close-btn {
+    margin-left: 6px;
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+}
+
+.lightbox-close-btn:hover {
+    background: rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+}
+
+.lightbox-zoom-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #94a3b8;
+    min-width: 42px;
+    text-align: center;
+    font-family: var(--font-jakarta);
+    user-select: none;
+}
+
+/* Image container */
+.lightbox-image-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    padding: 80px 24px 24px;
+}
+
+.lightbox-image-wrap img {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: 8px;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center center;
+    user-select: none;
+    -webkit-user-drag: none;
+}

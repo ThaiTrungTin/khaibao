@@ -1308,11 +1308,167 @@ function setupEventListeners() {
         });
     }
 
-    // Close modal on pressing the Escape key
+    // --- Image Lightbox Viewer ---
+    const lightbox = document.getElementById("image-lightbox");
+    const lightboxImg = document.getElementById("lightbox-img");
+    const lightboxZoomIn = document.getElementById("lightbox-zoom-in");
+    const lightboxZoomOut = document.getElementById("lightbox-zoom-out");
+    const lightboxZoomLabel = document.getElementById("lightbox-zoom-level");
+    const lightboxDownload = document.getElementById("lightbox-download");
+    const lightboxClose = document.getElementById("lightbox-close");
+    let lightboxZoom = 1;
+    let activePhotoIndex = 0; // 0-based index of current photo
+    const ZOOM_STEP = 0.25;
+    const ZOOM_MIN = 0.25;
+    const ZOOM_MAX = 5;
+
+    function openLightbox(src, index) {
+        if (!src || !lightbox) return;
+        lightboxZoom = 1;
+        lightboxImg.src = src;
+        lightboxImg.style.transform = "scale(1)";
+        lightboxZoomLabel.textContent = "100%";
+        activePhotoIndex = index;
+        lightbox.classList.add("show");
+    }
+
+    function closeLightbox() {
+        if (!lightbox) return;
+        lightbox.classList.remove("show");
+        setTimeout(() => { lightboxImg.src = ""; }, 250);
+    }
+
+    function setLightboxZoom(newZoom) {
+        lightboxZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+        lightboxImg.style.transform = `scale(${lightboxZoom})`;
+        lightboxZoomLabel.textContent = `${Math.round(lightboxZoom * 100)}%`;
+    }
+
+    // Click on active photo to open lightbox
+    const activePhotoBox = document.querySelector(".detail-active-photo-box");
+    if (activePhotoBox) {
+        activePhotoBox.addEventListener("click", () => {
+            const img = document.getElementById("detail-active-photo-img");
+            if (img && img.src && img.src !== window.location.href) {
+                let idx = 0;
+                if (activeIntakeRecord) {
+                    const photosArray = getPhotosArray(activeIntakeRecord.pet_photo);
+                    const currentSrc = img.getAttribute("src");
+                    const foundIdx = photosArray.findIndex(p => {
+                        if (!p) return false;
+                        if (p.startsWith("data:") && currentSrc.startsWith("data:")) {
+                            return p === currentSrc;
+                        }
+                        try {
+                            const pAbs = new URL(p, window.location.href).href;
+                            const curAbs = new URL(currentSrc, window.location.href).href;
+                            return pAbs === curAbs;
+                        } catch (err) {
+                            return currentSrc.endsWith(p) || p.endsWith(currentSrc);
+                        }
+                    });
+                    if (foundIdx !== -1) {
+                        idx = foundIdx;
+                    }
+                }
+                openLightbox(img.src, idx);
+            }
+        });
+    }
+
+    // Lightbox toolbar controls
+    if (lightboxZoomIn) lightboxZoomIn.addEventListener("click", () => setLightboxZoom(lightboxZoom + ZOOM_STEP));
+    if (lightboxZoomOut) lightboxZoomOut.addEventListener("click", () => setLightboxZoom(lightboxZoom - ZOOM_STEP));
+    if (lightboxClose) lightboxClose.addEventListener("click", closeLightbox);
+
+    // Mouse wheel zoom
+    if (lightbox) {
+        lightbox.addEventListener("wheel", (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+            setLightboxZoom(lightboxZoom + delta);
+        }, { passive: false });
+    }
+
+    // Click outside image to close
+    if (lightbox) {
+        lightbox.addEventListener("click", (e) => {
+            if (e.target === lightbox || e.target.classList.contains("lightbox-image-wrap")) {
+                closeLightbox();
+            }
+        });
+    }
+
+    // Download lightbox image with dynamic clean naming format: photo_[petName]_[phone]_[date]_[index+1].png
+    if (lightboxDownload) {
+        lightboxDownload.addEventListener("click", () => {
+            if (lightboxImg.src && lightboxImg.src !== window.location.href) {
+                const petName = (activeIntakeRecord && activeIntakeRecord.pet_name) ? activeIntakeRecord.pet_name.trim() : "Pet";
+                const phone = (activeIntakeRecord && activeIntakeRecord.owner_phone) ? activeIntakeRecord.owner_phone.trim() : "phone";
+                
+                let rawDate = (activeIntakeRecord && (activeIntakeRecord.created_at || activeIntakeRecord.date_signed)) || new Date().toISOString();
+                if (rawDate.includes("T")) rawDate = rawDate.split("T")[0];
+                const dateParts = rawDate.split("-");
+                const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
+
+                const photoNum = activePhotoIndex + 1;
+
+                // Clean name, phone and date for filesystem safety
+                const cleanPetName = petName.replace(/[\/\\?%*:|"<>\s]+/g, "_");
+                const cleanPhone = phone.replace(/[\/\\?%*:|"<>\s]+/g, "_");
+                const cleanDate = formattedDate.replace(/[\/\\?%*:|"<>\s]+/g, "-");
+
+                const filename = `photo_${cleanPetName}_${cleanPhone}_${cleanDate}_${photoNum}.png`;
+                fetchImageAndDownload(lightboxImg.src, filename);
+            }
+        });
+    }
+
+    async function fetchImageAndDownload(url, filename) {
+        try {
+            if (url.startsWith("data:")) {
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                return;
+            }
+
+            const response = await fetch(url, { mode: 'cors' });
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+        } catch (err) {
+            console.error("Failed to download image with fetch, falling back:", err);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            link.target = "_blank";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+
+    // Close modals on pressing the Escape key (lightbox has priority)
     window.addEventListener("keydown", (e) => {
         if (e.key === "Escape" || e.key === "Esc") {
-            detailsModal.classList.remove("show");
-            if (qrModal) qrModal.classList.remove("show");
+            if (lightbox && lightbox.classList.contains("show")) {
+                closeLightbox();
+            } else {
+                detailsModal.classList.remove("show");
+                if (qrModal) qrModal.classList.remove("show");
+            }
         }
     });
 
