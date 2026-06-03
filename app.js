@@ -28,6 +28,7 @@ const translations = {
         label_parasite: "Phòng Ký sinh trùng",
         choice_yes: "Có",
         choice_no: "Không",
+        choice_none: "Không",
         choice_unknown: "Không rõ",
         label_medical_history: "Các vấn đề sức khoẻ",
         label_allergies: "Dị ứng (thức ăn / thuốc)",
@@ -81,6 +82,7 @@ const translations = {
         label_parasite: "Parasite Prevention",
         choice_yes: "Yes",
         choice_no: "No",
+        choice_none: "None",
         choice_unknown: "Unknown",
         label_medical_history: "Medical History / Conditions",
         label_allergies: "Allergies (Food / Meds)",
@@ -134,6 +136,7 @@ const translations = {
         label_parasite: "寄生虫予防対策",
         choice_yes: "接種済み",
         choice_no: "未接種",
+        choice_none: "なし",
         choice_unknown: "不明",
         label_medical_history: "既往歴・持病",
         label_allergies: "アレルギー（食物・薬）",
@@ -355,18 +358,23 @@ function setupEventListeners() {
         });
     });
 
-    // Click delegation for Autofill "Không rõ" buttons (btn-autofill-unknown)
+    // Click delegation for Autofill buttons (btn-autofill-unknown & btn-autofill-none)
     form.addEventListener("click", (e) => {
-        const btn = e.target.closest(".btn-autofill-unknown");
-        if (btn) {
+        const btnUnknown = e.target.closest(".btn-autofill-unknown");
+        const btnNone = e.target.closest(".btn-autofill-none");
+        
+        if (btnUnknown || btnNone) {
             e.preventDefault();
+            const btn = btnUnknown || btnNone;
             const inputGroup = btn.closest(".input-group");
             if (inputGroup) {
                 const input = inputGroup.querySelector("input, textarea");
                 if (input) {
-                    // Get translated value for "Không rõ"
-                    const unknownText = translations[currentLang].choice_unknown;
-                    input.value = unknownText;
+                    // Get translated value based on which button was clicked
+                    const fillText = btnUnknown 
+                        ? translations[currentLang].choice_unknown 
+                        : translations[currentLang].choice_none;
+                    input.value = fillText;
                     
                     // Trigger input and change events to save draft and clear validation error
                     input.dispatchEvent(new Event("input", { bubbles: true }));

@@ -37,6 +37,15 @@ const soundOnIcon = soundToggleBtn.querySelector(".icon-sound-on");
 const soundOffIcon = soundToggleBtn.querySelector(".icon-sound-off");
 const soundStatusSpan = soundToggleBtn.querySelector("span");
 
+// QR Code Modal Elements
+const qrToggleBtn = document.getElementById("qr-toggle-btn");
+const qrModal = document.getElementById("qr-modal");
+const qrModalCloseBtn = document.getElementById("qr-modal-close-btn");
+const qrCodeContainer = document.getElementById("qr-code-container");
+const qrDeclarationUrl = document.getElementById("qr-declaration-url");
+const qrCopyLinkBtn = document.getElementById("qr-copy-link-btn");
+const qrDownloadBtn = document.getElementById("qr-download-btn");
+
 // Modal Elements
 const detailsModal = document.getElementById("details-modal");
 const modalCloseBtn = document.getElementById("modal-close-btn");
@@ -1081,10 +1090,229 @@ function setupEventListeners() {
         applyStatusFilter();
     });
 
+    // --- QR Modal Event Listeners ---
+    if (qrToggleBtn) {
+        qrToggleBtn.addEventListener("click", () => {
+            // Generate URL for declaration page (directory root, without index.html)
+            const declarationUrl = window.location.origin + window.location.pathname.replace('admin.html', '');
+            qrDeclarationUrl.textContent = declarationUrl;
+
+            // Generate QR Code
+            qrCodeContainer.innerHTML = "";
+            try {
+                new QRCode(qrCodeContainer, {
+                    text: declarationUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark: "#0f172a",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } catch (err) {
+                console.error("Error generating QR Code:", err);
+                qrCodeContainer.innerHTML = `<span style="color: var(--danger); font-size: 13px;">Không thể tạo mã QR</span>`;
+            }
+
+            qrModal.classList.add("show");
+        });
+    }
+
+    if (qrModalCloseBtn) {
+        qrModalCloseBtn.addEventListener("click", () => {
+            qrModal.classList.remove("show");
+        });
+    }
+
+    if (qrModal) {
+        qrModal.addEventListener("click", (e) => {
+            if (e.target === qrModal) {
+                qrModal.classList.remove("show");
+            }
+        });
+    }
+
+    if (qrCopyLinkBtn) {
+        qrCopyLinkBtn.addEventListener("click", () => {
+            const urlText = qrDeclarationUrl.textContent;
+            navigator.clipboard.writeText(urlText).then(() => {
+                const originalText = qrCopyLinkBtn.textContent;
+                qrCopyLinkBtn.textContent = "Đã chép!";
+                qrCopyLinkBtn.style.background = "var(--primary)";
+                qrCopyLinkBtn.style.color = "white";
+                setTimeout(() => {
+                    qrCopyLinkBtn.textContent = originalText;
+                    qrCopyLinkBtn.style.background = "rgba(16, 185, 129, 0.15)";
+                    qrCopyLinkBtn.style.color = "var(--primary)";
+                }, 1500);
+            }).catch(err => {
+                console.error("Failed to copy text:", err);
+            });
+        });
+    }
+
+    if (qrDownloadBtn) {
+        qrDownloadBtn.addEventListener("click", () => {
+            // Get QR source image from the container
+            const qrImg = qrCodeContainer.querySelector("img");
+            const qrCanvas = qrCodeContainer.querySelector("canvas");
+            const urlText = qrDeclarationUrl.textContent || "";
+
+            // Resolve QR image source
+            let qrSource = null;
+            if (qrImg && qrImg.complete && qrImg.naturalWidth > 0) {
+                qrSource = qrImg;
+            } else if (qrCanvas) {
+                qrSource = qrCanvas;
+            }
+
+            if (!qrSource) {
+                alert("Không thể tải mã QR lúc này. Vui lòng thử lại!");
+                return;
+            }
+
+            // --- Card dimensions (pixel-perfect for print) ---
+            const scale = 3; // 3x for crystal clear output
+            const cardW = 420 * scale;
+            const cardH = 460 * scale;
+            const radius = 28 * scale;
+            const qrSize = 220 * scale;
+            const padding = 30 * scale;
+
+            const exportCanvas = document.createElement("canvas");
+            exportCanvas.width = cardW;
+            exportCanvas.height = cardH;
+            const ctx = exportCanvas.getContext("2d");
+
+            // --- 1. Draw dark rounded rectangle background ---
+            ctx.beginPath();
+            ctx.moveTo(radius, 0);
+            ctx.lineTo(cardW - radius, 0);
+            ctx.quadraticCurveTo(cardW, 0, cardW, radius);
+            ctx.lineTo(cardW, cardH - radius);
+            ctx.quadraticCurveTo(cardW, cardH, cardW - radius, cardH);
+            ctx.lineTo(radius, cardH);
+            ctx.quadraticCurveTo(0, cardH, 0, cardH - radius);
+            ctx.lineTo(0, radius);
+            ctx.quadraticCurveTo(0, 0, radius, 0);
+            ctx.closePath();
+            ctx.fillStyle = "#0f172a";
+            ctx.fill();
+
+            // Subtle border glow
+            ctx.strokeStyle = "rgba(16, 185, 129, 0.25)";
+            ctx.lineWidth = 1.5 * scale;
+            ctx.stroke();
+
+            // --- 2. Draw "GAIA QR" badge pill ---
+            const badgeText = "GAIA QR";
+            const badgeFontSize = 11 * scale;
+            ctx.font = `700 ${badgeFontSize}px 'Outfit', sans-serif`;
+            const badgeMetrics = ctx.measureText(badgeText);
+            const badgePadX = 8 * scale;
+            const badgePadY = 4 * scale;
+            const badgeW = badgeMetrics.width + badgePadX * 2;
+            const badgeH = badgeFontSize + badgePadY * 2;
+            const badgeX = padding;
+            const badgeY = padding;
+
+            // Badge background
+            const badgeRadius = 6 * scale;
+            ctx.beginPath();
+            ctx.moveTo(badgeX + badgeRadius, badgeY);
+            ctx.lineTo(badgeX + badgeW - badgeRadius, badgeY);
+            ctx.quadraticCurveTo(badgeX + badgeW, badgeY, badgeX + badgeW, badgeY + badgeRadius);
+            ctx.lineTo(badgeX + badgeW, badgeY + badgeH - badgeRadius);
+            ctx.quadraticCurveTo(badgeX + badgeW, badgeY + badgeH, badgeX + badgeW - badgeRadius, badgeY + badgeH);
+            ctx.lineTo(badgeX + badgeRadius, badgeY + badgeH);
+            ctx.quadraticCurveTo(badgeX, badgeY + badgeH, badgeX, badgeY + badgeH - badgeRadius);
+            ctx.lineTo(badgeX, badgeY + badgeRadius);
+            ctx.quadraticCurveTo(badgeX, badgeY, badgeX + badgeRadius, badgeY);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(16, 185, 129, 0.15)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(16, 185, 129, 0.3)";
+            ctx.lineWidth = 1 * scale;
+            ctx.stroke();
+
+            // Badge text
+            ctx.fillStyle = "#10b981";
+            ctx.textBaseline = "middle";
+            ctx.fillText(badgeText, badgeX + badgePadX, badgeY + badgeH / 2);
+
+            // --- 3. Draw title "Mã QR Khai Báo" ---
+            const titleFontSize = 18 * scale;
+            ctx.font = `700 ${titleFontSize}px 'Outfit', sans-serif`;
+            ctx.fillStyle = "#f3f4f6";
+            ctx.textBaseline = "middle";
+            ctx.fillText("Mã QR Khai Báo", badgeX + badgeW + 12 * scale, badgeY + badgeH / 2);
+
+            // --- 4. Draw white rounded QR box with QR code ---
+            const qrBoxSize = qrSize + 32 * scale; // padding around QR
+            const qrBoxX = (cardW - qrBoxSize) / 2;
+            const qrBoxY = badgeY + badgeH + 25 * scale;
+            const qrBoxRadius = 18 * scale;
+
+            ctx.beginPath();
+            ctx.moveTo(qrBoxX + qrBoxRadius, qrBoxY);
+            ctx.lineTo(qrBoxX + qrBoxSize - qrBoxRadius, qrBoxY);
+            ctx.quadraticCurveTo(qrBoxX + qrBoxSize, qrBoxY, qrBoxX + qrBoxSize, qrBoxY + qrBoxRadius);
+            ctx.lineTo(qrBoxX + qrBoxSize, qrBoxY + qrBoxSize - qrBoxRadius);
+            ctx.quadraticCurveTo(qrBoxX + qrBoxSize, qrBoxY + qrBoxSize, qrBoxX + qrBoxSize - qrBoxRadius, qrBoxY + qrBoxSize);
+            ctx.lineTo(qrBoxX + qrBoxRadius, qrBoxY + qrBoxSize);
+            ctx.quadraticCurveTo(qrBoxX, qrBoxY + qrBoxSize, qrBoxX, qrBoxY + qrBoxSize - qrBoxRadius);
+            ctx.lineTo(qrBoxX, qrBoxY + qrBoxRadius);
+            ctx.quadraticCurveTo(qrBoxX, qrBoxY, qrBoxX + qrBoxRadius, qrBoxY);
+            ctx.closePath();
+            ctx.fillStyle = "#ffffff";
+            ctx.fill();
+            ctx.shadowColor = "rgba(0, 0, 0, 0.15)";
+            ctx.shadowBlur = 24 * scale;
+            ctx.shadowOffsetY = 8 * scale;
+            ctx.fill();
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+
+            // Draw QR code image onto card (crisp, centered inside white box)
+            const qrDrawX = qrBoxX + (qrBoxSize - qrSize) / 2;
+            const qrDrawY = qrBoxY + (qrBoxSize - qrSize) / 2;
+            ctx.imageSmoothingEnabled = false; // Keep QR pixels sharp
+            ctx.drawImage(qrSource, qrDrawX, qrDrawY, qrSize, qrSize);
+            ctx.imageSmoothingEnabled = true;
+
+            // --- 5. Draw centered URL text below QR ---
+            const urlY = qrBoxY + qrBoxSize + 30 * scale;
+            const urlFontSize = 12 * scale;
+            ctx.font = `500 ${urlFontSize}px 'Plus Jakarta Sans', sans-serif`;
+            ctx.fillStyle = "#9ca3af";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            // Truncate URL if too long
+            let displayUrl = urlText;
+            const maxUrlWidth = cardW - padding * 2;
+            while (ctx.measureText(displayUrl).width > maxUrlWidth && displayUrl.length > 10) {
+                displayUrl = displayUrl.slice(0, -1);
+            }
+            if (displayUrl !== urlText) displayUrl += "…";
+            ctx.fillText(displayUrl, cardW / 2, urlY);
+            ctx.textAlign = "start"; // reset
+
+            // --- 7. Download the composed card ---
+            const dataUrl = exportCanvas.toDataURL("image/png");
+            const link = document.createElement("a");
+            link.href = dataUrl;
+            link.download = "qrcode-gaia-khaibao.png";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    }
+
     // Close modal on pressing the Escape key
     window.addEventListener("keydown", (e) => {
         if (e.key === "Escape" || e.key === "Esc") {
             detailsModal.classList.remove("show");
+            if (qrModal) qrModal.classList.remove("show");
         }
     });
 

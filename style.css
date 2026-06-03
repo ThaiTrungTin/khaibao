@@ -1417,56 +1417,78 @@ input, textarea, select, button {
 }
 
 /* --- Autofill Unknown Quick Buttons --- */
-.btn-autofill-unknown {
+/* --- Autofill Quick Actions Container & Buttons --- */
+.autofill-actions {
     position: absolute;
     right: 12px;
     top: 50%;
     transform: translateY(-50%);
-    background-color: #fee2e2;
-    border: 1px solid #fca5a5;
-    color: #ef4444;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    z-index: 10;
+}
+
+/* Adjust position for Textareas */
+.input-group textarea ~ .autofill-actions {
+    top: 20px;
+    transform: none;
+}
+
+/* Show only when the input placeholder is shown (empty state) */
+.input-group input:placeholder-shown ~ .autofill-actions,
+.input-group textarea:placeholder-shown ~ .autofill-actions {
+    display: flex;
+}
+
+.btn-autofill-none,
+.btn-autofill-unknown {
     padding: 6px 12px;
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 700;
     cursor: pointer;
-    z-index: 10;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
     gap: 4px;
     transition: var(--transition-smooth);
-    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.08);
+}
+
+/* "Không" button style: Soft Green */
+.btn-autofill-none {
+    background-color: #e6f4ea;
+    border: 1px solid #a8e6cf;
+    color: #137333;
+    box-shadow: 0 2px 4px rgba(19, 115, 51, 0.06);
+}
+
+.btn-autofill-none:hover {
+    background-color: #ceead6;
+    border-color: #137333;
+    transform: scale(1.05);
+}
+
+.btn-autofill-none:active {
+    transform: scale(0.95);
+}
+
+/* "Không rõ" button style: Soft Red */
+.btn-autofill-unknown {
+    background-color: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #ef4444;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.06);
 }
 
 .btn-autofill-unknown:hover {
     background-color: #fecaca;
     border-color: #ef4444;
-    transform: translateY(-50%) scale(1.05);
-}
-
-.btn-autofill-unknown:active {
-    transform: translateY(-50%) scale(0.95);
-}
-
-/* Adjust position for Textareas */
-.input-group textarea ~ .btn-autofill-unknown {
-    top: 24px;
-    transform: none;
-}
-
-.input-group textarea ~ .btn-autofill-unknown:hover {
     transform: scale(1.05);
 }
 
-.input-group textarea ~ .btn-autofill-unknown:active {
+.btn-autofill-unknown:active {
     transform: scale(0.95);
-}
-
-/* Show only when the input placeholder is shown (empty state) */
-.input-group input:placeholder-shown ~ .btn-autofill-unknown,
-.input-group textarea:placeholder-shown ~ .btn-autofill-unknown {
-    display: flex;
 }
 
 /* Photo Upload Invalid Border */

@@ -2225,3 +2225,21 @@ body {
     border: 1px solid rgba(239, 68, 68, 0.25) !important;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(239, 68, 68, 0.15) !important;
 }
+
+/* --- QR Modal Custom Styles --- */
+.qr-modal-card {
+    max-width: 420px !important;
+}
+
+#qr-code-container img, 
+#qr-code-container canvas {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 12px;
+}
+
+#qr-declaration-url {
+    font-family: var(--font-jakarta);
+    user-select: all;
+}
