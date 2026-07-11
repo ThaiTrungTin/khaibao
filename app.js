@@ -571,6 +571,69 @@ function initVoiceInput() {
     });
 }
 
+// --- GAIA Daily Intake ID System (STT.DDMMYY.4SốĐuôiSĐT) ---
+function getDateStringDDMMYY(dateObj = new Date()) {
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const y = String(dateObj.getFullYear()).slice(-2);
+    return `${d}${m}${y}`;
+}
+
+function getDailySeqNumber() {
+    const dateStr = getDateStringDDMMYY();
+    let stored = null;
+    try {
+        stored = JSON.parse(localStorage.getItem("gaia_daily_id_counter"));
+    } catch(e) {}
+    if (!stored || stored.date !== dateStr) {
+        stored = { date: dateStr, count: 1 };
+        localStorage.setItem("gaia_daily_id_counter", JSON.stringify(stored));
+    }
+    return String(stored.count).padStart(2, '0');
+}
+
+function incrementDailySeqNumber() {
+    const dateStr = getDateStringDDMMYY();
+    let stored = null;
+    try {
+        stored = JSON.parse(localStorage.getItem("gaia_daily_id_counter"));
+    } catch(e) {}
+    if (!stored || stored.date !== dateStr) {
+        stored = { date: dateStr, count: 2 };
+    } else {
+        stored.count += 1;
+    }
+    localStorage.setItem("gaia_daily_id_counter", JSON.stringify(stored));
+}
+
+function updateIntakeID() {
+    const stt = getDailySeqNumber();
+    const dateStr = getDateStringDDMMYY();
+    const phoneInput = document.getElementById("owner-phone");
+    const rawPhone = phoneInput ? phoneInput.value.replace(/\D/g, '') : "";
+
+    let last4 = "____";
+    if (rawPhone.length >= 4) {
+        last4 = rawPhone.slice(-4);
+    } else if (rawPhone.length > 0) {
+        last4 = rawPhone.padStart(4, '_');
+    }
+
+    const fullId = `${stt}.${dateStr}.${last4}`;
+
+    const screenBadge = document.getElementById("screen-banner-id");
+    if (screenBadge) {
+        screenBadge.textContent = `ID: ${fullId}`;
+    }
+
+    const printBadge = document.getElementById("print-banner-id");
+    if (printBadge) {
+        printBadge.textContent = `ID: ${fullId}`;
+    }
+
+    return fullId;
+}
+
 // --- Initialize App ---
 document.addEventListener("DOMContentLoaded", () => {
     // 1. Autofill today's date
@@ -595,6 +658,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Initialize voice input for address field
     initVoiceInput();
+
+    // Initialize GAIA Intake ID and listen to phone number input changes
+    updateIntakeID();
+    const ownerPhoneEl = document.getElementById("owner-phone");
+    if (ownerPhoneEl) {
+        ownerPhoneEl.addEventListener("input", updateIntakeID);
+    }
 
     // 6. Track form start time on first interaction (for bot fill-time check)
     const startTrackingInputs = ["owner-phone", "owner-name", "owner-address", "pet-name"];
@@ -624,8 +694,63 @@ function setupEventListeners() {
     const fabTrigger = document.getElementById("fab-lang-trigger");
 
     if (fabTrigger && fabLang) {
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initialLeft = 0, initialTop = 0;
+
+        function onPointerDown(e) {
+            isDragging = false;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            startX = clientX;
+            startY = clientY;
+
+            const rect = fabLang.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+
+            function onPointerMove(moveEvent) {
+                const curX = moveEvent.touches ? moveEvent.touches[0].clientX : moveEvent.clientX;
+                const curY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
+                const dx = curX - startX;
+                const dy = curY - startY;
+
+                if (Math.hypot(dx, dy) > 5) {
+                    isDragging = true;
+                    fabLang.classList.add("dragging");
+                    fabLang.style.right = "auto";
+                    fabLang.style.bottom = "auto";
+                    const newLeft = Math.max(0, Math.min(window.innerWidth - rect.width, initialLeft + dx));
+                    const newTop = Math.max(0, Math.min(window.innerHeight - rect.height, initialTop + dy));
+                    fabLang.style.left = `${newLeft}px`;
+                    fabLang.style.top = `${newTop}px`;
+                }
+            }
+
+            function onPointerUp() {
+                fabLang.classList.remove("dragging");
+                window.removeEventListener("mousemove", onPointerMove);
+                window.removeEventListener("mouseup", onPointerUp);
+                window.removeEventListener("touchmove", onPointerMove);
+                window.removeEventListener("touchend", onPointerUp);
+            }
+
+            window.addEventListener("mousemove", onPointerMove);
+            window.addEventListener("mouseup", onPointerUp);
+            window.addEventListener("touchmove", onPointerMove);
+            window.addEventListener("touchend", onPointerUp);
+        }
+
+        fabTrigger.addEventListener("mousedown", onPointerDown);
+        fabTrigger.addEventListener("touchstart", onPointerDown, { passive: true });
+
         fabTrigger.addEventListener("click", (e) => {
             e.stopPropagation();
+            if (isDragging) {
+                e.preventDefault();
+                isDragging = false;
+                return;
+            }
             fabLang.classList.toggle("open");
         });
 
@@ -900,7 +1025,10 @@ function setupEventListeners() {
         setTimeout(() => { document.title = originalTitle; }, 1000);
     });
 
+    window.addEventListener("beforeprint", populatePrintForm);
+
     function populatePrintForm() {
+        updateIntakeID();
         document.getElementById("print-owner-name").textContent = document.getElementById("owner-name").value.trim() || "-";
         document.getElementById("print-owner-phone").textContent = document.getElementById("owner-phone").value.trim() || "-";
         document.getElementById("print-owner-address").textContent = document.getElementById("owner-address").value.trim() || "-";
@@ -1693,6 +1821,7 @@ async function submitForm() {
 
     // Gather form data
     const formData = {
+        intake_id: updateIntakeID(),
         owner_name: document.getElementById("owner-name").value.trim(),
         owner_phone: document.getElementById("owner-phone").value.trim(),
         owner_address: document.getElementById("owner-address").value.trim(),
@@ -1761,6 +1890,7 @@ async function sendPendingSubmissions() {
             // Clean local metadata before sending to Supabase
             const dataToInsert = { ...item };
             delete dataToInsert.id_local;
+            delete dataToInsert.intake_id;
 
             if (supabaseClient) {
                 try {
@@ -1814,6 +1944,10 @@ function finalizeSubmission(originalBtnText) {
     // Clear local storage draft
     localStorage.removeItem("gaia_form_draft");
 
+    // Increment daily sequence number for the next customer
+    incrementDailySeqNumber();
+    updateIntakeID();
+
     // Trigger Success Modal
     successModal.classList.add("show");
 }
@@ -1831,6 +1965,9 @@ function resetForm() {
     // Autofill date again
     const today = new Date().toISOString().split('T')[0];
     formDateInput.value = today;
+
+    // Refresh Intake ID for new form
+    updateIntakeID();
 
     // Reset form start time so next fill is fresh
     formStartTime = null;

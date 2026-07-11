@@ -597,9 +597,32 @@ function renderAllIntakes(records) {
     });
 }
 
+// Helper to compute GAIA Intake ID: STT.DDMMYY.4SốĐuôiSĐT
+function getFormattedIntakeId(record) {
+    if (!record) return "--.------.----";
+    const dateObj = new Date(record.created_at || record.date_signed || new Date());
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const yy = String(dateObj.getFullYear()).slice(-2);
+    const dateDDMMYY = `${d}${m}${yy}`;
+
+    const rawPhone = String(record.owner_phone || "").replace(/\D/g, "");
+    const phoneTail = rawPhone.slice(-4).padStart(4, '0');
+
+    const sameDayRecords = (intakesData || []).filter(r => {
+        const dt = new Date(r.created_at || r.date_signed || new Date());
+        const dtDDMMYY = `${String(dt.getDate()).padStart(2, '0')}${String(dt.getMonth() + 1).padStart(2, '0')}${String(dt.getFullYear()).slice(-2)}`;
+        return dtDDMMYY === dateDDMMYY;
+    }).sort((a, b) => (new Date(a.created_at || 0)) - (new Date(b.created_at || 0)));
+
+    const seqIdx = sameDayRecords.findIndex(r => r.id === record.id);
+    const stt = String(seqIdx >= 0 ? seqIdx + 1 : 1).padStart(2, '0');
+    return `${stt}.${dateDDMMYY}.${phoneTail}`;
+}
 
 function createIntakeCard(record) {
     const card = document.createElement("div");
+    const gaiaIdStr = getFormattedIntakeId(record);
     const isDone = record.trang_thai === 'done';
     card.className = `intake-card ${isDone ? 'card-status-done' : 'card-status-new'}`;
     card.setAttribute("data-id", record.id);
@@ -678,6 +701,9 @@ function createIntakeCard(record) {
         <div class="card-body-wrap">
             <div class="card-top">
                 <div class="pet-details-brief" style="width: 100%;">
+                    <div style="margin-bottom: 5px;">
+                        <span style="background: #9B1530; color: #ffffff; padding: 2px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.3px; display: inline-block;">ID: ${gaiaIdStr}</span>
+                    </div>
                     <div class="pet-name-row">
                         <h3>${escapeHtml(record.pet_name)}</h3>
                         ${duplicateHTML}
@@ -848,7 +874,7 @@ async function toggleCardStatus(record, cardEl, btnEl) {
 // --- Open Detailed Modal View ---
 function openIntakeDetails(record) {
     activeIntakeRecord = record;
-    modalPatientId.textContent = `#ID-${record.id}`;
+    modalPatientId.textContent = `ID: ${getFormattedIntakeId(record)}`;
 
     // Owner Details
     dOwnerName.textContent = record.owner_name || "-";
@@ -964,6 +990,28 @@ function openIntakeDetails(record) {
     // ==========================================
     // 🖨️ Populate High-Fidelity Print Template
     // ==========================================
+    const printBannerIdEl = document.getElementById("print-banner-id");
+    if (printBannerIdEl && record) {
+        const dateObj = new Date(record.created_at || record.date_signed || new Date());
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const yy = String(dateObj.getFullYear()).slice(-2);
+        const dateDDMMYY = `${d}${m}${yy}`;
+
+        const rawPhone = String(record.owner_phone || "").replace(/\D/g, "");
+        const phoneTail = rawPhone.slice(-4).padStart(4, '0');
+
+        const sameDayRecords = (intakesData || []).filter(r => {
+            const dt = new Date(r.created_at || r.date_signed || new Date());
+            const dtDDMMYY = `${String(dt.getDate()).padStart(2, '0')}${String(dt.getMonth() + 1).padStart(2, '0')}${String(dt.getFullYear()).slice(-2)}`;
+            return dtDDMMYY === dateDDMMYY;
+        }).sort((a, b) => (new Date(a.created_at || 0)) - (new Date(b.created_at || 0)));
+
+        const seqIdx = sameDayRecords.findIndex(r => r.id === record.id);
+        const stt = String(seqIdx >= 0 ? seqIdx + 1 : 1).padStart(2, '0');
+        printBannerIdEl.textContent = `ID: ${stt}.${dateDDMMYY}.${phoneTail}`;
+    }
+
     document.getElementById("print-owner-name").textContent = record.owner_name || "-";
     document.getElementById("print-owner-phone").textContent = record.owner_phone || "-";
     document.getElementById("print-owner-address").textContent = record.owner_address || "-";
