@@ -1896,7 +1896,7 @@ function initSoundToggle() {
 }
 
 // ==========================================
-// 🟢 FB / Zalo Real-time Live Form Activity Indicator (Supabase Presence)
+// 🟢 FB / Zalo Real-time Live Form Activity Indicator (Supabase Broadcast + Presence)
 // ==========================================
 function initLiveTypingIndicator() {
     const typingTextEl = document.getElementById("live-typing-text");
@@ -1904,8 +1904,9 @@ function initLiveTypingIndicator() {
     const onlineBadgeEl = document.querySelector(".live-online-badge");
     if (!typingTextEl) return;
 
-    let activeUsersCount = 0;
     const localActiveClients = new Set();
+    const remoteActiveClients = new Map();
+    let activeUsersCount = 0;
 
     // 1. Listen to cross-tab BroadcastChannel & LocalStorage heartbeats
     try {
@@ -1924,22 +1925,42 @@ function initLiveTypingIndicator() {
         }
     } catch (e) {}
 
-    // Periodic check for local activity timestamp (fallback across tabs)
+    // Periodic check for stale heartbeats
     setInterval(() => {
         try {
             const lastPing = parseInt(localStorage.getItem('gaia_live_form_ping') || '0', 10);
             if (Date.now() - lastPing > 5000) {
                 localActiveClients.clear();
-                if (activeUsersCount === 0) updateLiveUI(0);
-            } else if (Date.now() - lastPing < 5000 && activeUsersCount === 0 && localActiveClients.size === 0) {
-                updateLiveUI(1);
+            } else if (Date.now() - lastPing <= 5000 && localActiveClients.size === 0) {
+                localActiveClients.add('local_fallback');
             }
         } catch (e) {}
+        checkActiveCount();
     }, 1500);
 
-    // 2. Listen to Supabase Realtime Presence across devices
+    // 2. Listen to Supabase Realtime Broadcast & Presence across devices worldwide
     if (supabaseClient) {
         try {
+            // Instant global broadcast pings from any phone/device
+            const liveRoom = supabaseClient.channel('gaia_live_users_room');
+            liveRoom
+                .on('broadcast', { event: 'FORM_USER_PING' }, (message) => {
+                    const payload = message.payload;
+                    if (payload && payload.clientId) {
+                        remoteActiveClients.set(payload.clientId, Date.now());
+                        checkActiveCount();
+                    }
+                })
+                .on('broadcast', { event: 'FORM_USER_LEAVE' }, (message) => {
+                    const payload = message.payload;
+                    if (payload && payload.clientId) {
+                        remoteActiveClients.delete(payload.clientId);
+                        checkActiveCount();
+                    }
+                })
+                .subscribe();
+
+            // Presence sync as secondary backup
             const presenceChannel = supabaseClient.channel('gaia_form_activity', {
                 config: { presence: { key: 'admin_dashboard' } }
             });
@@ -1951,16 +1972,20 @@ function initLiveTypingIndicator() {
                         if (key !== 'admin_dashboard') count++;
                     }
                     activeUsersCount = count;
-                    updateLiveUI(count);
+                    checkActiveCount();
                 })
                 .subscribe();
         } catch (e) {
-            console.warn("Could not sync presence:", e);
+            console.warn("Could not sync real-time live users:", e);
         }
     }
 
     function checkActiveCount() {
-        const total = Math.max(localActiveClients.size, activeUsersCount);
+        const now = Date.now();
+        for (const [id, time] of remoteActiveClients.entries()) {
+            if (now - time > 6000) remoteActiveClients.delete(id);
+        }
+        const total = Math.max(localActiveClients.size, remoteActiveClients.size, activeUsersCount);
         updateLiveUI(total);
     }
 

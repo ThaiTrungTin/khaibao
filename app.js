@@ -239,11 +239,11 @@ if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CO
     console.warn("GAIA: Supabase credentials are not configured in env.js. Operating in local Mock Mode.");
 }
 
-// Join Supabase real-time presence & local broadcast so Admin dashboard shows accurate live form user count
+// Join Supabase real-time broadcast & presence so Admin dashboard shows accurate live form user count globally
 function initFormPresence() {
     const clientId = 'customer_' + Math.random().toString(36).substring(2, 10);
 
-    // 1. Local cross-tab heartbeat (works instantly across tabs/windows on same PC)
+    // 1. Local cross-tab heartbeat (same PC/browser)
     function pingLocalPresence() {
         try {
             localStorage.setItem('gaia_live_form_ping', Date.now());
@@ -254,31 +254,40 @@ function initFormPresence() {
         } catch (e) {}
     }
     pingLocalPresence();
-    setInterval(pingLocalPresence, 3000);
+    setInterval(pingLocalPresence, 2500);
 
-    // 2. Supabase Realtime Presence (works across different devices/phones/PCs)
+    // 2. Supabase Realtime Broadcast across all devices & networks worldwide
     if (!supabaseClient) return;
     try {
+        const liveRoom = supabaseClient.channel('gaia_live_users_room');
+        liveRoom.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                // Send immediate ping
+                liveRoom.send({
+                    type: 'broadcast',
+                    event: 'FORM_USER_PING',
+                    payload: { clientId, time: Date.now() }
+                });
+                // Repeat ping every 2.5 seconds
+                setInterval(() => {
+                    liveRoom.send({
+                        type: 'broadcast',
+                        event: 'FORM_USER_PING',
+                        payload: { clientId, time: Date.now() }
+                    });
+                }, 2500);
+            }
+        });
+
+        // Also track via presence channel as backup
         const presenceChannel = supabaseClient.channel('gaia_form_activity', {
             config: { presence: { key: clientId } }
         });
         presenceChannel.subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                await presenceChannel.track({
-                    user: clientId,
-                    online_at: new Date().toISOString()
-                });
+                await presenceChannel.track({ user: clientId, online_at: new Date().toISOString() });
             }
         });
-        // Keep presence alive
-        setInterval(async () => {
-            try {
-                await presenceChannel.track({
-                    user: clientId,
-                    online_at: new Date().toISOString()
-                });
-            } catch (e) {}
-        }, 15000);
 
         function cleanupPresence() {
             try {
@@ -286,6 +295,11 @@ function initFormPresence() {
                     const bc = new BroadcastChannel('gaia_live_form');
                     bc.postMessage({ type: 'LEAVE', clientId });
                 }
+                liveRoom.send({
+                    type: 'broadcast',
+                    event: 'FORM_USER_LEAVE',
+                    payload: { clientId }
+                });
                 localStorage.removeItem('gaia_live_form_ping');
                 presenceChannel.untrack();
             } catch (e) {}
