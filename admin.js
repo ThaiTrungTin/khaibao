@@ -1135,6 +1135,11 @@ function setupEventListeners() {
         const originalTitle = document.title;
         document.title = `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City`;
         
+        const printBannerIdEl = document.getElementById("print-banner-id");
+        if (printBannerIdEl) {
+            printBannerIdEl.textContent = `ID: ${getFormattedIntakeId(activeIntakeRecord)}`;
+        }
+
         window.print();
         
         // Restore title after print dialog closes
