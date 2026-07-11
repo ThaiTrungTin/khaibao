@@ -1938,11 +1938,16 @@ function initLiveTypingIndicator() {
         checkActiveCount();
     }, 1500);
 
-    // 2. Listen to Supabase Realtime Broadcast & Presence across devices worldwide
+    // 2. Listen to Supabase Realtime Unified Channel (Broadcast + Presence across devices worldwide)
     if (supabaseClient) {
         try {
-            // Instant global broadcast pings from any phone/device
-            const liveRoom = supabaseClient.channel('gaia_live_users_room');
+            const liveRoom = supabaseClient.channel('gaia_live_form_room_v1', {
+                config: {
+                    broadcast: { self: true, ack: false },
+                    presence: { key: 'admin_dashboard' }
+                }
+            });
+
             liveRoom
                 .on('broadcast', { event: 'FORM_USER_PING' }, (message) => {
                     const payload = message.payload;
@@ -1958,15 +1963,8 @@ function initLiveTypingIndicator() {
                         checkActiveCount();
                     }
                 })
-                .subscribe();
-
-            // Presence sync as secondary backup
-            const presenceChannel = supabaseClient.channel('gaia_form_activity', {
-                config: { presence: { key: 'admin_dashboard' } }
-            });
-            presenceChannel
                 .on('presence', { event: 'sync' }, () => {
-                    const state = presenceChannel.presenceState();
+                    const state = liveRoom.presenceState();
                     let count = 0;
                     for (const key in state) {
                         if (key !== 'admin_dashboard') count++;

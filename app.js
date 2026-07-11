@@ -254,40 +254,36 @@ function initFormPresence() {
         } catch (e) {}
     }
     pingLocalPresence();
-    setInterval(pingLocalPresence, 2500);
+    setInterval(pingLocalPresence, 2000);
 
-    // 2. Supabase Realtime Broadcast across all devices & networks worldwide
+    // 2. Supabase Realtime Unified Channel (Broadcast + Presence across all devices worldwide)
     if (!supabaseClient) return;
     try {
-        const liveRoom = supabaseClient.channel('gaia_live_users_room');
-        liveRoom.subscribe((status) => {
+        const liveRoom = supabaseClient.channel('gaia_live_form_room_v1', {
+            config: {
+                broadcast: { self: true, ack: false },
+                presence: { key: clientId }
+            }
+        });
+
+        liveRoom.subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                // Send immediate ping
+                try {
+                    await liveRoom.track({ user: clientId, online_at: Date.now() });
+                } catch (e) {}
+            }
+        });
+
+        // Continuously send broadcast pings every 2 seconds
+        setInterval(() => {
+            try {
                 liveRoom.send({
                     type: 'broadcast',
                     event: 'FORM_USER_PING',
                     payload: { clientId, time: Date.now() }
                 });
-                // Repeat ping every 2.5 seconds
-                setInterval(() => {
-                    liveRoom.send({
-                        type: 'broadcast',
-                        event: 'FORM_USER_PING',
-                        payload: { clientId, time: Date.now() }
-                    });
-                }, 2500);
-            }
-        });
-
-        // Also track via presence channel as backup
-        const presenceChannel = supabaseClient.channel('gaia_form_activity', {
-            config: { presence: { key: clientId } }
-        });
-        presenceChannel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await presenceChannel.track({ user: clientId, online_at: new Date().toISOString() });
-            }
-        });
+            } catch (e) {}
+        }, 2000);
 
         function cleanupPresence() {
             try {
@@ -300,8 +296,8 @@ function initFormPresence() {
                     event: 'FORM_USER_LEAVE',
                     payload: { clientId }
                 });
+                liveRoom.untrack();
                 localStorage.removeItem('gaia_live_form_ping');
-                presenceChannel.untrack();
             } catch (e) {}
         }
         window.addEventListener('beforeunload', cleanupPresence);
