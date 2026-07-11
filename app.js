@@ -59,7 +59,8 @@ const translations = {
         btn_expand_more: "Hiển thị thêm",
         voice_tooltip: "Nhập bằng giọng nói",
         voice_listening: "Đang nghe...",
-        voice_not_supported: "Trình duyệt không hỗ trợ nhập giọng nói"
+        voice_not_supported: "Trình duyệt không hỗ trợ nhập giọng nói",
+        error_invalid_number: "Thông tin không hợp lệ"
     },
     en: {
         title: "Owner & Pet Profile",
@@ -118,7 +119,8 @@ const translations = {
         btn_expand_more: "Show more",
         voice_tooltip: "Voice input",
         voice_listening: "Listening...",
-        voice_not_supported: "Voice input is not supported in this browser"
+        voice_not_supported: "Voice input is not supported in this browser",
+        error_invalid_number: "Invalid number format"
     },
     ja: {
         title: "ペット・飼い主様 登録",
@@ -177,7 +179,8 @@ const translations = {
         btn_expand_more: "もっと見る",
         voice_tooltip: "音声入力",
         voice_listening: "聞いています...",
-        voice_not_supported: "このブラウザは音声入力に対応していません"
+        voice_not_supported: "このブラウザは音声入力に対応していません",
+        error_invalid_number: "数値の形式が正しくありません"
     }
 };
 
@@ -384,6 +387,44 @@ function stopAllVoiceRecording() {
     }
 }
 
+function parseSpeechNumber(text) {
+    if (!text) return "";
+    let s = text.trim().toLowerCase();
+
+    // Clean up decimals & rưỡi
+    s = s.replace(/,/g, ".")
+         .replace(/phẩy|chấm|point|dot/g, ".")
+         .replace(/\s*\.\s*/g, ".")
+         .replace(/rưỡi/g, ".5");
+
+    // Word mapping for Vietnamese & English numbers
+    const numMap = {
+        "không": "0", "zero": "0",
+        "một": "1", "mốt": "1", "one": "1",
+        "hai": "2", "two": "2",
+        "ba": "3", "three": "3",
+        "bốn": "4", "tư": "4", "four": "4",
+        "năm": "5", "lăm": "5", "five": "5",
+        "sáu": "6", "six": "6",
+        "bảy": "7", "bẩy": "7", "seven": "7",
+        "tám": "8", "eight": "8",
+        "chín": "9", "nine": "9",
+        "mười": "10", "chục": "10", "ten": "10"
+    };
+
+    for (const [word, digit] of Object.entries(numMap)) {
+        const regex = new RegExp(`\\b${word}\\b`, "g");
+        s = s.replace(regex, digit);
+    }
+
+    // Extract first valid integer or decimal number
+    const match = s.match(/(\d+(?:\.\d+)?)/);
+    if (match) {
+        return match[1];
+    }
+    return text.trim();
+}
+
 function startVoiceRecording(field, micBtn) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -424,12 +465,23 @@ function startVoiceRecording(field, micBtn) {
             }
         }
 
+        let rawText = "";
         if (sessionFinal) {
             finalTranscript = finalTranscript + separator + sessionFinal;
-            field.value = finalTranscript;
+            rawText = finalTranscript;
         } else {
-            field.value = finalTranscript + separator + interimTranscript;
+            rawText = finalTranscript + separator + interimTranscript;
         }
+
+        const isNumericField = field.id === "pet-weight" || field.id === "pet-age" || field.getAttribute("data-numeric") === "true" || field.type === "number";
+        if (isNumericField) {
+            field.value = parseSpeechNumber(rawText);
+        } else {
+            field.value = rawText;
+        }
+
+        // Dispatch events so form saves and validates instantly
+        field.dispatchEvent(new Event("input", { bubbles: true }));
 
         // Trigger auto-expand for textareas
         if (field.tagName === "TEXTAREA" && typeof updateTextareaResize === "function") {
@@ -605,7 +657,7 @@ function setupEventListeners() {
         const clientHeight = window.innerHeight;
 
         if (scrollTopBtn) {
-            if (scrollTop > 250) {
+            if (scrollTop > 200) {
                 scrollTopBtn.classList.add("visible");
             } else {
                 scrollTopBtn.classList.remove("visible");
@@ -613,7 +665,7 @@ function setupEventListeners() {
         }
 
         if (scrollBottomBtn) {
-            if (scrollTop + clientHeight < scrollHeight - 150) {
+            if (scrollTop + clientHeight < scrollHeight - 80) {
                 scrollBottomBtn.classList.add("visible");
             } else {
                 scrollBottomBtn.classList.remove("visible");
@@ -1286,40 +1338,43 @@ function validateInput(input) {
     if (!parent) return true;
 
     let isInputValid = true;
+    let customErrorMsg = null;
 
     // Checkbox consent validation
     if (input.type === "checkbox") {
         if (!input.checked) {
             isInputValid = false;
+            customErrorMsg = translations[currentLang].error_consent;
         }
     }
     // Text and textarea empty check
     else if (!input.value.trim()) {
         isInputValid = false;
+        customErrorMsg = translations[currentLang].error_required;
     }
     // Pattern phone validation
     else if (input.type === "tel") {
         const phonePattern = /^[0-9\s\-\+\(\)]{9,15}$/;
         if (!phonePattern.test(input.value.trim())) {
             isInputValid = false;
-            // Show custom error msg for phone if defined
-            const errorEl = parent.querySelector(".error-msg");
-            if (errorEl) {
-                errorEl.textContent = translations[currentLang].error_phone;
-            }
+            customErrorMsg = translations[currentLang].error_phone;
+        }
+    }
+    // Numeric fields check (Weight, Age)
+    else if (input.id === "pet-weight" || input.id === "pet-age" || input.getAttribute("data-numeric") === "true" || input.type === "number") {
+        const cleanVal = input.value.trim().replace(/,/g, ".");
+        const numVal = Number(cleanVal);
+        if (isNaN(numVal) || !isFinite(numVal) || numVal < 0 || !/^\d+(?:\.\d+)?$/.test(cleanVal)) {
+            isInputValid = false;
+            customErrorMsg = translations[currentLang].error_invalid_number || "Thông tin không hợp lệ";
         }
     }
 
     if (!isInputValid) {
         parent.classList.add("invalid");
         const errorEl = parent.querySelector(".error-msg");
-        if (errorEl) {
-            // Pick correct translation for validation error
-            if (input.type === "checkbox") {
-                errorEl.textContent = translations[currentLang].error_consent;
-            } else if (input.type !== "tel") {
-                errorEl.textContent = translations[currentLang].error_required;
-            }
+        if (errorEl && customErrorMsg) {
+            errorEl.textContent = customErrorMsg;
         }
     } else {
         parent.classList.remove("invalid");
@@ -1342,7 +1397,12 @@ function updateLanguage(lang) {
 
     const fabCurrent = document.getElementById("fab-lang-current");
     if (fabCurrent) {
-        fabCurrent.textContent = lang.toUpperCase();
+        const flagSVGs = {
+            vi: `<svg class="flag-icon" viewBox="0 0 24 16" width="18" height="12"><rect width="24" height="16" fill="#da251d" rx="2"/><polygon points="12,3.5 14.6,11.5 7.7,6.4 16.3,6.4 9.4,11.5" fill="#ffff00"/></svg>`,
+            en: `<svg class="flag-icon" viewBox="0 0 24 16" width="18" height="12"><rect width="24" height="16" fill="#012169" rx="2"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#ffffff" stroke-width="2.6"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#C8102E" stroke-width="1.4"/><path d="M12,0 V16 M0,8 H24" stroke="#ffffff" stroke-width="4"/><path d="M12,0 V16 M0,8 H24" stroke="#C8102E" stroke-width="2.4"/></svg>`,
+            ja: `<svg class="flag-icon" viewBox="0 0 24 16" width="18" height="12"><rect width="24" height="16" fill="#ffffff" stroke="#e0e0e0" stroke-width="0.8" rx="2"/><circle cx="12" cy="8" r="4.8" fill="#bc002d"/></svg>`
+        };
+        fabCurrent.innerHTML = `${flagSVGs[lang] || flagSVGs.vi} <span>${lang.toUpperCase()}</span>`;
     }
 
     // Update all components containing data-key
