@@ -231,11 +231,31 @@ if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CO
         // supabase.createClient comes from the loaded @supabase/supabase-js library CDN
         supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
         console.log("GAIA: Supabase Client initialized successfully!");
+        initFormPresence();
     } catch (e) {
         console.error("GAIA: Error initializing Supabase client:", e);
     }
 } else {
     console.warn("GAIA: Supabase credentials are not configured in env.js. Operating in local Mock Mode.");
+}
+
+// Join Supabase real-time presence channel so Admin dashboard shows accurate live form user count
+function initFormPresence() {
+    if (!supabaseClient) return;
+    try {
+        const clientId = 'customer_' + Math.random().toString(36).substring(2, 10);
+        const presenceChannel = supabaseClient.channel('gaia_form_activity');
+        presenceChannel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await presenceChannel.track({
+                    user: clientId,
+                    online_at: new Date().toISOString()
+                });
+            }
+        });
+    } catch (e) {
+        console.warn("Could not start presence tracking:", e);
+    }
 }
 
 // --- Auto-expanding Textareas with > 3 Lines Expand/Collapse Toggle ---

@@ -77,8 +77,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 1. Set current date stat
     updateDateDisplay();
 
-    // 2. Initialize sound settings
+    // 2. Initialize sound settings & live typing indicator
     initSoundToggle();
+    initLiveTypingIndicator();
 
     // 3. Initialize Supabase Client
     if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_PROJECT_URL') {
@@ -1892,6 +1893,55 @@ function initSoundToggle() {
             soundStatusSpan.textContent = "Âm thanh: Tắt";
         }
     });
+}
+
+// ==========================================
+// 🟢 FB / Zalo Real-time Live Form Activity Indicator (Supabase Presence)
+// ==========================================
+function initLiveTypingIndicator() {
+    const typingTextEl = document.getElementById("live-typing-text");
+    const typingDotsEl = document.querySelector(".live-typing-dots");
+    const onlineBadgeEl = document.querySelector(".live-online-badge");
+    if (!typingTextEl) return;
+
+    // Default status when nobody is filling out the form right now
+    updateLiveUI(0);
+
+    if (!supabaseClient) return;
+
+    try {
+        const presenceChannel = supabaseClient.channel('gaia_form_activity');
+        presenceChannel
+            .on('presence', { event: 'sync' }, () => {
+                const state = presenceChannel.presenceState();
+                const activeCount = Object.keys(state).length;
+                updateLiveUI(activeCount);
+            })
+            .subscribe();
+    } catch (e) {
+        console.warn("Could not sync presence:", e);
+    }
+
+    function updateLiveUI(count) {
+        if (!typingTextEl) return;
+        if (count === 0) {
+            typingTextEl.textContent = "Hiện chưa có ai điền form";
+            typingTextEl.style.color = "var(--text-muted)";
+            if (typingDotsEl) typingDotsEl.style.display = "none";
+            if (onlineBadgeEl) {
+                onlineBadgeEl.style.background = "#64748B";
+                onlineBadgeEl.style.boxShadow = "none";
+            }
+        } else {
+            typingTextEl.textContent = `Có ${count} người đang điền form`;
+            typingTextEl.style.color = "#10B981";
+            if (typingDotsEl) typingDotsEl.style.display = "flex";
+            if (onlineBadgeEl) {
+                onlineBadgeEl.style.background = "#10B981";
+                onlineBadgeEl.style.boxShadow = "0 0 6px #10B981";
+            }
+        }
+    }
 }
 
 function showErrorState(errorMessage) {
