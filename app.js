@@ -239,12 +239,29 @@ if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CO
     console.warn("GAIA: Supabase credentials are not configured in env.js. Operating in local Mock Mode.");
 }
 
-// Join Supabase real-time presence channel so Admin dashboard shows accurate live form user count
+// Join Supabase real-time presence & local broadcast so Admin dashboard shows accurate live form user count
 function initFormPresence() {
+    const clientId = 'customer_' + Math.random().toString(36).substring(2, 10);
+
+    // 1. Local cross-tab heartbeat (works instantly across tabs/windows on same PC)
+    function pingLocalPresence() {
+        try {
+            localStorage.setItem('gaia_live_form_ping', Date.now());
+            if (typeof BroadcastChannel !== 'undefined') {
+                const bc = new BroadcastChannel('gaia_live_form');
+                bc.postMessage({ type: 'PING', clientId, time: Date.now() });
+            }
+        } catch (e) {}
+    }
+    pingLocalPresence();
+    setInterval(pingLocalPresence, 3000);
+
+    // 2. Supabase Realtime Presence (works across different devices/phones/PCs)
     if (!supabaseClient) return;
     try {
-        const clientId = 'customer_' + Math.random().toString(36).substring(2, 10);
-        const presenceChannel = supabaseClient.channel('gaia_form_activity');
+        const presenceChannel = supabaseClient.channel('gaia_form_activity', {
+            config: { presence: { key: clientId } }
+        });
         presenceChannel.subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 await presenceChannel.track({
@@ -253,6 +270,28 @@ function initFormPresence() {
                 });
             }
         });
+        // Keep presence alive
+        setInterval(async () => {
+            try {
+                await presenceChannel.track({
+                    user: clientId,
+                    online_at: new Date().toISOString()
+                });
+            } catch (e) {}
+        }, 15000);
+
+        function cleanupPresence() {
+            try {
+                if (typeof BroadcastChannel !== 'undefined') {
+                    const bc = new BroadcastChannel('gaia_live_form');
+                    bc.postMessage({ type: 'LEAVE', clientId });
+                }
+                localStorage.removeItem('gaia_live_form_ping');
+                presenceChannel.untrack();
+            } catch (e) {}
+        }
+        window.addEventListener('beforeunload', cleanupPresence);
+        window.addEventListener('pagehide', cleanupPresence);
     } catch (e) {
         console.warn("Could not start presence tracking:", e);
     }

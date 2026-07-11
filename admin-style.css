@@ -186,6 +186,26 @@ body {
     box-shadow: 0 0 6px #10B981;
 }
 
+.live-count-badge {
+    display: none; /* Hidden on desktop where full text is shown */
+    position: absolute;
+    top: -6px;
+    right: -8px;
+    background: #EF4444;
+    color: #FFFFFF;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 14px;
+    padding: 0 4px;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    border: 1.5px solid #0A0E17;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.85);
+    text-align: center;
+    z-index: 5;
+}
+
 .live-typing-text {
     font-size: 13.5px;
     font-weight: 700;
@@ -228,9 +248,81 @@ body {
     }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 950px) {
+    .dashboard-header {
+        height: 52px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 5px !important;
+        padding: 6px 8px !important;
+    }
+    .brand-section {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }
+    .brand-text h1 {
+        font-size: 13px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .header-controls {
+        flex: 0 0 auto !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        margin-left: auto !important;
+    }
     .live-typing-widget {
-        display: none;
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+    }
+    /* Reduce icon sizes down to 2/3 (~26px x 26px) */
+    .live-typing-pill,
+    .header-controls .control-btn {
+        width: 26px !important;
+        height: 26px !important;
+        min-width: 26px !important;
+        padding: 0 !important;
+        border-radius: 50% !important;
+        justify-content: center !important;
+        display: flex !important;
+        align-items: center !important;
+        background: rgba(255, 255, 255, 0.06) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        box-shadow: none !important;
+    }
+    .live-user-icon,
+    .header-controls .control-btn svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
+    .live-count-badge {
+        top: -5px !important;
+        right: -6px !important;
+        font-size: 9px !important;
+        line-height: 12px !important;
+        min-width: 14px !important;
+        height: 14px !important;
+        padding: 0 3px !important;
+        display: inline-block !important;
+    }
+    .live-online-badge {
+        width: 7px !important;
+        height: 7px !important;
+        bottom: -1px !important;
+        right: -1px !important;
+    }
+    .status-indicator {
+        height: 24px !important;
+        padding: 2px 7px !important;
+        font-size: 10px !important;
+        border-radius: 12px !important;
+    }
+    .live-typing-text,
+    .live-typing-dots {
+        display: none !important;
     }
 }
 
@@ -1881,45 +1973,72 @@ body {
 /* 2. Tablets and Medium Devices (max-width: 768px) */
 @media (max-width: 768px) {
     .dashboard-header {
-        height: 54px !important;
-        padding: 8px 12px !important;
+        height: auto !important;
+        min-height: 52px !important;
+        padding: 6px 10px !important;
         flex-direction: row !important;
+        flex-wrap: nowrap !important;
         justify-content: space-between !important;
         align-items: center !important;
-        gap: 10px !important;
+        gap: 6px !important;
     }
 
     .brand-section {
+        flex: 1 1 auto !important;
         flex-direction: row !important;
         align-items: center !important;
-        gap: 10px !important;
+        gap: 8px !important;
         text-align: left !important;
+        min-width: 0 !important;
     }
 
     .logo-wrap {
-        padding: 4px 8px !important;
+        padding: 2px 6px !important;
+        flex: 0 0 auto !important;
     }
 
     .brand-logo {
-        max-height: 28px !important;
+        max-height: 26px !important;
     }
 
     .brand-text h1 {
-        font-size: 15px !important;
+        font-size: 12.5px !important;
+        line-height: 1.25 !important;
+        white-space: normal !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 2 !important;
+        -webkit-box-orient: vertical !important;
+        overflow: hidden !important;
     }
 
     .header-controls {
+        flex: 0 0 auto !important;
         width: auto !important;
+        display: flex !important;
+        align-items: center !important;
         justify-content: flex-end !important;
-        gap: 8px !important;
+        gap: 5px !important;
+        margin-left: auto !important;
     }
     
-    .control-btn, .status-indicator {
+    .control-btn, .live-typing-pill {
         flex: none !important;
-        padding: 6px 10px !important;
-        font-size: 11px !important;
-        border-radius: 8px !important;
-        min-width: auto !important;
+        width: 26px !important;
+        height: 26px !important;
+        min-width: 26px !important;
+        padding: 0 !important;
+        border-radius: 50% !important;
+        justify-content: center !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .status-indicator {
+        flex: none !important;
+        height: 24px !important;
+        padding: 2px 7px !important;
+        font-size: 10px !important;
+        border-radius: 12px !important;
     }
 
     .control-btn span {

@@ -1904,26 +1904,69 @@ function initLiveTypingIndicator() {
     const onlineBadgeEl = document.querySelector(".live-online-badge");
     if (!typingTextEl) return;
 
-    // Default status when nobody is filling out the form right now
-    updateLiveUI(0);
+    let activeUsersCount = 0;
+    const localActiveClients = new Set();
 
-    if (!supabaseClient) return;
-
+    // 1. Listen to cross-tab BroadcastChannel & LocalStorage heartbeats
     try {
-        const presenceChannel = supabaseClient.channel('gaia_form_activity');
-        presenceChannel
-            .on('presence', { event: 'sync' }, () => {
-                const state = presenceChannel.presenceState();
-                const activeCount = Object.keys(state).length;
-                updateLiveUI(activeCount);
-            })
-            .subscribe();
-    } catch (e) {
-        console.warn("Could not sync presence:", e);
+        if (typeof BroadcastChannel !== 'undefined') {
+            const bc = new BroadcastChannel('gaia_live_form');
+            bc.onmessage = (event) => {
+                if (!event.data) return;
+                if (event.data.type === 'PING') {
+                    localActiveClients.add(event.data.clientId);
+                    checkActiveCount();
+                } else if (event.data.type === 'LEAVE') {
+                    localActiveClients.delete(event.data.clientId);
+                    checkActiveCount();
+                }
+            };
+        }
+    } catch (e) {}
+
+    // Periodic check for local activity timestamp (fallback across tabs)
+    setInterval(() => {
+        try {
+            const lastPing = parseInt(localStorage.getItem('gaia_live_form_ping') || '0', 10);
+            if (Date.now() - lastPing > 5000) {
+                localActiveClients.clear();
+                if (activeUsersCount === 0) updateLiveUI(0);
+            } else if (Date.now() - lastPing < 5000 && activeUsersCount === 0 && localActiveClients.size === 0) {
+                updateLiveUI(1);
+            }
+        } catch (e) {}
+    }, 1500);
+
+    // 2. Listen to Supabase Realtime Presence across devices
+    if (supabaseClient) {
+        try {
+            const presenceChannel = supabaseClient.channel('gaia_form_activity', {
+                config: { presence: { key: 'admin_dashboard' } }
+            });
+            presenceChannel
+                .on('presence', { event: 'sync' }, () => {
+                    const state = presenceChannel.presenceState();
+                    let count = 0;
+                    for (const key in state) {
+                        if (key !== 'admin_dashboard') count++;
+                    }
+                    activeUsersCount = count;
+                    updateLiveUI(count);
+                })
+                .subscribe();
+        } catch (e) {
+            console.warn("Could not sync presence:", e);
+        }
+    }
+
+    function checkActiveCount() {
+        const total = Math.max(localActiveClients.size, activeUsersCount);
+        updateLiveUI(total);
     }
 
     function updateLiveUI(count) {
         const typingWidgetEl = document.getElementById("live-typing-widget");
+        const countBadgeEl = document.getElementById("live-count-badge");
         if (!typingTextEl) return;
         if (count === 0) {
             if (typingWidgetEl) typingWidgetEl.style.display = "none";
@@ -1931,6 +1974,7 @@ function initLiveTypingIndicator() {
             if (typingWidgetEl) typingWidgetEl.style.display = "flex";
             typingTextEl.textContent = `Có ${count} người đang điền form`;
             typingTextEl.style.color = "#10B981";
+            if (countBadgeEl) countBadgeEl.textContent = count;
             if (typingDotsEl) typingDotsEl.style.display = "flex";
             if (onlineBadgeEl) {
                 onlineBadgeEl.style.background = "#10B981";
@@ -1938,6 +1982,9 @@ function initLiveTypingIndicator() {
             }
         }
     }
+
+    // Default status on initial load
+    updateLiveUI(0);
 }
 
 function showErrorState(errorMessage) {
