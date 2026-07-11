@@ -30,15 +30,6 @@
                 <img src="Form - G22_files/image002.png" alt="GAIA Animal Hospital" class="gaia-header-banner">
             </div>
 
-            <div class="header-top" style="justify-content: flex-end; margin-bottom: 12px;">
-                <!-- Language Selector -->
-                <div class="lang-selector">
-                    <button class="lang-btn active" data-lang="vi">VI</button>
-                    <button class="lang-btn" data-lang="en">EN</button>
-                    <button class="lang-btn" data-lang="ja">JA</button>
-                </div>
-            </div>
-
             <!-- Form Title -->
             <div class="header-title-section">
                 <h1 id="main-title" data-key="title">Thông tin Chủ & Thú cưng</h1>
@@ -130,6 +121,10 @@
                                 <span class="label-primary" data-key="label_owner_address">Địa chỉ</span>
                                 <span class="label-sub">Address | 住所</span>
                             </label>
+                            <button type="button" class="btn-textarea-toggle" tabindex="-1">
+                                <span class="toggle-icon">▲</span>
+                                <span class="toggle-text" data-key="btn_collapse">Ẩn bớt</span>
+                            </button>
                             <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
                         </div>
                     </div>
@@ -438,6 +433,10 @@
                                 <button type="button" class="btn-autofill-unknown" tabindex="-1">✗ <span
                                         data-key="choice_unknown">Không rõ</span></button>
                             </div>
+                            <button type="button" class="btn-textarea-toggle" tabindex="-1">
+                                <span class="toggle-icon">▲</span>
+                                <span class="toggle-text" data-key="btn_collapse">Ẩn bớt</span>
+                            </button>
                             <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
                         </div>
 
@@ -454,6 +453,10 @@
                                 <button type="button" class="btn-autofill-unknown" tabindex="-1">✗ <span
                                         data-key="choice_unknown">Không rõ</span></button>
                             </div>
+                            <button type="button" class="btn-textarea-toggle" tabindex="-1">
+                                <span class="toggle-icon">▲</span>
+                                <span class="toggle-text" data-key="btn_collapse">Ẩn bớt</span>
+                            </button>
                             <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
                         </div>
 
@@ -471,6 +474,10 @@
                                 <button type="button" class="btn-autofill-unknown" tabindex="-1">✗ <span
                                         data-key="choice_unknown">Không rõ</span></button>
                             </div>
+                            <button type="button" class="btn-textarea-toggle" tabindex="-1">
+                                <span class="toggle-icon">▲</span>
+                                <span class="toggle-text" data-key="btn_collapse">Ẩn bớt</span>
+                            </button>
                             <span class="error-msg" data-key="error_required">Vui lòng điền thông tin này</span>
                         </div>
 
@@ -982,6 +989,37 @@
                 <!-- Photos dynamically injected by JS -->
             </div>
         </div>
+    </div>
+
+    <!-- Floating Language Selector FAB -->
+    <div class="fab-lang" id="fab-lang">
+        <button class="fab-lang-trigger" id="fab-lang-trigger" aria-label="Chọn ngôn ngữ">
+            <svg class="fab-lang-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            <span class="fab-lang-current" id="fab-lang-current">VI</span>
+        </button>
+        <div class="fab-lang-menu" id="fab-lang-menu">
+            <button class="lang-btn active" data-lang="vi">VI</button>
+            <button class="lang-btn" data-lang="en">EN</button>
+            <button class="lang-btn" data-lang="ja">JA</button>
+        </div>
+    </div>
+
+    <!-- Floating Scroll Buttons -->
+    <div class="fab-scroll-group">
+        <button class="fab-scroll-btn" id="fab-scroll-top" aria-label="Lên đầu trang">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"/>
+            </svg>
+        </button>
+        <button class="fab-scroll-btn" id="fab-scroll-bottom" aria-label="Xuống cuối trang">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+            </svg>
+        </button>
     </div>
 
     <!-- Supabase CDN Client SDK -->

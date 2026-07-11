@@ -54,7 +54,12 @@ const translations = {
         error_phone: "Số điện thoại không hợp lệ",
         error_consent: "Bạn cần đồng ý với điều khoản này",
         error_signature: "Vui lòng ký tên của bạn",
-        error_photo_required: "Vui lòng tải lên ít nhất 1 hình ảnh thú cưng"
+        error_photo_required: "Vui lòng tải lên ít nhất 1 hình ảnh thú cưng",
+        btn_collapse: "Ẩn bớt",
+        btn_expand_more: "Hiển thị thêm",
+        voice_tooltip: "Nhập bằng giọng nói",
+        voice_listening: "Đang nghe...",
+        voice_not_supported: "Trình duyệt không hỗ trợ nhập giọng nói"
     },
     en: {
         title: "Owner & Pet Profile",
@@ -108,7 +113,12 @@ const translations = {
         error_phone: "Invalid phone number format",
         error_consent: "You must agree to these terms",
         error_signature: "Your signature is required",
-        error_photo_required: "Please upload at least 1 pet photo"
+        error_photo_required: "Please upload at least 1 pet photo",
+        btn_collapse: "Collapse",
+        btn_expand_more: "Show more",
+        voice_tooltip: "Voice input",
+        voice_listening: "Listening...",
+        voice_not_supported: "Voice input is not supported in this browser"
     },
     ja: {
         title: "ペット・飼い主様 登録",
@@ -162,7 +172,12 @@ const translations = {
         error_phone: "電話番号が正しくありません",
         error_consent: "同意ボックスにチェックを入れてください",
         error_signature: "署名を入力してください",
-        error_photo_required: "ペットの写真を少なくとも1枚アップロードしてください"
+        error_photo_required: "ペットの写真を少なくとも1枚アップロードしてください",
+        btn_collapse: "折りたたむ",
+        btn_expand_more: "もっと見る",
+        voice_tooltip: "音声入力",
+        voice_listening: "聞いています...",
+        voice_not_supported: "このブラウザは音声入力に対応していません"
     }
 };
 
@@ -220,6 +235,290 @@ if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CO
     console.warn("GAIA: Supabase credentials are not configured in env.js. Operating in local Mock Mode.");
 }
 
+// --- Auto-expanding Textareas with > 3 Lines Expand/Collapse Toggle ---
+function updateTextareaResize(textarea) {
+    if (!textarea) return;
+    const inputGroup = textarea.closest(".input-group");
+    if (!inputGroup) return;
+
+    const toggleBtn = inputGroup.querySelector(".btn-textarea-toggle");
+    const MAX_3_LINES_HEIGHT = 98; // 3 lines threshold (~98px)
+    const COLLAPSED_HEIGHT = 98;
+
+    const isCollapsed = textarea.dataset.collapsed === "true";
+
+    if (!isCollapsed) {
+        textarea.style.height = "auto";
+    }
+
+    const scrollH = textarea.scrollHeight;
+
+    if (scrollH > MAX_3_LINES_HEIGHT + 6) {
+        if (toggleBtn) {
+            toggleBtn.style.display = "inline-flex";
+            updateToggleButtonState(toggleBtn, !isCollapsed);
+        }
+        // Add bottom padding so text doesn't overlap the toggle button inside
+        textarea.style.paddingBottom = "28px";
+
+        if (isCollapsed) {
+            textarea.style.height = COLLAPSED_HEIGHT + "px";
+            textarea.style.overflowY = "auto";
+        } else {
+            textarea.style.height = scrollH + "px";
+            textarea.style.overflowY = "hidden";
+        }
+    } else {
+        if (toggleBtn) {
+            toggleBtn.style.display = "none";
+        }
+        textarea.dataset.collapsed = "false";
+        textarea.style.paddingBottom = "";
+        const minH = textarea.rows === 3 ? 88 : 72;
+        textarea.style.height = Math.max(scrollH, minH) + "px";
+        textarea.style.overflowY = "hidden";
+    }
+}
+
+function updateToggleButtonState(toggleBtn, isExpanded) {
+    if (!toggleBtn) return;
+    const iconSpan = toggleBtn.querySelector(".toggle-icon");
+    const textSpan = toggleBtn.querySelector(".toggle-text");
+    const dict = (typeof translations !== "undefined" && translations[currentLang]) ? translations[currentLang] : (typeof translations !== "undefined" ? translations.vi : null);
+    if (!dict) return;
+
+    if (isExpanded) {
+        if (iconSpan) iconSpan.textContent = "▲";
+        if (textSpan) {
+            textSpan.textContent = dict.btn_collapse || "Ẩn bớt";
+            textSpan.setAttribute("data-key", "btn_collapse");
+        }
+    } else {
+        if (iconSpan) iconSpan.textContent = "▼";
+        if (textSpan) {
+            textSpan.textContent = dict.btn_expand_more || "Hiển thị thêm";
+            textSpan.setAttribute("data-key", "btn_expand_more");
+        }
+    }
+}
+
+function initAutoExpandingTextareas() {
+    const textareas = document.querySelectorAll("#gaia-intake-form textarea");
+    textareas.forEach(textarea => {
+        textarea.dataset.collapsed = "false";
+
+        textarea.addEventListener("input", () => {
+            textarea.dataset.collapsed = "false";
+            updateTextareaResize(textarea);
+        });
+
+        textarea.addEventListener("blur", () => {
+            updateTextareaResize(textarea);
+        });
+
+        const inputGroup = textarea.closest(".input-group");
+        const toggleBtn = inputGroup ? inputGroup.querySelector(".btn-textarea-toggle") : null;
+        if (toggleBtn) {
+            toggleBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                const currentlyCollapsed = textarea.dataset.collapsed === "true";
+                textarea.dataset.collapsed = currentlyCollapsed ? "false" : "true";
+
+                textarea.style.transition = "height 0.35s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease";
+                updateTextareaResize(textarea);
+                setTimeout(() => {
+                    textarea.style.transition = "";
+                }, 360);
+            });
+        }
+
+        updateTextareaResize(textarea);
+    });
+
+    window.addEventListener("resize", () => {
+        textareas.forEach(textarea => updateTextareaResize(textarea));
+    });
+}
+
+// --- Speech-to-Text Voice Input for ALL Text Input Fields ---
+let activeVoiceRecognition = null;
+let activeVoiceMicBtn = null;
+let activeVoiceField = null;
+let voiceIsRecording = false;
+
+const MIC_SVG_HTML = `<svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+    <line x1="12" y1="19" x2="12" y2="23"/>
+    <line x1="8" y1="23" x2="16" y2="23"/>
+</svg><span class="mic-pulse-ring"></span>`;
+
+function getSpeechLang() {
+    const langMap = { vi: "vi-VN", en: "en-US", ja: "ja-JP" };
+    return langMap[currentLang] || "vi-VN";
+}
+
+function stopAllVoiceRecording() {
+    voiceIsRecording = false;
+    if (activeVoiceRecognition) {
+        try { activeVoiceRecognition.stop(); } catch (e) { /* ignore */ }
+        activeVoiceRecognition = null;
+    }
+    if (activeVoiceMicBtn) {
+        activeVoiceMicBtn.classList.remove("recording");
+        activeVoiceMicBtn.setAttribute("aria-label", translations[currentLang]?.voice_tooltip || "Nhập bằng giọng nói");
+    }
+    if (activeVoiceField) {
+        activeVoiceField.style.borderColor = "";
+        activeVoiceField.style.boxShadow = "";
+        // Auto-expand if textarea
+        if (activeVoiceField.tagName === "TEXTAREA" && typeof updateTextareaResize === "function") {
+            updateTextareaResize(activeVoiceField);
+        }
+    }
+    activeVoiceMicBtn = null;
+    activeVoiceField = null;
+
+    if (typeof saveDraft === "function") {
+        saveDraft();
+    }
+}
+
+function startVoiceRecording(field, micBtn) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    // Stop any existing recording first
+    if (voiceIsRecording) {
+        stopAllVoiceRecording();
+    }
+
+    activeVoiceField = field;
+    activeVoiceMicBtn = micBtn;
+    activeVoiceRecognition = new SpeechRecognition();
+    activeVoiceRecognition.lang = getSpeechLang();
+    activeVoiceRecognition.interimResults = true;
+    activeVoiceRecognition.continuous = true;
+    activeVoiceRecognition.maxAlternatives = 1;
+
+    let finalTranscript = field.value;
+    const separator = finalTranscript.length > 0 && !finalTranscript.endsWith(" ") ? " " : "";
+
+    voiceIsRecording = true;
+    micBtn.classList.add("recording");
+    micBtn.setAttribute("aria-label", translations[currentLang]?.voice_listening || "Đang nghe...");
+
+    // Visual feedback on the field
+    field.style.borderColor = "#dc2626";
+    field.style.boxShadow = "0 0 0 3px rgba(220, 38, 38, 0.15)";
+
+    activeVoiceRecognition.onresult = (event) => {
+        let interimTranscript = "";
+        let sessionFinal = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                sessionFinal += transcript;
+            } else {
+                interimTranscript += transcript;
+            }
+        }
+
+        if (sessionFinal) {
+            finalTranscript = finalTranscript + separator + sessionFinal;
+            field.value = finalTranscript;
+        } else {
+            field.value = finalTranscript + separator + interimTranscript;
+        }
+
+        // Trigger auto-expand for textareas
+        if (field.tagName === "TEXTAREA" && typeof updateTextareaResize === "function") {
+            field.dataset.collapsed = "false";
+            updateTextareaResize(field);
+        }
+    };
+
+    activeVoiceRecognition.onerror = (event) => {
+        console.warn("Voice recognition error:", event.error);
+        stopAllVoiceRecording();
+    };
+
+    activeVoiceRecognition.onend = () => {
+        if (voiceIsRecording && activeVoiceField === field) {
+            try {
+                activeVoiceRecognition.start();
+            } catch (e) {
+                stopAllVoiceRecording();
+            }
+        }
+    };
+
+    try {
+        activeVoiceRecognition.start();
+    } catch (e) {
+        console.error("Failed to start voice recognition:", e);
+        stopAllVoiceRecording();
+    }
+}
+
+function initVoiceInput() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        // Browser does not support Speech Recognition — do nothing
+        console.warn("GAIA: Speech Recognition not supported.");
+        return;
+    }
+
+    // Select all eligible text input fields (not checkboxes, radios, selects, file, date, hidden)
+    const eligibleFields = form.querySelectorAll(
+        "input[type='text'], input[type='tel'], input[type='number'], textarea"
+    );
+
+    eligibleFields.forEach(field => {
+        const inputGroup = field.closest(".input-group");
+        if (!inputGroup) return;
+
+        // Skip if already has a mic button
+        if (inputGroup.querySelector(".btn-voice-input")) return;
+
+        // Add has-voice-input class for CSS padding
+        inputGroup.classList.add("has-voice-input");
+
+        // Create mic button
+        const micBtn = document.createElement("button");
+        micBtn.type = "button";
+        micBtn.className = "btn-voice-input";
+        micBtn.tabIndex = -1;
+        micBtn.setAttribute("aria-label", translations[currentLang]?.voice_tooltip || "Nhập bằng giọng nói");
+        micBtn.innerHTML = MIC_SVG_HTML;
+
+        // Insert mic button after the field's label
+        const label = inputGroup.querySelector("label");
+        if (label) {
+            label.insertAdjacentElement("afterend", micBtn);
+        } else {
+            inputGroup.appendChild(micBtn);
+        }
+
+        // Click handler: toggle recording
+        micBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            if (voiceIsRecording && activeVoiceField === field) {
+                stopAllVoiceRecording();
+            } else {
+                startVoiceRecording(field, micBtn);
+            }
+        });
+
+        // Auto-stop mic when user moves to another field (Tab, click, etc.)
+        field.addEventListener("focus", () => {
+            if (voiceIsRecording && activeVoiceField !== field) {
+                stopAllVoiceRecording();
+            }
+        });
+    });
+}
+
 // --- Initialize App ---
 document.addEventListener("DOMContentLoaded", () => {
     // 1. Autofill today's date
@@ -238,6 +537,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 5. Apply default language translations
     updateLanguage(currentLang);
+
+    // Initialize auto-expanding textareas and expand/collapse buttons
+    initAutoExpandingTextareas();
+
+    // Initialize voice input for address field
+    initVoiceInput();
 
     // 6. Track form start time on first interaction (for bot fill-time check)
     const startTrackingInputs = ["owner-phone", "owner-name", "owner-address", "pet-name"];
@@ -263,6 +568,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // --- Event Listeners Setup ---
 function setupEventListeners() {
+    const fabLang = document.getElementById("fab-lang");
+    const fabTrigger = document.getElementById("fab-lang-trigger");
+
+    if (fabTrigger && fabLang) {
+        fabTrigger.addEventListener("click", (e) => {
+            e.stopPropagation();
+            fabLang.classList.toggle("open");
+        });
+
+        document.addEventListener("click", (e) => {
+            if (!fabLang.contains(e.target)) {
+                fabLang.classList.remove("open");
+            }
+        });
+    }
+
     // Language buttons
     langButtons.forEach(btn => {
         btn.addEventListener("click", () => {
@@ -270,8 +591,50 @@ function setupEventListeners() {
             btn.classList.add("active");
             currentLang = btn.getAttribute("data-lang");
             updateLanguage(currentLang);
+            if (fabLang) fabLang.classList.remove("open");
         });
     });
+
+    // Floating scroll buttons
+    const scrollTopBtn = document.getElementById("fab-scroll-top");
+    const scrollBottomBtn = document.getElementById("fab-scroll-bottom");
+
+    function updateScrollButtons() {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const scrollHeight = document.documentElement.scrollHeight;
+        const clientHeight = window.innerHeight;
+
+        if (scrollTopBtn) {
+            if (scrollTop > 250) {
+                scrollTopBtn.classList.add("visible");
+            } else {
+                scrollTopBtn.classList.remove("visible");
+            }
+        }
+
+        if (scrollBottomBtn) {
+            if (scrollTop + clientHeight < scrollHeight - 150) {
+                scrollBottomBtn.classList.add("visible");
+            } else {
+                scrollBottomBtn.classList.remove("visible");
+            }
+        }
+    }
+
+    window.addEventListener("scroll", updateScrollButtons, { passive: true });
+    updateScrollButtons();
+
+    if (scrollTopBtn) {
+        scrollTopBtn.addEventListener("click", () => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+    }
+
+    if (scrollBottomBtn) {
+        scrollBottomBtn.addEventListener("click", () => {
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+        });
+    }
 
     // Step dots navigation (only allow moving to completed or current steps)
     stepDots.forEach(dot => {
@@ -442,6 +805,9 @@ function setupEventListeners() {
     }
 
     function triggerAutofillEffect(element) {
+        if (element && element.tagName === "TEXTAREA" && typeof updateTextareaResize === "function") {
+            updateTextareaResize(element);
+        }
         // Subtle and gorgeous emerald-green pulse on autofilled fields
         element.style.transition = "none";
         element.style.boxShadow = "0 0 0 4px rgba(16, 185, 129, 0.4)";
@@ -675,6 +1041,11 @@ function setupEventListeners() {
 function goToStep(stepNum) {
     if (stepNum < 1 || stepNum > totalSteps) return;
 
+    // Stop any active voice recording when switching steps
+    if (typeof stopAllVoiceRecording === "function" && voiceIsRecording) {
+        stopAllVoiceRecording();
+    }
+
     // Slide transition classes handled by CSS animation
     steps.forEach(step => step.classList.remove("active"));
     document.getElementById(`step-${stepNum}`).classList.add("active");
@@ -721,6 +1092,18 @@ function goToStep(stepNum) {
             resizeCanvas();
         }, 80);
     }
+
+    // Update auto-expanding textareas when switching steps
+    setTimeout(() => {
+        const currentStepEl = document.getElementById(`step-${stepNum}`);
+        if (currentStepEl) {
+            currentStepEl.querySelectorAll("textarea").forEach(textarea => {
+                if (typeof updateTextareaResize === "function") {
+                    updateTextareaResize(textarea);
+                }
+            });
+        }
+    }, 40);
 
     // Scroll top with smooth behavior
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -957,6 +1340,11 @@ function updateLanguage(lang) {
     currentLang = lang;
     document.documentElement.lang = lang;
 
+    const fabCurrent = document.getElementById("fab-lang-current");
+    if (fabCurrent) {
+        fabCurrent.textContent = lang.toUpperCase();
+    }
+
     // Update all components containing data-key
     const transElements = document.querySelectorAll("[data-key]");
     transElements.forEach(el => {
@@ -1064,6 +1452,14 @@ function loadDraft() {
                 console.error("Error parsing pet photo draft array:", err);
             }
         }
+
+        setTimeout(() => {
+            form.querySelectorAll("textarea").forEach(textarea => {
+                if (typeof updateTextareaResize === "function") {
+                    updateTextareaResize(textarea);
+                }
+            });
+        }, 50);
     } catch (e) {
         console.error("Error parsing autosaved draft", e);
     }
