@@ -932,8 +932,8 @@ function setupEventListeners() {
                 if (input) {
                     // Get translated value based on which button was clicked
                     const fillText = btnUnknown 
-                        ? translations[currentLang].choice_unknown 
-                        : translations[currentLang].choice_none;
+                        ? ((translations[currentLang] && translations[currentLang].choice_unknown) ? translations[currentLang].choice_unknown : "Không rõ")
+                        : ((translations[currentLang] && translations[currentLang].choice_none) ? translations[currentLang].choice_none : "Không");
                     input.value = fillText;
                     
                     // Trigger input and change events to save draft and clear validation error

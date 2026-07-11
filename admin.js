@@ -1923,16 +1923,12 @@ function initLiveTypingIndicator() {
     }
 
     function updateLiveUI(count) {
+        const typingWidgetEl = document.getElementById("live-typing-widget");
         if (!typingTextEl) return;
         if (count === 0) {
-            typingTextEl.textContent = "Hiện chưa có ai điền form";
-            typingTextEl.style.color = "var(--text-muted)";
-            if (typingDotsEl) typingDotsEl.style.display = "none";
-            if (onlineBadgeEl) {
-                onlineBadgeEl.style.background = "#64748B";
-                onlineBadgeEl.style.boxShadow = "none";
-            }
+            if (typingWidgetEl) typingWidgetEl.style.display = "none";
         } else {
+            if (typingWidgetEl) typingWidgetEl.style.display = "flex";
             typingTextEl.textContent = `Có ${count} người đang điền form`;
             typingTextEl.style.color = "#10B981";
             if (typingDotsEl) typingDotsEl.style.display = "flex";

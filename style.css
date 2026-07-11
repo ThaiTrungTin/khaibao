@@ -1787,17 +1787,15 @@ input, textarea, select, button {
     transform: none;
 }
 
-/* Show only when the input placeholder is shown (empty state) */
+/* Show when the input placeholder is shown (empty state) */
 .input-group input:placeholder-shown ~ .autofill-actions,
 .input-group textarea:placeholder-shown ~ .autofill-actions {
     display: flex;
 }
 
-/* When placing cursor into field (focus) or hovering textarea, hide "Không" & "Không rõ" so only mic shows */
-.input-group:focus-within .autofill-actions,
+/* When clicking into the field itself (focus), hide "Không" & "Không rõ" */
 .input-group textarea:focus ~ .autofill-actions,
-.input-group input:focus ~ .autofill-actions,
-.input-group textarea:hover ~ .autofill-actions {
+.input-group input:focus ~ .autofill-actions {
     display: none !important;
 }
 
