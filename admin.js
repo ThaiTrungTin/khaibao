@@ -819,6 +819,18 @@ async function deleteDuplicateRecord(record, btnEl) {
                 .eq('id', record.id);
             
             if (error) throw error;
+
+            // Xóa ở Google Sheet
+            try {
+                fetch(GOOGLE_SHEET_WEBHOOK_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ id: record.id, is_deleted: true })
+                });
+            } catch (sheetErr) {
+                console.error('GAIA Dashboard: Error deleting from Google Sheet:', sheetErr);
+            }
         }
 
         // Local fallback in case realtime delay or disconnect occurs
