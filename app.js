@@ -1961,6 +1961,28 @@ async function sendPendingSubmissions() {
             delete dataToInsert.id_local;
             delete dataToInsert.intake_id;
 
+            // Push to Google Sheets Webhook if configured
+            if (typeof GOOGLE_SHEET_WEBHOOK_URL !== 'undefined' && GOOGLE_SHEET_WEBHOOK_URL) {
+                try {
+                    // Don't send huge photos/signatures to Google Sheet to avoid timeout/payload too large
+                    const sheetData = { ...dataToInsert };
+                    delete sheetData.signature_data;
+                    delete sheetData.pet_photo;
+                    
+                    await fetch(GOOGLE_SHEET_WEBHOOK_URL, {
+                        method: 'POST',
+                        mode: 'no-cors', // Bỏ qua lỗi CORS của trình duyệt
+                        headers: {
+                            'Content-Type': 'text/plain;charset=utf-8' // Bắt buộc dùng text/plain để tránh preflight request
+                        },
+                        body: JSON.stringify(sheetData)
+                    });
+                    console.log(`GAIA Queue: Pushed to Google Sheets successfully for pet: ${item.pet_name}`);
+                } catch (sheetErr) {
+                    console.error("GAIA Queue: Failed to push to Google Sheets:", sheetErr);
+                }
+            }
+
             if (supabaseClient) {
                 try {
                     const { error } = await supabaseClient
