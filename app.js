@@ -1961,35 +1961,37 @@ async function sendPendingSubmissions() {
             delete dataToInsert.id_local;
             delete dataToInsert.intake_id;
 
-            // Push to Google Sheets Webhook if configured
-            if (typeof GOOGLE_SHEET_WEBHOOK_URL !== 'undefined' && GOOGLE_SHEET_WEBHOOK_URL) {
-                try {
-                    // Don't send huge photos/signatures to Google Sheet to avoid timeout/payload too large
-                    const sheetData = { ...dataToInsert };
-                    delete sheetData.signature_data;
-                    delete sheetData.pet_photo;
-                    
-                    await fetch(GOOGLE_SHEET_WEBHOOK_URL, {
-                        method: 'POST',
-                        mode: 'no-cors', // Bỏ qua lỗi CORS của trình duyệt
-                        headers: {
-                            'Content-Type': 'text/plain;charset=utf-8' // Bắt buộc dùng text/plain để tránh preflight request
-                        },
-                        body: JSON.stringify(sheetData)
-                    });
-                    console.log(`GAIA Queue: Pushed to Google Sheets successfully for pet: ${item.pet_name}`);
-                } catch (sheetErr) {
-                    console.error("GAIA Queue: Failed to push to Google Sheets:", sheetErr);
-                }
-            }
-
             if (supabaseClient) {
                 try {
-                    const { error } = await supabaseClient
+                    const { data, error } = await supabaseClient
                         .from('pet_intakes')
-                        .insert([dataToInsert]);
+                        .insert([dataToInsert])
+                        .select();
 
                     if (error) throw error;
+                    
+                    const insertedRow = data && data.length > 0 ? data[0] : null;
+
+                    // Push to Google Sheets Webhook if configured, using inserted row with id and trang_thai
+                    if (insertedRow && typeof GOOGLE_SHEET_WEBHOOK_URL !== 'undefined' && GOOGLE_SHEET_WEBHOOK_URL) {
+                        try {
+                            const sheetData = { ...insertedRow };
+                            delete sheetData.signature_data;
+                            delete sheetData.pet_photo;
+                            
+                            await fetch(GOOGLE_SHEET_WEBHOOK_URL, {
+                                method: 'POST',
+                                mode: 'no-cors',
+                                headers: {
+                                    'Content-Type': 'text/plain;charset=utf-8'
+                                },
+                                body: JSON.stringify(sheetData)
+                            });
+                            console.log(`GAIA Queue: Pushed to Google Sheets successfully for pet: ${item.pet_name}`);
+                        } catch (sheetErr) {
+                            console.error("GAIA Queue: Failed to push to Google Sheets:", sheetErr);
+                        }
+                    }
 
                     console.log(`GAIA Queue: Silent sync successful for pet: ${item.pet_name}`);
                     

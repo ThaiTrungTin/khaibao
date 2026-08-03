@@ -853,6 +853,23 @@ async function toggleCardStatus(record, cardEl, btnEl) {
                 .update({ trang_thai: newStatus })
                 .eq('id', record.id);
             if (error) throw error;
+            
+            // Push update to Google Sheets if configured
+            if (typeof GOOGLE_SHEET_WEBHOOK_URL !== 'undefined' && GOOGLE_SHEET_WEBHOOK_URL) {
+                try {
+                    let updatedRecord = {...record, trang_thai: newStatus};
+                    delete updatedRecord.signature_data;
+                    delete updatedRecord.pet_photo;
+                    await fetch(GOOGLE_SHEET_WEBHOOK_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(updatedRecord)
+                    });
+                } catch(e) {
+                    console.error('GAIA Dashboard: Error pushing update to Google Sheets:', e);
+                }
+            }
         }
 
         // Update local data
