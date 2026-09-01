@@ -709,6 +709,60 @@ function playScanSuccessSound() {
     }
 }
 
+// Web Audio API Error Beep (âm thanh cảnh báo khi quét sai mã)
+function playScanErrorSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+
+        // 2 tiếng bíp ngắn, tone thấp xuống để báo lỗi
+        const playBeep = (startTime, freq) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(freq, startTime);
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.6, startTime + 0.12);
+
+            gain.gain.setValueAtTime(0.12, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.12);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(startTime);
+            osc.stop(startTime + 0.12);
+        };
+
+        playBeep(ctx.currentTime, 400);
+        playBeep(ctx.currentTime + 0.15, 280);
+    } catch (e) {
+        console.warn("Scan error sound error:", e);
+    }
+}
+
+// Text-To-Speech (TTS) Voice Counting on Valid Scan (Hô đếm số lượng 1, 2, 3, 4...)
+function speakScanCount(count) {
+    if ('speechSynthesis' in window) {
+        try {
+            window.speechSynthesis.cancel(); // Dừng ngay câu đọc trước đó để không bị trễ khi quét nhanh
+            const utterance = new SpeechSynthesisUtterance(String(count));
+            utterance.lang = 'vi-VN';
+            utterance.rate = 1.3; // Đọc nhanh, dứt khoát
+            utterance.pitch = 1.0;
+            window.speechSynthesis.speak(utterance);
+            return;
+        } catch (e) {
+            console.warn("Speech synthesis error:", e);
+        }
+    }
+    // Fallback tiếng bíp nếu không hỗ trợ giọng nói
+    playScanSuccessSound();
+}
+
+
+
 // Requirement: QR / Barcode Scanner Add & Parsing Logic
 async function handleNxQrScannerAdd() {
     const scannerInput = document.getElementById('nx-qr-scanner-input');
@@ -772,8 +826,9 @@ async function handleNxQrScannerAdd() {
         }
     }
 
-    // REQUIREMENT: Nếu không tìm thấy mã vạch -> Báo lỗi, KHÔNG CÓ ÂM THANH!
+    // REQUIREMENT: Nếu không tìm thấy mã vạch -> Báo lỗi + âm thanh cảnh báo
     if (!matchedVatTu) {
+        playScanErrorSound(); // Bíp 2 tiếng báo quét sai
         if (typeof showVatTuNoticeModal === 'function') {
             showVatTuNoticeModal(
                 'danger',
@@ -789,8 +844,6 @@ async function handleNxQrScannerAdd() {
         return;
     }
 
-    // SUCCESS: Có mã vạch hợp lệ -> Báo âm thanh thành công!
-    playScanSuccessSound();
 
     ten_hang_hoa = matchedVatTu.ten_mat_hang || matchedVatTu.ten_hoa_don || 'Vật tư y tế';
     matchedBarCode = matchedVatTu.ma_vach || ma_vach;
@@ -798,6 +851,8 @@ async function handleNxQrScannerAdd() {
     const ma_qr = rawVal;
     const currentMaDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || 'ĐƠN-NHÁP';
     const currentLoai = document.getElementById('nx-input-loai')?.value || currentDraftOrder.loai_don || 'Nhập';
+
+    let scannedCount = 1;
 
     // 3. Nếu quét 2 mã QR giống nhau (hoặc cùng mã vạch & LOT) -> Số lượng tự động cộng dồn lên dần (+1)
     const existingIndex = currentDraftNxItems.findIndex(item => {
@@ -809,6 +864,7 @@ async function handleNxQrScannerAdd() {
         const oldQty = Number(currentDraftNxItems[existingIndex].so_luong) || 0;
         const newQty = oldQty + 1;
         currentDraftNxItems[existingIndex].so_luong = newQty;
+        scannedCount = newQty;
 
         logNxOrderAction(
             currentMaDon,
@@ -817,6 +873,7 @@ async function handleNxQrScannerAdd() {
             `Quét trùng mã -> Tự động tăng số lượng [${ten_hang_hoa}] từ ${oldQty} lên ${newQty}`
         );
     } else {
+        scannedCount = 1;
         currentDraftNxItems.push({
             ma_qr: ma_qr,
             ma_vach: matchedBarCode,
@@ -834,6 +891,9 @@ async function handleNxQrScannerAdd() {
         );
     }
 
+    // SUCCESS: Giọng nói đếm số lượng hiện tại của mặt hàng này (1, 2, 3, 4...)
+    speakScanCount(scannedCount);
+
     scannerInput.value = '';
     scannerInput.focus();
     currentDraftOrder.items = currentDraftNxItems;
@@ -841,6 +901,7 @@ async function handleNxQrScannerAdd() {
     renderNxDraftItemsTable();
     renderNhapXuatOrderList(filteredNhapXuatData);
     checkNxOrderModified();
+
 }
 
 // Render Draft Order Items Table
