@@ -1257,23 +1257,59 @@ async function saveNxOrderToSystem() {
     }
 }
 
+// Helper: Chuẩn hóa ngày thành YYYY-MM-DD để khớp với kiểu DATE của PostgreSQL table 'the_kho'
+function parseDateToYyyyMmDd(dateStr) {
+    if (!dateStr || dateStr === '-' || dateStr === 'null' || dateStr === 'undefined') return null;
+    let str = String(dateStr).trim();
+    if (!str) return null;
+
+    // Định dạng DD/MM/YYYY (ví dụ: 31/12/2026)
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+        const parts = str.split('/');
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        return `${year}-${month}-${day}`;
+    }
+
+    // Định dạng YYYY-MM-DD (ví dụ: 2026-12-31)
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        return str.substring(0, 10);
+    }
+
+    try {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+    } catch (e) {}
+
+    return null;
+}
+
 // Sync Nx Order Items to Thẻ Kho (the_kho) Table in Supabase
 async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
     const maDon = order.ma_don || '';
+    const normalizedLoai = (order.loai_don && String(order.loai_don).includes('Xuất')) ? 'Xuất' : 'Nhập';
 
     const theKhoEntries = (order.chi_tiet_san_pham || []).map(item => ({
         ma_don: maDon,
-        ma_qr: item.ma_qr || item.ma_vach,
-        ma_vach: item.ma_vach || '',
+        ma_qr: item.ma_qr || item.ma_vach || '',
+        ma_vach: item.ma_vach || item.ma_qr || 'KHONG-MA',
         lot: item.lot || '-',
-        date_expiry: item.date_expiry || null,
-        ten_hang_hoa: item.ten_hang_hoa || '',
-        loai: order.loai_don, // 'Nhập' or 'Xuất'
-        so_luong: Number(item.so_luong) || 0,
+        date_expiry: parseDateToYyyyMmDd(item.date_expiry),
+        ten_hang_hoa: item.ten_hang_hoa || 'Sản phẩm kho',
+        loai: normalizedLoai, // Khớp chính xác CHECK (loai IN ('Nhập', 'Xuất'))
+        so_luong: Number(item.so_luong) || 1,
         muc_dich: order.muc_dich || '',
-        user_name: order.user_name,
+        user_name: order.user_name || 'Thái Trung Tín - CN1',
         created_at: new Date().toISOString()
     }));
+
+    if (theKhoEntries.length === 0) return;
 
     const client = getNhapXuatSupabaseClient();
     try {
@@ -1293,11 +1329,13 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
 
             const { error: insErr } = await client.from('the_kho').insert(theKhoEntries);
             if (insErr) {
-                console.warn("NhapXuat: Error syncing to Supabase table the_kho:", insErr.message);
+                console.error("NhapXuat: Error inserting the_kho entries:", insErr.message, insErr.details);
+            } else {
+                console.log(`NhapXuat: Synced ${theKhoEntries.length} items to Thẻ Kho (ma_don: ${maDon}) successfully.`);
             }
         }
     } catch (e) {
-        console.warn("NhapXuat: Exception syncing to the_kho:", e);
+        console.error("NhapXuat: Exception syncing to the_kho:", e);
     }
 
     // Trigger realtime refresh on Thẻ Kho module if function exists
@@ -1305,6 +1343,7 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
         fetchTheKhoData();
     }
 }
+
 
 // Helpers
 function formatNxDateTime(dateStr) {
