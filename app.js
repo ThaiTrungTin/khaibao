@@ -1961,6 +1961,17 @@ async function sendPendingSubmissions() {
             delete dataToInsert.id_local;
             delete dataToInsert.intake_id;
 
+            // Auto-populate cn column from chi_nhanh if present
+            if (dataToInsert.chi_nhanh && !dataToInsert.cn) {
+                const str = String(dataToInsert.chi_nhanh).trim();
+                if (str.includes("-")) {
+                    dataToInsert.cn = str.split("-")[0].trim();
+                } else {
+                    const match = str.match(/^(CN\d+|CN[A-Za-z0-9]+)/i);
+                    dataToInsert.cn = match ? match[1].toUpperCase() : str;
+                }
+            }
+
             if (supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient

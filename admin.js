@@ -77,14 +77,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 1. Set current date stat
     updateDateDisplay();
 
-    // 2. Initialize sound settings & live typing indicator
+    // 2. Initialize sound settings & live typing indicator & more options dropdown
     initSoundToggle();
     initLiveTypingIndicator();
+    initMoreOptionsDropdown();
 
     // 3. Initialize Supabase Client
     if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_PROJECT_URL') {
         try {
             supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+            window.supabaseClient = supabaseClient;
             console.log("GAIA Dashboard: Supabase Client initialized successfully!");
         } catch (e) {
             console.error("GAIA Dashboard: Supabase initialization error:", e);
@@ -118,6 +120,17 @@ async function fetchInitialIntakes() {
 
         let query = supabaseClient.from('pet_intakes').select('*');
 
+        const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
+        const roleLower = loggedUser ? (loggedUser.role || "").toLowerCase().trim() : "";
+        const isManager = roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower.includes("manager");
+
+        if (!isManager && loggedUser) {
+            const userCN = loggedUser.cn || extractCNCode(loggedUser.branch || "");
+            if (userCN) {
+                query = query.eq('cn', userCN);
+            }
+        }
+
         if (!isAllDates) {
             // Build date range: from 00:00:00 to 23:59:59 of viewDate
             const dayStart = new Date(viewDate);
@@ -136,8 +149,12 @@ async function fetchInitialIntakes() {
 
         intakesData = data || [];
         currentPage = 1;
-        calculateStatistics(intakesData);
+
+        // Initialize branch filter dropdown options
+        initBranchFilterDropdown();
+
         applyStatusFilter();
+        updateScheduleCountBadge();
     } catch (e) {
         console.error("GAIA Dashboard: Error fetching initial data:", e);
         showErrorState(`Không thể tải dữ liệu: ${e.message || e}`);
@@ -145,6 +162,35 @@ async function fetchInitialIntakes() {
         loadingSpinner.style.display = "none";
     }
 }
+
+// --- Update Sidebar Schedule Count Badge (Today New Count + Total New Count) ---
+window.updateScheduleCountBadge = async function () {
+    const todayEl = document.getElementById("schedule-today-count");
+    const totalEl = document.getElementById("schedule-total-count");
+    if (!todayEl && !totalEl) return;
+
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const isNewRecord = (r) => !r.trang_thai || r.trang_thai === 'new';
+
+    const scopedIntakes = (intakesData && Array.isArray(intakesData)) ? intakesData.filter(isRecordInSelectedBranch) : [];
+
+    const todayNewCount = scopedIntakes.filter(r => {
+        const dateStr = (r.created_at || r.date_signed || "").substring(0, 10);
+        return isNewRecord(r) && dateStr === todayStr;
+    }).length;
+
+    const totalNewCount = scopedIntakes.filter(r => isNewRecord(r)).length;
+
+    if (todayEl) {
+        todayEl.textContent = todayNewCount;
+        todayEl.style.display = todayNewCount > 0 ? "inline-flex" : "none";
+    }
+
+    if (totalEl) {
+        totalEl.textContent = `(${totalNewCount})`;
+        totalEl.style.display = "inline-flex";
+    }
+};
 
 // --- Fetch loyal phones (registered more than once in database) ---
 async function fetchLoyalPhones() {
@@ -186,7 +232,7 @@ function analyzeDuplicates() {
 
         const phone = record.owner_phone.trim();
         const petName = record.pet_name.trim().toLowerCase();
-        
+
         // Extract date part (YYYY-MM-DD) from created_at or date_signed
         let dateStr = "";
         if (record.created_at) {
@@ -247,12 +293,16 @@ function setupRealtimeSubscription() {
             .subscribe((status) => {
                 console.log("GAIA Dashboard: Realtime subscription status:", status);
                 const indicator = document.querySelector(".status-indicator");
-                if (status === 'SUBSCRIBED') {
-                    indicator.className = "status-indicator live";
-                    indicator.querySelector(".status-text").textContent = "LIVE";
-                } else {
-                    indicator.className = "status-indicator";
-                    indicator.querySelector(".status-text").textContent = "DISCONNECTED";
+                if (indicator) {
+                    if (status === 'SUBSCRIBED') {
+                        indicator.className = "status-indicator live";
+                        const txt = indicator.querySelector(".status-text");
+                        if (txt) txt.textContent = "LIVE";
+                    } else {
+                        indicator.className = "status-indicator";
+                        const txt = indicator.querySelector(".status-text");
+                        if (txt) txt.textContent = "DISCONNECTED";
+                    }
                 }
             });
     } catch (e) {
@@ -282,6 +332,7 @@ async function handleIncomingIntake(newRecord) {
 
             // Re-apply current filter (which will also render)
             applyStatusFilter();
+            updateScheduleCountBadge();
 
             // Play synthesized bell alert chime
             playAlertPing();
@@ -300,7 +351,7 @@ function handleIncomingUpdate(updatedRecord) {
         // Prevent Supabase Realtime from omitting TOASTed columns (like long strings/photos)
         const oldRecord = intakesData[idx];
         const mergedRecord = { ...oldRecord, ...updatedRecord };
-        
+
         // Preserve old photo if realtime payload omitted it
         if (oldRecord.pet_photo && !updatedRecord.pet_photo) {
             mergedRecord.pet_photo = oldRecord.pet_photo;
@@ -308,11 +359,11 @@ function handleIncomingUpdate(updatedRecord) {
 
         // Update local data with the merged record
         intakesData[idx] = mergedRecord;
-        
+
         // Recalculate statistics and re-apply current filter & render
         calculateStatistics(intakesData);
         applyStatusFilter();
-        
+
         // If details modal is open for this updated record, refresh the modal view
         const detailsModal = document.getElementById("details-modal");
         const modalPatientId = document.getElementById("modal-patient-id");
@@ -348,7 +399,7 @@ async function handleIncomingDelete(oldRecord) {
 
         calculateStatistics(intakesData);
         applyStatusFilter();
-        
+
         // Close modal if deleted record was being viewed
         const detailsModal = document.getElementById("details-modal");
         const modalPatientId = document.getElementById("modal-patient-id");
@@ -391,6 +442,26 @@ function playAlertPing() {
     }
 }
 
+// --- Initialize More Options 3-Dots Dropdown Menu ---
+function initMoreOptionsDropdown() {
+    const btnMoreOptions = document.getElementById("btn-more-options");
+    const moreOptionsDropdown = document.getElementById("more-options-dropdown");
+
+    if (btnMoreOptions && moreOptionsDropdown) {
+        btnMoreOptions.addEventListener("click", (e) => {
+            e.stopPropagation();
+            moreOptionsDropdown.classList.toggle("show");
+        });
+
+        document.addEventListener("click", (e) => {
+            if (!moreOptionsDropdown.contains(e.target) && !btnMoreOptions.contains(e.target)) {
+                moreOptionsDropdown.classList.remove("show");
+            }
+        });
+    }
+}
+
+
 // --- Utility to Parse Photos Array ---
 function getPhotosArray(petPhotoString) {
     if (!petPhotoString) return [];
@@ -406,24 +477,139 @@ function getPhotosArray(petPhotoString) {
     }
 }
 
+// Helper to extract CN code prefix (e.g. 'CN1' from 'CN1 - No. 2D...')
+function extractCNCode(branchStr) {
+    if (!branchStr) return "";
+    const str = branchStr.trim();
+    if (str.includes("-")) {
+        return str.split("-")[0].trim();
+    }
+    const match = str.match(/^(CN\d+|CN[A-Za-z0-9]+)/i);
+    if (match) {
+        return match[1].toUpperCase();
+    }
+    return str;
+}
+
+// Dynamic Branch Selection & Permission Rule:
+// Manager can select "All branches" or filter by any branch. Admin & Employee are locked to their own branch.
+function isRecordInSelectedBranch(record) {
+    const selectEl = document.getElementById("branch-select-filter");
+    const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
+    if (!loggedUser) return true;
+
+    const roleLower = (loggedUser.role || "").toLowerCase().trim();
+    const isManager = roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower.includes("manager");
+
+    let selectedBranch = selectEl ? selectEl.value : "all";
+
+    // Enforce branch lock for non-managers
+    if (!isManager) {
+        selectedBranch = loggedUser.cn || extractCNCode(loggedUser.branch || "");
+    }
+
+    if (!selectedBranch || selectedBranch === "all") return true;
+
+    const recordCN = (record.cn || extractCNCode(record.chi_nhanh || record.branch || "")).toUpperCase().trim();
+    return recordCN === selectedBranch.toUpperCase().trim();
+}
+
+function initBranchFilterDropdown() {
+    const selectEl = document.getElementById("branch-select-filter");
+    if (!selectEl) return;
+
+    const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
+    const roleLower = loggedUser ? (loggedUser.role || "").toLowerCase().trim() : "";
+    const isManager = roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower.includes("manager");
+
+    let userCN = loggedUser ? (loggedUser.cn || extractCNCode(loggedUser.branch || "")) : "";
+    userCN = userCN ? userCN.toUpperCase().trim() : "";
+
+    // Collect available unique CN codes from dataset
+    const cnSet = new Set(["CN1", "CN2"]);
+    if (userCN) cnSet.add(userCN);
+    (intakesData || []).forEach(item => {
+        const c = item.cn || extractCNCode(item.chi_nhanh || item.branch || "");
+        if (c) cnSet.add(c.toUpperCase().trim());
+    });
+
+    const currentSelection = selectEl.value;
+    selectEl.innerHTML = "";
+
+    if (isManager) {
+        selectEl.disabled = false;
+        selectEl.style.opacity = "1";
+        selectEl.style.cursor = "pointer";
+
+        const optAll = document.createElement("option");
+        optAll.value = "all";
+        optAll.textContent = "🌐 Tất cả chi nhánh";
+        selectEl.appendChild(optAll);
+
+        Array.from(cnSet).sort().forEach(cnCode => {
+            const opt = document.createElement("option");
+            opt.value = cnCode;
+            opt.textContent = `📍 Chi nhánh ${cnCode}`;
+            selectEl.appendChild(opt);
+        });
+
+        selectEl.value = currentSelection && cnSet.has(currentSelection) ? currentSelection : "all";
+    } else {
+        // Lock for Admin / Employee to their own branch
+        selectEl.disabled = true;
+        selectEl.style.opacity = "0.85";
+        selectEl.style.cursor = "not-allowed";
+
+        const opt = document.createElement("option");
+        opt.value = userCN || "CN1";
+        opt.textContent = `🔒 ${userCN || "CN1"}`;
+        selectEl.appendChild(opt);
+        selectEl.value = userCN || "CN1";
+    }
+
+    selectEl.removeEventListener("change", handleBranchFilterChange);
+    selectEl.addEventListener("change", handleBranchFilterChange);
+}
+
+function handleBranchFilterChange() {
+    applyStatusFilter();
+}
+
 // --- Status Filter and Rendering ---
 function applyStatusFilter() {
     // Analyze duplicates across full dataset before filtering/pagination
     analyzeDuplicates();
 
-    let filtered;
+    // 1. Filter dataset by selected branch FIRST
+    const scopedData = intakesData.filter(isRecordInSelectedBranch);
+
+    // 2. Synchronize Top 3 Stat Cards ("Tất cả", "Mới", "Đã xử lý") from scopedData
+    const totalCount = scopedData.length;
+    const newCount = scopedData.filter(r => !r.trang_thai || r.trang_thai === 'new').length;
+    const doneCount = scopedData.filter(r => r.trang_thai === 'done').length;
+
+    const countAllEl = document.getElementById("count-all");
+    const countNewEl = document.getElementById("count-new");
+    const countDoneEl = document.getElementById("count-done");
+
+    if (countAllEl) countAllEl.textContent = totalCount;
+    if (countNewEl) countNewEl.textContent = newCount;
+    if (countDoneEl) countDoneEl.textContent = doneCount;
+
+    // 3. Apply Status Filter Tab (all vs new vs done)
+    let filtered = scopedData;
     if (currentStatusFilter === 'new') {
-        filtered = intakesData.filter(r => !r.trang_thai || r.trang_thai === 'new');
+        filtered = scopedData.filter(r => !r.trang_thai || r.trang_thai === 'new');
     } else if (currentStatusFilter === 'done') {
-        filtered = intakesData.filter(r => r.trang_thai === 'done');
+        filtered = scopedData.filter(r => r.trang_thai === 'done');
     } else {
-        filtered = intakesData;
+        filtered = scopedData;
     }
 
     // Apply search filter if query exists (now integrated into the filter data flow)
     const query = searchInput.value.toLowerCase().trim();
     if (query) {
-        filtered = filtered.filter(record => 
+        filtered = filtered.filter(record =>
             (record.owner_name && record.owner_name.toLowerCase().includes(query)) ||
             (record.owner_phone && record.owner_phone.toLowerCase().includes(query)) ||
             (record.pet_name && record.pet_name.toLowerCase().includes(query)) ||
@@ -447,6 +633,7 @@ function applyStatusFilter() {
 
     renderAllIntakes(paginatedItems);
     renderPagination(totalItems);
+    updateScheduleCountBadge();
 }
 
 // --- Pagination Renderer ---
@@ -556,7 +743,7 @@ function renderPagination(totalItems) {
 function scrollToIntakesList() {
     const listEl = document.getElementById("intakes-list");
     if (listEl) {
-        const yOffset = -120; 
+        const yOffset = -120;
         const y = listEl.getBoundingClientRect().top + window.pageYOffset + yOffset;
         window.scrollTo({ top: y, behavior: 'smooth' });
     }
@@ -631,7 +818,7 @@ function createIntakeCard(record) {
 
     // Loyal customer detection (only show for 'new' status, not 'done')
     const isLoyal = record.owner_phone && loyalPhones.has(record.owner_phone.trim()) && (!record.trang_thai || record.trang_thai === 'new');
-    const loyalBadgeHTML = isLoyal 
+    const loyalBadgeHTML = isLoyal
         ? `<span class="customer-loyal-badge" title="Khách hàng đã đăng ký nhiều lần">(Khách quen)</span>`
         : ``;
 
@@ -703,7 +890,7 @@ function createIntakeCard(record) {
             <div class="card-top">
                 <div class="pet-details-brief" style="width: 100%;">
                     <div style="margin-bottom: 5px;">
-                        <span style="background: #9B1530; color: #ffffff; padding: 2px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.3px; display: inline-block;">ID: ${gaiaIdStr}</span>
+                        <span class="card-id-badge">ID: ${gaiaIdStr}</span>
                     </div>
                     <div class="pet-name-row">
                         <h3>${escapeHtml(record.pet_name)}</h3>
@@ -817,7 +1004,7 @@ async function deleteDuplicateRecord(record, btnEl) {
                 .from('pet_intakes')
                 .delete()
                 .eq('id', record.id);
-            
+
             if (error) throw error;
 
             // Xóa ở Google Sheet
@@ -849,9 +1036,51 @@ async function deleteDuplicateRecord(record, btnEl) {
     }
 }
 
-// --- Toggle Status (Mới ↔ Đã xử lý) ---
+// --- Toggle Status (Mới ↔ Đã xử lý) với Lịch Sử Thao Tác Audit Log ---
 async function toggleCardStatus(record, cardEl, btnEl) {
     const newStatus = (record.trang_thai === 'done') ? 'new' : 'done';
+
+    // Build Action Log Entry: "Đã Xử Lý - Thái Trung Tín - 15h45 05/08/2026"
+    const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
+    const actorName = loggedUser ? (loggedUser.full_name || "Nhân viên") : "Hệ thống";
+    const userCN = loggedUser ? (loggedUser.cn || extractCNCode(loggedUser.branch || "")) : "";
+
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    const timeStr = `${hh}h${mm} ${dd}/${month}/${yyyy}`;
+
+    const statusText = newStatus === 'done' ? 'Đã Xử Lý' : 'Mới';
+    const newLogLine = `${statusText} - ${actorName} - ${timeStr}`;
+
+    // Read existing logs from record.history or record.status_history
+    let currentLogs = [];
+    const rawHistory = record.history || record.status_history;
+    if (rawHistory) {
+        if (Array.isArray(rawHistory)) {
+            currentLogs = [...rawHistory];
+        } else if (typeof rawHistory === 'string') {
+            try {
+                const parsed = JSON.parse(rawHistory);
+                currentLogs = Array.isArray(parsed) ? parsed : [rawHistory];
+            } catch (e) {
+                currentLogs = rawHistory.split('\n').filter(Boolean);
+            }
+        }
+    }
+
+    currentLogs.unshift(newLogLine); // Newest log on top!
+
+    // Build Supabase update payload matching your exact database columns: staff_name, history (jsonb), cn
+    const updatePayload = {
+        trang_thai: newStatus,
+        staff_name: actorName,
+        history: currentLogs
+    };
+    if (userCN) updatePayload.cn = userCN;
 
     // Optimistic UI: disable button and show loading
     btnEl.disabled = true;
@@ -862,14 +1091,25 @@ async function toggleCardStatus(record, cardEl, btnEl) {
         if (supabaseClient) {
             const { error } = await supabaseClient
                 .from('pet_intakes')
-                .update({ trang_thai: newStatus })
+                .update(updatePayload)
                 .eq('id', record.id);
-            if (error) throw error;
-            
+
+            if (error) {
+                console.warn("GAIA Dashboard: Initial payload update error, trying JSON string history update:", error);
+                await supabaseClient
+                    .from('pet_intakes')
+                    .update({
+                        trang_thai: newStatus,
+                        staff_name: actorName,
+                        history: JSON.stringify(currentLogs)
+                    })
+                    .eq('id', record.id);
+            }
+
             // Push update to Google Sheets if configured
             if (typeof GOOGLE_SHEET_WEBHOOK_URL !== 'undefined' && GOOGLE_SHEET_WEBHOOK_URL) {
                 try {
-                    let updatedRecord = {...record, trang_thai: newStatus};
+                    let updatedRecord = { ...record, ...updatePayload };
                     delete updatedRecord.signature_data;
                     delete updatedRecord.pet_photo;
                     await fetch(GOOGLE_SHEET_WEBHOOK_URL, {
@@ -878,7 +1118,7 @@ async function toggleCardStatus(record, cardEl, btnEl) {
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify(updatedRecord)
                     });
-                } catch(e) {
+                } catch (e) {
                     console.error('GAIA Dashboard: Error pushing update to Google Sheets:', e);
                 }
             }
@@ -886,12 +1126,19 @@ async function toggleCardStatus(record, cardEl, btnEl) {
 
         // Update local data
         record.trang_thai = newStatus;
+        record.staff_name = actorName;
+        record.history = currentLogs;
+        record.status_history = currentLogs;
+        if (userCN) record.cn = userCN;
+
         const idx = intakesData.findIndex(r => r.id === record.id);
-        if (idx !== -1) intakesData[idx].trang_thai = newStatus;
+        if (idx !== -1) {
+            intakesData[idx] = { ...intakesData[idx], ...record };
+        }
 
         // Recalculate counts and re-render
         calculateStatistics(intakesData);
-        applyStatusFilter(); // This will re-render cards & remove this one if needed
+        applyStatusFilter();
 
     } catch (e) {
         console.error('GAIA Dashboard: Error toggling status:', e);
@@ -927,58 +1174,87 @@ function openIntakeDetails(record) {
         dPetNeutered.textContent = "Chưa Triệt Sản (Intact)";
     }
 
+    // Render Action Logs (Lịch Sử Thao Tác từ cột history / status_history)
+    const historyTextEl = document.getElementById("detail-history-text");
+    if (historyTextEl) {
+        let logsList = [];
+        const rawHistory = record.history || record.status_history;
+        if (rawHistory) {
+            if (Array.isArray(rawHistory)) {
+                logsList = rawHistory;
+            } else if (typeof rawHistory === 'string') {
+                try {
+                    const parsed = JSON.parse(rawHistory);
+                    logsList = Array.isArray(parsed) ? parsed : [rawHistory];
+                } catch (e) {
+                    logsList = rawHistory.split('\n').filter(Boolean);
+                }
+            }
+        }
+
+        if (logsList.length > 0) {
+            historyTextEl.innerHTML = logsList.map(log => {
+                const isDone = log.includes("Đã Xử Lý");
+                const badgeColor = isDone ? "#10b981" : "#3b82f6";
+                const bgAlpha = isDone ? "rgba(16, 185, 129, 0.12)" : "rgba(59, 130, 246, 0.12)";
+                return `<div style="padding: 8px 12px; margin-bottom: 6px; background: ${bgAlpha}; border-left: 3px solid ${badgeColor}; border-radius: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;"><span>${escapeHtml(log)}</span></div>`;
+            }).join("");
+        } else {
+            historyTextEl.innerHTML = `<span style="color: var(--text-muted); font-size: 13px;">Chưa có lịch sử thao tác.</span>`;
+        }
+    }
+
     // Pet photo details show/hide with multi-photo gallery support
     const photoContainer = document.getElementById("detail-pet-photo-container");
     const activePhotoImg = document.getElementById("detail-active-photo-img");
     const thumbnailsGrid = document.getElementById("detail-photo-thumbnails-grid");
+    const activePhotoBox = document.querySelector(".detail-active-photo-box");
     const detailTwoCol = document.querySelector(".detail-two-col");
 
-    if (photoContainer && activePhotoImg && thumbnailsGrid) {
+    if (photoContainer) {
         const photosArray = getPhotosArray(record.pet_photo);
 
         if (photosArray.length > 0) {
-            activePhotoImg.src = photosArray[0];
+            if (activePhotoBox) activePhotoBox.style.display = "block";
+            if (activePhotoImg) activePhotoImg.src = photosArray[0];
             photoContainer.style.display = "block";
-            if (detailTwoCol) {
-                detailTwoCol.classList.add("has-photos");
-            }
+            if (detailTwoCol) detailTwoCol.classList.add("has-photos");
 
-            // Clear existing thumbnails
-            thumbnailsGrid.innerHTML = "";
-
-            if (photosArray.length > 1) {
-                thumbnailsGrid.style.display = "grid";
-                photosArray.forEach((photoSrc, idx) => {
-                    const thumb = document.createElement("div");
-                    thumb.className = `thumbnail-item ${idx === 0 ? 'active' : ''}`;
-                    thumb.innerHTML = `<img src="${photoSrc}" alt="Thumbnail">`;
-
-                    thumb.addEventListener("click", () => {
-                        // Switch active image source
-                        activePhotoImg.style.opacity = "0.3";
-                        setTimeout(() => {
-                            activePhotoImg.src = photoSrc;
-                            activePhotoImg.style.opacity = "1";
-                        }, 150);
-
-                        // Switch active class on thumbnails
-                        thumbnailsGrid.querySelectorAll(".thumbnail-item").forEach(t => t.classList.remove("active"));
-                        thumb.classList.add("active");
+            if (thumbnailsGrid) {
+                thumbnailsGrid.innerHTML = "";
+                if (photosArray.length > 1) {
+                    thumbnailsGrid.style.display = "grid";
+                    photosArray.forEach((photoSrc, idx) => {
+                        const thumb = document.createElement("div");
+                        thumb.className = `thumbnail-item ${idx === 0 ? 'active' : ''}`;
+                        thumb.innerHTML = `<img src="${photoSrc}" alt="Thumbnail">`;
+                        thumb.addEventListener("click", () => {
+                            if (activePhotoImg) {
+                                activePhotoImg.style.opacity = "0.3";
+                                setTimeout(() => {
+                                    activePhotoImg.src = photoSrc;
+                                    activePhotoImg.style.opacity = "1";
+                                }, 150);
+                            }
+                            thumbnailsGrid.querySelectorAll(".thumbnail-item").forEach(t => t.classList.remove("active"));
+                            thumb.classList.add("active");
+                        });
+                        thumbnailsGrid.appendChild(thumb);
                     });
-
-                    thumbnailsGrid.appendChild(thumb);
-                });
-            } else {
-                thumbnailsGrid.style.display = "none";
+                } else {
+                    thumbnailsGrid.style.display = "none";
+                }
             }
         } else {
-            activePhotoImg.src = "";
-            photoContainer.style.display = "none";
-            thumbnailsGrid.innerHTML = "";
-            thumbnailsGrid.style.display = "none";
-            if (detailTwoCol) {
-                detailTwoCol.classList.remove("has-photos");
+            // No photos, but keep right column displayed for History box
+            if (activePhotoImg) activePhotoImg.src = "";
+            if (activePhotoBox) activePhotoBox.style.display = "none";
+            if (thumbnailsGrid) {
+                thumbnailsGrid.innerHTML = "";
+                thumbnailsGrid.style.display = "none";
             }
+            photoContainer.style.display = "block"; // Keep history visible!
+            if (detailTwoCol) detailTwoCol.classList.add("has-photos");
         }
     }
 
@@ -1155,23 +1431,23 @@ function setupEventListeners() {
     // PDF direct download trigger
     modalPrintBtn.addEventListener("click", () => {
         if (!activeIntakeRecord) return;
-        
+
         const petName = activeIntakeRecord.pet_name || "Pet";
         let rawDate = activeIntakeRecord.created_at || activeIntakeRecord.date_signed || new Date().toISOString();
         if (rawDate.includes("T")) rawDate = rawDate.split("T")[0];
         const dateParts = rawDate.split("-");
         const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
-        
+
         const originalTitle = document.title;
         document.title = `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City`;
-        
+
         const printBannerIdEl = document.getElementById("print-banner-id");
         if (printBannerIdEl) {
             printBannerIdEl.textContent = `ID: ${getFormattedIntakeId(activeIntakeRecord)}`;
         }
 
         window.print();
-        
+
         // Restore title after print dialog closes
         setTimeout(() => { document.title = originalTitle; }, 1000);
     });
@@ -1185,8 +1461,8 @@ function setupEventListeners() {
     // --- QR Modal Event Listeners ---
     if (qrToggleBtn) {
         qrToggleBtn.addEventListener("click", () => {
-            // Generate URL for declaration page (directory root, without index.html)
-            const declarationUrl = window.location.origin + window.location.pathname.replace('admin.html', '');
+            // Generate URL for declaration page (directory root, without index.html or menu.html)
+            const declarationUrl = window.location.origin + window.location.pathname.replace(/(admin|menu)\.html.*/i, '');
             qrDeclarationUrl.textContent = declarationUrl;
 
             // Generate QR Code
@@ -1410,7 +1686,7 @@ function setupEventListeners() {
     const lightboxClose = document.getElementById("lightbox-close");
     const lightboxPrev = document.getElementById("lightbox-prev");
     const lightboxNext = document.getElementById("lightbox-next");
-    
+
     let lightboxZoom = 1;
     let activePhotoIndex = 0; // 0-based index of current photo
     const ZOOM_STEP = 0.25;
@@ -1468,7 +1744,7 @@ function setupEventListeners() {
         }
 
         activePhotoIndex = newIdx;
-        
+
         // Fading effect transition
         lightboxImg.style.opacity = "0";
         setTimeout(() => {
@@ -1516,7 +1792,7 @@ function setupEventListeners() {
     if (lightboxZoomIn) lightboxZoomIn.addEventListener("click", () => setLightboxZoom(lightboxZoom + ZOOM_STEP));
     if (lightboxZoomOut) lightboxZoomOut.addEventListener("click", () => setLightboxZoom(lightboxZoom - ZOOM_STEP));
     if (lightboxClose) lightboxClose.addEventListener("click", closeLightbox);
-    
+
     // Lightbox navigation controls
     if (lightboxPrev) lightboxPrev.addEventListener("click", () => navigateLightbox(-1));
     if (lightboxNext) lightboxNext.addEventListener("click", () => navigateLightbox(1));
@@ -1545,7 +1821,7 @@ function setupEventListeners() {
             if (lightboxImg.src && lightboxImg.src !== window.location.href) {
                 const petName = (activeIntakeRecord && activeIntakeRecord.pet_name) ? activeIntakeRecord.pet_name.trim() : "Pet";
                 const phone = (activeIntakeRecord && activeIntakeRecord.owner_phone) ? activeIntakeRecord.owner_phone.trim() : "phone";
-                
+
                 let rawDate = (activeIntakeRecord && (activeIntakeRecord.created_at || activeIntakeRecord.date_signed)) || new Date().toISOString();
                 if (rawDate.includes("T")) rawDate = rawDate.split("T")[0];
                 const dateParts = rawDate.split("-");
@@ -1579,14 +1855,14 @@ function setupEventListeners() {
             const response = await fetch(url, { mode: 'cors' });
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
-            
+
             const link = document.createElement("a");
             link.href = blobUrl;
             link.download = filename;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
         } catch (err) {
             console.error("Failed to download image with fetch, falling back:", err);
@@ -1952,7 +2228,7 @@ function initLiveTypingIndicator() {
                 }
             };
         }
-    } catch (e) {}
+    } catch (e) { }
 
     // Periodic check for stale heartbeats
     setInterval(() => {
@@ -1963,7 +2239,7 @@ function initLiveTypingIndicator() {
             } else if (Date.now() - lastPing <= 5000 && localActiveClients.size === 0) {
                 localActiveClients.add('local_fallback');
             }
-        } catch (e) {}
+        } catch (e) { }
         checkActiveCount();
     }, 1500);
 
