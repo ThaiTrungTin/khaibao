@@ -9,11 +9,22 @@ let kiemKhoSelectedBranch = '';
 let kiemKhoAudioCtx = null;
 let currentKiemKhoPhieuId = null;
 let currentKiemKhoMaPhieu = null;
+const kiemKhoClientSessionId = 'cli_' + Math.random().toString(36).substring(2, 11);
 
 // Pagination state
 let kiemKhoCurrentPage = 1;
 const KIEMKHO_PAGE_SIZE = 20;
 let kiemKhoSearchQuery = '';
+
+// Debounced DOM Render for 500+ items to prevent UI stutter/lag
+let renderKiemKhoTableTimer = null;
+function debouncedRenderKiemKhoTable(delay = 100) {
+    if (renderKiemKhoTableTimer) clearTimeout(renderKiemKhoTableTimer);
+    renderKiemKhoTableTimer = setTimeout(() => {
+        renderKiemKhoTableTimer = null;
+        renderKiemKhoTable();
+    }, delay);
+}
 
 // Generate Mã Phiếu: PKK-CN1-02/09/2026_01
 async function generateKiemKhoMaPhieu(branch) {
@@ -147,6 +158,155 @@ function getKiemKhoLoggedBranch() {
     return b || 'CN1';
 }
 
+// Helper to normalize scanner object
+function normalizeScanner(user_name, branch) {
+    const name = (user_name && user_name.trim()) ? user_name.trim() : 'Nhân viên';
+    const br = (branch && branch.trim()) ? branch.trim() : 'CN1';
+    return { user_name: name, branch: br };
+}
+
+// Helper to parse user_name string into array of scanner objects
+function parseKiemKhoScanners(userNameStr, defaultBranch = 'CN1', phieuUserName = '') {
+    if (!userNameStr && phieuUserName) {
+        userNameStr = phieuUserName;
+    }
+    if (!userNameStr) {
+        return [normalizeScanner('Nhân viên', defaultBranch)];
+    }
+
+    const str = String(userNameStr).trim();
+
+    // Check if JSON array or JSON object string
+    if (str.includes('[') || str.includes('{')) {
+        try {
+            const arr = JSON.parse(str);
+            if (Array.isArray(arr) && arr.length > 0) {
+                return arr.map(s => normalizeScanner(s.user_name || s.name || s.user, s.branch || defaultBranch));
+            } else if (arr && typeof arr === 'object') {
+                return [normalizeScanner(arr.user_name || arr.name || arr.user, arr.branch || defaultBranch)];
+            }
+        } catch (e) {}
+    }
+
+    // Check if comma separated: "A - CN1, B - CN2" or "A, B"
+    if (str.includes(',')) {
+        const parts = str.split(',');
+        const list = [];
+        parts.forEach(p => {
+            const trimmed = p.trim();
+            if (trimmed) {
+                if (trimmed.includes(' - ')) {
+                    const [n, b] = trimmed.split(' - ');
+                    list.push(normalizeScanner(n, b || defaultBranch));
+                } else {
+                    list.push(normalizeScanner(trimmed, defaultBranch));
+                }
+            }
+        });
+        if (list.length > 0) return list;
+    }
+
+    // Single scanner string
+    if (str.includes(' - ')) {
+        const [n, b] = str.split(' - ');
+        return [normalizeScanner(n, b || defaultBranch)];
+    }
+
+    return [normalizeScanner(str, defaultBranch)];
+}
+
+// Helper to add/merge a scanner into an item's scanner list
+function addKiemKhoItemScanner(item, userName, branch) {
+    if (!item) return;
+    if (!item.scanners || !Array.isArray(item.scanners)) {
+        item.scanners = parseKiemKhoScanners(item.user_name, item.branch || branch);
+    }
+    const newScanner = normalizeScanner(userName, branch);
+    const exists = item.scanners.some(s => 
+        s.user_name.toLowerCase() === newScanner.user_name.toLowerCase() &&
+        s.branch.toLowerCase() === newScanner.branch.toLowerCase()
+    );
+    if (!exists) {
+        item.scanners.push(newScanner);
+    }
+    // Sync item.user_name serialized string for DB storage
+    item.user_name = JSON.stringify(item.scanners);
+    if (item.scanners.length === 1) {
+        item.branch = item.scanners[0].branch;
+    }
+}
+
+// Toggle Scanners Dropdown Popover Card
+function toggleKiemKhoScannersPopover(event, key) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+
+    const existing = document.getElementById('kiemkho-scanners-popover');
+    if (existing) {
+        const isSameKey = existing.getAttribute('data-popover-key') === key;
+        existing.remove();
+        if (isSameKey) return;
+    }
+
+    const item = kiemKhoItemsMap.get(key);
+    if (!item) return;
+
+    const scanners = (item.scanners && item.scanners.length > 0) ? 
+        item.scanners : 
+        parseKiemKhoScanners(item.user_name, item.branch);
+
+    const btn = event.currentTarget || event.target;
+    const rect = btn.getBoundingClientRect();
+
+    const popover = document.createElement('div');
+    popover.id = 'kiemkho-scanners-popover';
+    popover.className = 'kiemkho-scanners-popover-card';
+    popover.setAttribute('data-popover-key', key);
+
+    const top = rect.bottom + window.scrollY + 6;
+    let left = rect.left + window.scrollX;
+    if (left + 260 > window.innerWidth) {
+        left = window.innerWidth - 270;
+    }
+
+    popover.style.cssText = `top: ${top}px; left: ${left}px; position: absolute; z-index: 999999;`;
+
+    popover.innerHTML = `
+        <div class="kiemkho-scanners-popover-header">
+            <div class="kiemkho-scanners-popover-title">
+                <span>📁</span>
+                <span>Người Quét - CN</span>
+            </div>
+            <span class="kiemkho-scanners-popover-count">${scanners.length} người</span>
+        </div>
+        <div class="kiemkho-scanners-popover-list">
+            ${scanners.map(s => `
+                <div class="kiemkho-scanners-popover-item">
+                    <div class="kiemkho-scanners-popover-user">
+                        <span style="color: #10b981;">🟢</span>
+                        <span>${escapeHtml(s.user_name)}</span>
+                    </div>
+                    <span class="kiemkho-scanners-popover-branch">${escapeHtml(s.branch)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    document.body.appendChild(popover);
+
+    setTimeout(() => {
+        const closeHandler = (e) => {
+            if (popover && !popover.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+                popover.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        document.addEventListener('click', closeHandler);
+    }, 50);
+}
+
 // Custom Modal Confirm Dialog Window Helper (Replaces native browser confirm alert popups)
 function showKiemKhoConfirmModal(title, message, confirmText = 'Đồng ý', cancelText = 'Hủy') {
     return new Promise((resolve) => {
@@ -205,6 +365,9 @@ async function initKiemKhoView() {
     setupKiemKhoScanInput();
     setupKiemKhoPhieuInput();
 
+    // ALWAYS ACTIVATE REALTIME SUBSCRIPTION FOR MULTI-USER LIVE SYNC!
+    setupKiemKhoRealtimeSubscription();
+
     // Fetch vatTuData from Supabase if empty
     if (!window.vatTuData || !Array.isArray(window.vatTuData) || window.vatTuData.length === 0) {
         if (typeof window.fetchVatTuData === 'function') {
@@ -217,6 +380,9 @@ async function initKiemKhoView() {
 
     if (restored && currentKiemKhoMaPhieu) {
         setKiemKhoBranchSelectDisabled(true);
+        // Verify if ticket still exists in DB & sync live scan logs from DB (F5 Fix)
+        await verifyKiemKhoSessionExistence();
+        await syncActiveKiemKhoTicketFromDB();
     } else {
         setKiemKhoBranchSelectDisabled(false);
     }
@@ -229,6 +395,145 @@ async function initKiemKhoView() {
     // Start background live monitoring timer for system stock changes every 4 seconds!
     if (!window.kiemKhoLiveMonitorTimer) {
         window.kiemKhoLiveMonitorTimer = setInterval(checkKiemKhoLiveSystemQtyChanges, 4000);
+    }
+
+    // Start background auto-reconciliation timer for 100% exact multi-device sync (runs every 3 seconds)
+    if (!window.kiemKhoAutoReconcileTimer) {
+        window.kiemKhoAutoReconcileTimer = setInterval(() => {
+            if (currentKiemKhoMaPhieu || currentKiemKhoPhieuId) {
+                syncActiveKiemKhoTicketFromDB();
+            }
+        }, 3000);
+    }
+}
+
+// Sync active ticket's scan logs from quet_chi_tiet DB table silently
+async function syncActiveKiemKhoTicketFromDB() {
+    if (!currentKiemKhoMaPhieu && !currentKiemKhoPhieuId) return;
+
+    const client = getVatTuSupabaseClient();
+    if (!client) return;
+
+    try {
+        let phieuId = currentKiemKhoPhieuId;
+        if (!phieuId) {
+            const { data: pData } = await client.from('kiem_kho').select('id').eq('ma_phieu', currentKiemKhoMaPhieu).maybeSingle();
+            if (pData) {
+                phieuId = pData.id;
+                currentKiemKhoPhieuId = phieuId;
+            }
+        }
+
+        if (!phieuId) return;
+
+        const { data: quetLogData } = await client
+            .from('quet_chi_tiet')
+            .select('*')
+            .or(`phieu_id.eq.${phieuId},ma_phieu.eq.${currentKiemKhoMaPhieu}`);
+
+        const quetLogMap = new Map();
+        if (quetLogData && quetLogData.length > 0) {
+            quetLogData.forEach(log => {
+                const key = `${log.ma_vach}_${log.lot || '-'}`;
+                if (!quetLogMap.has(key)) {
+                    quetLogMap.set(key, {
+                        ma_vach: log.ma_vach,
+                        ten_hang_hoa: log.ten_hang_hoa,
+                        lot: log.lot || '-',
+                        date_expiry: log.date_expiry || '-',
+                        so_luong_thuc_te: 0,
+                        scanners: [],
+                        time_scanned: log.created_at
+                    });
+                }
+                const entry = quetLogMap.get(key);
+                entry.so_luong_thuc_te += Number(log.so_luong || 1);
+                addKiemKhoItemScanner(entry, log.user_name, log.branch);
+                if (log.created_at > entry.time_scanned) entry.time_scanned = log.created_at;
+            });
+
+            quetLogMap.forEach((entry, key) => {
+                if (kiemKhoItemsMap.has(key)) {
+                    const existing = kiemKhoItemsMap.get(key);
+                    existing.so_luong_thuc_te = entry.so_luong_thuc_te;
+                    existing.chenh_lech = existing.so_luong_thuc_te - existing.so_luong_he_thong;
+                    existing.trang_thai = getKiemKhoStatus(existing.so_luong_thuc_te, existing.so_luong_he_thong);
+                    entry.scanners.forEach(s => addKiemKhoItemScanner(existing, s.user_name, s.branch));
+                } else {
+                    const systemQty = getSystemQtyForBranch(entry.ma_vach, entry.ma_vach, kiemKhoSelectedBranch, entry.lot);
+                    kiemKhoItemsMap.set(key, {
+                        key,
+                        ma_vach: entry.ma_vach,
+                        ten_hang_hoa: entry.ten_hang_hoa || '',
+                        lot: entry.lot,
+                        date_expiry: entry.date_expiry,
+                        so_luong_thuc_te: entry.so_luong_thuc_te,
+                        so_luong_he_thong: systemQty,
+                        chenh_lech: entry.so_luong_thuc_te - systemQty,
+                        trang_thai: getKiemKhoStatus(entry.so_luong_thuc_te, systemQty),
+                        user_name: JSON.stringify(entry.scanners),
+                        branch: kiemKhoSelectedBranch,
+                        scanners: entry.scanners,
+                        time_scanned: entry.time_scanned || new Date().toISOString(),
+                        is_synced: true,
+                        is_system_qty_changed: false
+                    });
+                }
+            });
+        }
+
+        // Clean up items in kiemKhoItemsMap that are no longer in DB scan logs quetLogData
+        kiemKhoItemsMap.forEach((item, key) => {
+            if (!quetLogMap.has(key)) {
+                if (item.so_luong_he_thong === 0 || item.is_unmatched || (item.ten_hang_hoa && item.ten_hang_hoa.includes('Không có trong danh mục'))) {
+                    kiemKhoItemsMap.delete(key);
+                } else {
+                    item.so_luong_thuc_te = 0;
+                    item.chenh_lech = 0 - item.so_luong_he_thong;
+                    item.trang_thai = getKiemKhoStatus(0, item.so_luong_he_thong);
+                    item.scanners = [];
+                }
+            }
+        });
+
+        let totalScans = 0;
+        kiemKhoItemsMap.forEach(it => {
+            totalScans += (it.so_luong_thuc_te || 0);
+        });
+        kiemKhoTotalScans = totalScans;
+
+        renderKiemKhoTable();
+    } catch (e) {
+        console.warn("syncActiveKiemKhoTicketFromDB error:", e);
+    }
+}
+
+// Verify active ticket existence on DB
+async function verifyKiemKhoSessionExistence() {
+    if (!currentKiemKhoMaPhieu) return;
+    const client = getVatTuSupabaseClient();
+    if (!client) return;
+
+    try {
+        const { data: existingHeader } = await client
+            .from('kiem_kho')
+            .select('id')
+            .eq('ma_phieu', currentKiemKhoMaPhieu)
+            .maybeSingle();
+
+        if (!existingHeader) {
+            console.log("KiemKho: Ticket no longer exists on DB, clearing local cache.");
+            kiemKhoItemsMap.clear();
+            kiemKhoTotalScans = 0;
+            currentKiemKhoPhieuId = null;
+            currentKiemKhoMaPhieu = null;
+            localStorage.removeItem("gaia_active_kiemkho_session");
+            setKiemKhoBranchSelectDisabled(false);
+            updateKiemKhoPhieuDisplay();
+            renderKiemKhoTable();
+        }
+    } catch (e) {
+        console.warn("verifyKiemKhoSessionExistence error:", e);
     }
 }
 
@@ -480,13 +785,6 @@ async function loadKiemKhoPhieuByCode(maPhieu) {
         // Clear error text if loading old phiếu successfully
         setKiemKhoPhieuError(null);
 
-        const { data: chiTietData, error: chiTietErr } = await client
-            .from('kiem_kho_chi_tiet')
-            .select('*')
-            .eq('phieu_id', phieuData.id);
-
-        if (chiTietErr) throw chiTietErr;
-
         // Load into map
         kiemKhoItemsMap.clear();
         kiemKhoTotalScans = 0;
@@ -494,26 +792,150 @@ async function loadKiemKhoPhieuByCode(maPhieu) {
         currentKiemKhoMaPhieu = maPhieu;
         kiemKhoSelectedBranch = phieuData.branch || 'all';
 
-        (chiTietData || []).forEach(row => {
-            const key = `${row.ma_vach}_${row.lot || '-'}`;
-            kiemKhoItemsMap.set(key, {
-                key,
-                ma_vach: row.ma_vach,
-                ten_hang_hoa: row.ten_hang_hoa || '',
-                lot: row.lot || '-',
-                date_expiry: row.date_expiry || '-',
-                so_luong_thuc_te: row.so_luong_thuc_te || 0,
-                so_luong_he_thong: row.so_luong_he_thong || 0,
-                chenh_lech: row.chenh_lech || 0,
-                trang_thai: row.trang_thai || 'THIEU',
-                user_name: row.user_name || '',
-                branch: row.branch || kiemKhoSelectedBranch,
-                time_scanned: row.thoi_gian_quat || new Date().toISOString(),
-                is_synced: true,
-                is_system_qty_changed: false
+        // 1. Try querying SQL View view_kiem_kho_tong_hop_chi_tiet
+        let loadedFromView = false;
+        try {
+            const { data: viewData, error: viewErr } = await client
+                .from('view_kiem_kho_tong_hop_chi_tiet')
+                .select('*')
+                .eq('phieu_id', phieuData.id);
+
+            if (!viewErr && viewData && viewData.length > 0) {
+                viewData.forEach(row => {
+                    const key = `${row.ma_vach}_${row.lot || '-'}`;
+                    const defaultBr = phieuData.branch || kiemKhoSelectedBranch || 'CN1';
+                    let scanners = [];
+                    if (Array.isArray(row.scanners)) {
+                        scanners = row.scanners.map(s => normalizeScanner(s.user_name || s.name, s.branch || defaultBr));
+                    } else {
+                        scanners = parseKiemKhoScanners(row.user_name || row.scanners, defaultBr, phieuData.user_name);
+                    }
+                    const primary = scanners[0] || normalizeScanner(phieuData.user_name || 'Nhân viên', defaultBr);
+
+                    kiemKhoItemsMap.set(key, {
+                        key,
+                        ma_vach: row.ma_vach,
+                        ten_hang_hoa: row.ten_hang_hoa || '',
+                        lot: row.lot || '-',
+                        date_expiry: row.date_expiry || '-',
+                        so_luong_thuc_te: Number(row.so_luong_thuc_te || 0),
+                        so_luong_he_thong: Number(row.so_luong_he_thong || 0),
+                        chenh_lech: Number(row.chenh_lech || 0),
+                        trang_thai: row.trang_thai || getKiemKhoStatus(row.so_luong_thuc_te, row.so_luong_he_thong),
+                        user_name: JSON.stringify(scanners),
+                        branch: primary.branch || kiemKhoSelectedBranch,
+                        scanners: scanners,
+                        time_scanned: row.thoi_gian_quat || new Date().toISOString(),
+                        is_synced: true,
+                        is_system_qty_changed: false
+                    });
+                    if (Number(row.so_luong_thuc_te || 0) > 0) kiemKhoTotalScans += Number(row.so_luong_thuc_te);
+                });
+                loadedFromView = true;
+            }
+        } catch (e) {
+            console.warn("SQL View query fallback:", e);
+        }
+
+        // 2. Fallback if SQL view is not created yet
+        if (!loadedFromView) {
+            const { data: chiTietData } = await client
+                .from('kiem_kho_chi_tiet')
+                .select('*')
+                .eq('phieu_id', phieuData.id);
+
+            (chiTietData || []).forEach(row => {
+                const key = `${row.ma_vach}_${row.lot || '-'}`;
+                const defaultBr = row.branch || phieuData.branch || kiemKhoSelectedBranch || 'CN1';
+                const scanners = parseKiemKhoScanners(row.user_name, defaultBr, phieuData.user_name);
+                const primary = scanners[0] || normalizeScanner(phieuData.user_name || 'Nhân viên', defaultBr);
+
+                kiemKhoItemsMap.set(key, {
+                    key,
+                    ma_vach: row.ma_vach,
+                    ten_hang_hoa: row.ten_hang_hoa || '',
+                    lot: row.lot || '-',
+                    date_expiry: row.date_expiry || '-',
+                    so_luong_thuc_te: row.so_luong_thuc_te || 0,
+                    so_luong_he_thong: row.so_luong_he_thong || 0,
+                    chenh_lech: row.chenh_lech || 0,
+                    trang_thai: row.trang_thai || 'THIEU',
+                    user_name: row.user_name || phieuData.user_name || primary.user_name,
+                    branch: row.branch || primary.branch || kiemKhoSelectedBranch,
+                    scanners: scanners,
+                    time_scanned: row.thoi_gian_quat || new Date().toISOString(),
+                    is_synced: true,
+                    is_system_qty_changed: false
+                });
+                if ((row.so_luong_thuc_te || 0) > 0) kiemKhoTotalScans += row.so_luong_thuc_te;
             });
-            if ((row.so_luong_thuc_te || 0) > 0) kiemKhoTotalScans += row.so_luong_thuc_te;
-        });
+
+            // Also fetch quet_chi_tiet scan logs to aggregate realtime atomic scan logs
+            try {
+                const { data: quetLogData } = await client
+                    .from('quet_chi_tiet')
+                    .select('*')
+                    .or(`phieu_id.eq.${phieuData.id},ma_phieu.eq.${maPhieu}`);
+
+                if (quetLogData && quetLogData.length > 0) {
+                    const quetLogMap = new Map();
+                    quetLogData.forEach(log => {
+                        const key = `${log.ma_vach}_${log.lot || '-'}`;
+                        if (!quetLogMap.has(key)) {
+                            quetLogMap.set(key, {
+                                ma_vach: log.ma_vach,
+                                ten_hang_hoa: log.ten_hang_hoa,
+                                lot: log.lot || '-',
+                                date_expiry: log.date_expiry || '-',
+                                so_luong_thuc_te: 0,
+                                scanners: [],
+                                time_scanned: log.created_at
+                            });
+                        }
+                        const entry = quetLogMap.get(key);
+                        entry.so_luong_thuc_te += Number(log.so_luong || 1);
+                        addKiemKhoItemScanner(entry, log.user_name, log.branch);
+                        if (log.created_at > entry.time_scanned) entry.time_scanned = log.created_at;
+                    });
+
+                    quetLogMap.forEach((entry, key) => {
+                        if (kiemKhoItemsMap.has(key)) {
+                            const existing = kiemKhoItemsMap.get(key);
+                            existing.so_luong_thuc_te = entry.so_luong_thuc_te;
+                            existing.chenh_lech = existing.so_luong_thuc_te - existing.so_luong_he_thong;
+                            existing.trang_thai = getKiemKhoStatus(existing.so_luong_thuc_te, existing.so_luong_he_thong);
+                            entry.scanners.forEach(s => addKiemKhoItemScanner(existing, s.user_name, s.branch));
+                        } else {
+                            const systemQty = getSystemQtyForBranch(entry.ma_vach, entry.ma_vach, phieuData.branch, entry.lot);
+                            kiemKhoItemsMap.set(key, {
+                                key,
+                                ma_vach: entry.ma_vach,
+                                ten_hang_hoa: entry.ten_hang_hoa || '',
+                                lot: entry.lot,
+                                date_expiry: entry.date_expiry,
+                                so_luong_thuc_te: entry.so_luong_thuc_te,
+                                so_luong_he_thong: systemQty,
+                                chenh_lech: entry.so_luong_thuc_te - systemQty,
+                                trang_thai: getKiemKhoStatus(entry.so_luong_thuc_te, systemQty),
+                                user_name: JSON.stringify(entry.scanners),
+                                branch: phieuData.branch || kiemKhoSelectedBranch,
+                                scanners: entry.scanners,
+                                time_scanned: entry.time_scanned || new Date().toISOString(),
+                                is_synced: true,
+                                is_system_qty_changed: false
+                            });
+                        }
+                    });
+
+                    kiemKhoTotalScans = 0;
+                    kiemKhoItemsMap.forEach(it => {
+                        kiemKhoTotalScans += (it.so_luong_thuc_te || 0);
+                    });
+                }
+            } catch (e) {
+                console.warn("Fetch quet_chi_tiet log error:", e);
+            }
+        }
 
         // Auto-fill and lock branch select dropdown based on loaded ticket
         let phieuBranch = phieuData.branch || 'all';
@@ -533,7 +955,7 @@ async function loadKiemKhoPhieuByCode(maPhieu) {
         updateKiemKhoPhieuDisplay();
         renderKiemKhoTable();
         showVatTuLoading(false);
-        showKiemKhoToast('success', 'Đã Tải Phiếu Cũ Sửa', `✅ Đã tải thành công phiếu kiểm kho <b>${maPhieu}</b> (${phieuBranch}) với ${chiTietData.length} mã hàng để chỉnh sửa!`);
+        showKiemKhoToast('success', 'Đã Tải Phiếu Cũ Sửa', `✅ Đã tải thành công phiếu kiểm kho <b>${maPhieu}</b> (${phieuBranch}) với ${kiemKhoItemsMap.size} mã hàng để chỉnh sửa!`);
     } catch (err) {
         showVatTuLoading(false);
         console.error('loadKiemKhoPhieuByCode error:', err);
@@ -726,9 +1148,108 @@ function parseKiemKhoQrString(rawVal) {
 
     const ma_vach = parts[0] ? parts[0].trim() : cleanStr;
     const lot = (parts[1] && parts[1].trim() !== '') ? parts[1].trim() : '-';
-    let date_expiry = (parts[2] && parts[2].trim() !== '') ? parts[2].trim() : '-';
+    let date_expiry = (parts[2] && parts[2].trim() !== '') ? formatDate(parts[2].trim()) : '-';
 
     return { ma_vach, lot, date_expiry };
+}
+
+// Helper to convert date strings safely to ISO format (YYYY-MM-DD)
+function formatToIsoDateString(rawDate) {
+    if (!rawDate || rawDate === '-' || rawDate === 'null') return null;
+    const str = String(rawDate).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+    const parts = str.split(/[\/\.-]/);
+    if (parts.length === 3 && parts[2].length === 4) {
+        const d = parts[0].padStart(2, '0');
+        const m = parts[1].padStart(2, '0');
+        const y = parts[2];
+        return `${y}-${m}-${d}`;
+    }
+    return str;
+}
+
+// Ensure Active Ticket Header Exists in Supabase CSDL (kiem_kho table)
+async function ensureActiveKiemKhoHeaderExists() {
+    if (currentKiemKhoPhieuId) return currentKiemKhoPhieuId;
+
+    const client = getVatTuSupabaseClient();
+    if (!client) return null;
+
+    if (!currentKiemKhoMaPhieu) {
+        currentKiemKhoMaPhieu = await generateKiemKhoMaPhieu(kiemKhoSelectedBranch);
+        updateKiemKhoPhieuDisplay();
+    }
+
+    try {
+        const { data: existing } = await client.from('kiem_kho').select('id').eq('ma_phieu', currentKiemKhoMaPhieu).maybeSingle();
+        if (existing) {
+            currentKiemKhoPhieuId = existing.id;
+            return currentKiemKhoPhieuId;
+        }
+
+        const loggedUser = window.getCurrentLoggedUser ? window.getCurrentLoggedUser() : null;
+        const userName = loggedUser ? (loggedUser.name || loggedUser.user_name || 'Hệ thống') : 'Nhân viên';
+        const userBranch = kiemKhoSelectedBranch || (loggedUser ? loggedUser.branch : 'CN1');
+
+        const headerPayload = {
+            ma_phieu: currentKiemKhoMaPhieu,
+            branch: userBranch,
+            user_name: userName,
+            tong_ma_quat: 0,
+            tong_so_luong_quat: 0,
+            so_ma_khop: 0,
+            so_ma_du: 0,
+            so_ma_thieu: 0,
+            trang_thai: 'DANG_KIEM',
+            created_at: new Date().toISOString()
+        };
+
+        const { data: inserted, error: insertErr } = await client.from('kiem_kho').insert([headerPayload]).select('id').single();
+        if (!insertErr && inserted) {
+            currentKiemKhoPhieuId = inserted.id;
+        }
+    } catch (e) {
+        console.warn("ensureActiveKiemKhoHeaderExists warning:", e);
+    }
+    return currentKiemKhoPhieuId;
+}
+
+// Append-Only Scan Log DB Writer (Ultra-fast insert, zero lock conflicts)
+async function logScanToQuetChiTietDB(item, deltaQty = 1) {
+    if (!item || !item.ma_vach) return;
+
+    const phieuId = await ensureActiveKiemKhoHeaderExists();
+    if (!currentKiemKhoMaPhieu) return;
+
+    const client = getVatTuSupabaseClient();
+    if (!client) return;
+
+    const userName = getKiemKhoLoggedUserName();
+    const userBranch = getKiemKhoLoggedBranch();
+    const normLot = (item.lot && item.lot !== '-') ? item.lot : '-';
+    const normDate = formatToIsoDateString(item.date_expiry);
+
+    try {
+        const { data, error } = await client.from('quet_chi_tiet').insert([{
+            phieu_id: phieuId || null,
+            ma_phieu: currentKiemKhoMaPhieu,
+            ma_vach: item.ma_vach,
+            ten_hang_hoa: item.ten_hang_hoa,
+            lot: normLot,
+            date_expiry: normDate,
+            so_luong: deltaQty,
+            user_name: userName,
+            branch: userBranch
+        }]);
+
+        if (error) {
+            console.error("❌ GAIA KiemKho: quet_chi_tiet INSERT Failed:", error.message || error);
+        } else {
+            console.log(`✅ GAIA KiemKho: quet_chi_tiet INSERT OK -> ${item.ma_vach} (+${deltaQty}) [Phieu: ${currentKiemKhoMaPhieu}]`);
+        }
+    } catch (e) {
+        console.warn("logScanToQuetChiTietDB error:", e);
+    }
 }
 
 // Core Barcode / QR Scanner Processing Logic
@@ -793,6 +1314,10 @@ async function processKiemKhoScannedCode(codeStr) {
         existingItem.time_scanned = new Date().toISOString();
         existingItem.is_synced = false;
 
+        const userName = getKiemKhoLoggedUserName();
+        const userBranch = getKiemKhoLoggedBranch();
+        addKiemKhoItemScanner(existingItem, userName, userBranch);
+
         // Play Sound
         if (existingItem.trang_thai === 'DU') {
             playKiemKhoAudio('excess');
@@ -811,6 +1336,8 @@ async function processKiemKhoScannedCode(codeStr) {
         const chenhLech = scannedQty - systemQty;
         const trangThai = getKiemKhoStatus(scannedQty, systemQty);
 
+        const initialScanners = [normalizeScanner(userName, userBranch)];
+
         const newItem = {
             key: itemKey,
             ma_vach: maVach,
@@ -821,8 +1348,9 @@ async function processKiemKhoScannedCode(codeStr) {
             so_luong_he_thong: systemQty,
             chenh_lech: chenhLech,
             trang_thai: trangThai,
-            user_name: userName,
+            user_name: JSON.stringify(initialScanners),
             branch: userBranch,
+            scanners: initialScanners,
             time_scanned: new Date().toISOString(),
             is_synced: false
         };
@@ -841,10 +1369,10 @@ async function processKiemKhoScannedCode(codeStr) {
 
     renderKiemKhoTable();
 
-    // Real-time DB sync for scanned item
+    // Fast Append-Only Log Insert to Supabase DB (never locks rows or collides)
     const scannedItem = kiemKhoItemsMap.get(itemKey);
     if (scannedItem) {
-        syncKiemKhoItemToDB(scannedItem);
+        logScanToQuetChiTietDB(scannedItem, 1);
     }
 }
 
@@ -1064,6 +1592,7 @@ async function loadAllBranchItemsToKiemKho() {
                 updatedCount++;
             } else {
                 // Add new branch item
+                const initialScanners = [normalizeScanner(userName, userBranch)];
                 kiemKhoItemsMap.set(itemKey, {
                     key: itemKey,
                     ma_vach: maVach,
@@ -1074,8 +1603,9 @@ async function loadAllBranchItemsToKiemKho() {
                     so_luong_he_thong: systemQty,
                     chenh_lech: 0 - systemQty,
                     trang_thai: getKiemKhoStatus(0, systemQty),
-                    user_name: userName,
+                    user_name: JSON.stringify(initialScanners),
                     branch: userBranch,
+                    scanners: initialScanners,
                     time_scanned: new Date().toISOString(),
                     is_synced: true
                 });
@@ -1153,7 +1683,8 @@ async function loadAllBranchItemsToKiemKho() {
                     so_luong_he_thong: it.so_luong_he_thong,
                     chenh_lech: it.chenh_lech,
                     trang_thai: it.trang_thai,
-                    branch: selectedBranch
+                    branch: selectedBranch,
+                    user_name: it.user_name || JSON.stringify(it.scanners || [normalizeScanner(userName, userBranch)])
                 }));
 
                 await client.from('kiem_kho_chi_tiet').insert(detailsPayload);
@@ -1183,6 +1714,9 @@ function setupKiemKhoRealtimeSubscription() {
     try {
         kiemKhoRealtimeChannel = client
             .channel('realtime-kiem-kho-all')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'quet_chi_tiet' }, (payload) => {
+                handleQuetChiTietRealtimeChange(payload);
+            })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'kiem_kho_chi_tiet' }, (payload) => {
                 handleKiemKhoChiTietRealtimeChange(payload);
             })
@@ -1194,6 +1728,115 @@ function setupKiemKhoRealtimeSubscription() {
             });
     } catch (e) {
         console.warn("KiemKho: Realtime subscription warning:", e);
+    }
+}
+
+function handleQuetChiTietRealtimeChange(payload) {
+    if (!currentKiemKhoMaPhieu && !currentKiemKhoPhieuId) return;
+
+    const eventType = payload.eventType; // 'INSERT', 'DELETE'
+    const newRow = payload.new;
+    const oldRow = payload.old;
+    const row = newRow || oldRow;
+
+    if (!row) return;
+
+    const isSameTicket = (currentKiemKhoPhieuId && String(row.phieu_id) === String(currentKiemKhoPhieuId)) ||
+                         (currentKiemKhoMaPhieu && String(row.ma_phieu).toUpperCase() === String(currentKiemKhoMaPhieu).toUpperCase());
+
+    if (!isSameTicket) return;
+
+    if (eventType === 'DELETE') {
+        const deletedVach = oldRow ? oldRow.ma_vach : null;
+        if (deletedVach) {
+            const key = `${deletedVach}_${oldRow.lot || '-'}`;
+            kiemKhoItemsMap.delete(key);
+            renderKiemKhoTable();
+        }
+        if (typeof debouncedKiemKhoAutoReconcile === 'function') {
+            debouncedKiemKhoAutoReconcile();
+        }
+        return;
+    }
+
+    if (eventType === 'INSERT') {
+        const scannerName = newRow.user_name || 'Nhân viên';
+        const scannerBranch = newRow.branch || 'CN1';
+        const myName = getKiemKhoLoggedUserName();
+        const myBranch = getKiemKhoLoggedBranch();
+
+        // If event was generated by THIS logged-in user on THIS branch, ignore to avoid double counting (already updated optimistically in 0ms)
+        if (scannerName.trim().toLowerCase() === myName.trim().toLowerCase() && 
+            scannerBranch.trim().toLowerCase() === myBranch.trim().toLowerCase()) {
+            return;
+        }
+
+        const maVach = newRow.ma_vach;
+        if (!maVach) return;
+
+        const lot = newRow.lot || '-';
+        const key = `${maVach}_${lot}`;
+        const addQty = Number(newRow.so_luong || 1);
+
+        const existing = kiemKhoItemsMap.get(key);
+
+        if (existing) {
+            existing.so_luong_thuc_te += addQty;
+            existing.chenh_lech = existing.so_luong_thuc_te - existing.so_luong_he_thong;
+            existing.trang_thai = getKiemKhoStatus(existing.so_luong_thuc_te, existing.so_luong_he_thong);
+            addKiemKhoItemScanner(existing, scannerName, scannerBranch);
+        } else {
+            const systemQty = getSystemQtyForBranch(maVach, maVach, kiemKhoSelectedBranch, lot);
+            const chenhLech = addQty - systemQty;
+            const status = getKiemKhoStatus(addQty, systemQty);
+            const initialScanners = [normalizeScanner(scannerName, scannerBranch)];
+
+            kiemKhoItemsMap.set(key, {
+                key: key,
+                ma_vach: maVach,
+                ten_hang_hoa: newRow.ten_hang_hoa || 'Mặt hàng chưa tên',
+                lot: lot,
+                date_expiry: newRow.date_expiry || '-',
+                so_luong_thuc_te: addQty,
+                so_luong_he_thong: systemQty,
+                chenh_lech: chenhLech,
+                trang_thai: status,
+                scanners: initialScanners,
+                user_name: JSON.stringify(initialScanners),
+                branch: scannerBranch,
+                time_scanned: newRow.created_at || new Date().toISOString(),
+                is_synced: true
+            });
+        }
+
+        let totalScans = 0;
+        kiemKhoItemsMap.forEach(it => {
+            totalScans += (it.so_luong_thuc_te || 0);
+        });
+        kiemKhoTotalScans = totalScans;
+
+        debouncedRenderKiemKhoTable(100);
+    } else if (eventType === 'DELETE') {
+        const maVach = oldRow ? oldRow.ma_vach : null;
+        if (!maVach) return;
+        const lot = (oldRow && oldRow.lot) ? oldRow.lot : '-';
+        const key = `${maVach}_${lot}`;
+        const subQty = Number((oldRow && oldRow.so_luong) ? oldRow.so_luong : 1);
+
+        if (kiemKhoItemsMap.has(key)) {
+            const existing = kiemKhoItemsMap.get(key);
+            existing.so_luong_thuc_te = Math.max(0, existing.so_luong_thuc_te - subQty);
+            existing.chenh_lech = existing.so_luong_thuc_te - existing.so_luong_he_thong;
+            existing.trang_thai = getKiemKhoStatus(existing.so_luong_thuc_te, existing.so_luong_he_thong);
+
+            let totalScans = 0;
+            kiemKhoItemsMap.forEach(it => {
+                totalScans += (it.so_luong_thuc_te || 0);
+            });
+            kiemKhoTotalScans = totalScans;
+
+            renderKiemKhoTable();
+        }
     }
 }
 
@@ -1225,6 +1868,7 @@ function handleKiemKhoChiTietRealtimeChange(payload) {
         const diff = Number(newRow.chenh_lech !== undefined ? newRow.chenh_lech : (scannedQty - systemQty));
         const status = newRow.trang_thai || getKiemKhoStatus(scannedQty, systemQty);
 
+        const incomingScanners = parseKiemKhoScanners(newRow.user_name, newRow.branch);
         const existing = kiemKhoItemsMap.get(key);
 
         if (existing) {
@@ -1232,7 +1876,16 @@ function handleKiemKhoChiTietRealtimeChange(payload) {
             existing.so_luong_he_thong = systemQty;
             existing.chenh_lech = diff;
             existing.trang_thai = status;
-            if (newRow.user_name) existing.user_name = newRow.user_name;
+            if (!existing.scanners) existing.scanners = parseKiemKhoScanners(existing.user_name, existing.branch);
+
+            incomingScanners.forEach(s => {
+                const exists = existing.scanners.some(es => 
+                    es.user_name.toLowerCase() === s.user_name.toLowerCase() &&
+                    es.branch.toLowerCase() === s.branch.toLowerCase()
+                );
+                if (!exists) existing.scanners.push(s);
+            });
+            existing.user_name = JSON.stringify(existing.scanners);
             if (newRow.branch) existing.branch = newRow.branch;
         } else {
             kiemKhoItemsMap.set(key, {
@@ -1245,7 +1898,8 @@ function handleKiemKhoChiTietRealtimeChange(payload) {
                 so_luong_he_thong: systemQty,
                 chenh_lech: diff,
                 trang_thai: status,
-                user_name: newRow.user_name || 'Đồng nghiệp',
+                scanners: incomingScanners,
+                user_name: JSON.stringify(incomingScanners),
                 branch: newRow.branch || kiemKhoSelectedBranch,
                 time_scanned: newRow.created_at || new Date().toISOString(),
                 is_synced: true
@@ -1260,9 +1914,9 @@ function handleKiemKhoChiTietRealtimeChange(payload) {
 
         renderKiemKhoTable();
     } else if (eventType === 'DELETE') {
-        const maVach = oldRow.ma_vach;
+        const maVach = oldRow ? oldRow.ma_vach : null;
         if (!maVach) return;
-        const lot = oldRow.lot || '-';
+        const lot = (oldRow && oldRow.lot) ? oldRow.lot : '-';
         const key = `${maVach}_${lot}`;
 
         if (kiemKhoItemsMap.has(key)) {
@@ -1282,16 +1936,26 @@ function handleKiemKhoChiTietRealtimeChange(payload) {
 function handleKiemKhoHeaderRealtimeChange(payload) {
     if (!currentKiemKhoMaPhieu) return;
 
-    const row = payload.new;
+    const eventType = payload.eventType; // 'INSERT', 'UPDATE', 'DELETE'
+    const newRow = payload.new;
+    const oldRow = payload.old;
+    const row = newRow || oldRow;
+
     if (!row) return;
 
     if (String(row.ma_phieu).toUpperCase() === String(currentKiemKhoMaPhieu).toUpperCase()) {
-        if (row.trang_thai === 'DA_HOAN_THANH') {
-            showKiemKhoToast('info', 'Phiếu Đã Hoàn Thành', `🎉 Phiếu kiểm <b>${row.ma_phieu}</b> đã được hoàn tất và lưu bởi ${row.user_name || 'đồng nghiệp'}!`);
+        if (eventType === 'DELETE' || row.trang_thai === 'DA_HOAN_THANH') {
+            if (eventType === 'DELETE') {
+                showKiemKhoToast('warning', 'Phiếu Đã Bị Xóa', `⚠️ Phiếu kiểm <b>${row.ma_phieu}</b> đã bị xóa khỏi CSDL!`);
+            } else {
+                showKiemKhoToast('info', 'Phiếu Đã Hoàn Thành', `🎉 Phiếu kiểm <b>${row.ma_phieu}</b> đã được hoàn tất và lưu bởi ${row.user_name || 'đồng nghiệp'}!`);
+            }
             kiemKhoItemsMap.clear();
             kiemKhoTotalScans = 0;
             currentKiemKhoPhieuId = null;
             currentKiemKhoMaPhieu = null;
+            localStorage.removeItem("gaia_active_kiemkho_session");
+            setKiemKhoBranchSelectDisabled(false);
             updateKiemKhoPhieuDisplay();
             renderKiemKhoTable();
         }
@@ -1311,8 +1975,11 @@ async function syncKiemKhoItemToDB(item) {
         let query = client.from('kiem_kho_chi_tiet')
             .update({
                 so_luong_thuc_te: item.so_luong_thuc_te,
+                so_luong_he_thong: item.so_luong_he_thong,
                 chenh_lech: item.chenh_lech,
-                trang_thai: item.trang_thai
+                trang_thai: item.trang_thai,
+                user_name: item.user_name || JSON.stringify(item.scanners || []),
+                branch: item.branch || kiemKhoSelectedBranch
             })
             .eq('phieu_id', currentKiemKhoPhieuId)
             .eq('ma_vach', item.ma_vach);
@@ -1337,7 +2004,8 @@ async function syncKiemKhoItemToDB(item) {
                 so_luong_he_thong: item.so_luong_he_thong,
                 chenh_lech: item.chenh_lech,
                 trang_thai: item.trang_thai,
-                branch: item.branch || kiemKhoSelectedBranch
+                branch: item.branch || kiemKhoSelectedBranch,
+                user_name: item.user_name || JSON.stringify(item.scanners || [])
             }]);
         }
 
@@ -1446,11 +2114,11 @@ function renderKiemKhoTable() {
         const globalIdx = startIdx + idx;
         let statusBadge = '';
         if (item.trang_thai === 'KHOP') {
-            statusBadge = `<span class="badge-status badge-success" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid #10b981; padding: 4px 10px; border-radius: 6px; font-weight: 700;">✅ ĐỦ (KHỚP)</span>`;
+            statusBadge = `<span style="color: #10b981; font-weight: 700; font-size: 13px;">✅ ĐỦ</span>`;
         } else if (item.trang_thai === 'DU') {
-            statusBadge = `<span class="badge-status badge-warning" style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid #f59e0b; padding: 4px 10px; border-radius: 6px; font-weight: 700;">⚠️ DƯ (+${item.chenh_lech})</span>`;
+            statusBadge = `<span style="color: #f59e0b; font-weight: 700; font-size: 13px;">⚠️ DƯ</span>`;
         } else {
-            statusBadge = `<span class="badge-status badge-info" style="background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid #3b82f6; padding: 4px 10px; border-radius: 6px; font-weight: 700;">🔵 THIẾU (${item.chenh_lech})</span>`;
+            statusBadge = `<span style="color: #ef4444; font-weight: 700; font-size: 13px;">🔵 THIẾU</span>`;
         }
 
         let systemQtyTd = `<td style="text-align: center; font-weight: 700; color: #94a3b8;">${item.so_luong_he_thong}</td>`;
@@ -1462,7 +2130,7 @@ function renderKiemKhoTable() {
                 <td style="text-align: center; font-weight: 800; background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; color: #ef4444; border-radius: 6px; padding: 4px 6px;" title="Tồn hệ thống vừa biến động! Tồn cũ: ${item.old_so_luong_he_thong ?? '-'} ➔ Tồn mới: ${item.so_luong_he_thong}">
                     <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                         <span>⚠️ ${item.so_luong_he_thong}</span>
-                        <button type="button" onclick="acknowledgeSystemStockChange('${item.key}')" 
+                        <button type="button" onclick="acknowledgeSystemStockChange('${encodeURIComponent(item.key)}')" 
                                 style="background: rgba(16, 185, 129, 0.3); border: 1px solid #10b981; color: #10b981; border-radius: 6px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; font-weight: bold; transition: all 0.2s ease; animation: kiemkhoRedPulse 1.2s infinite;" 
                                 title="Ấn dấu tick để xác nhận tồn hệ thống thay đổi mới nhất">
                             ✅
@@ -1471,6 +2139,28 @@ function renderKiemKhoTable() {
                     <span style="font-size: 10px; display: block; color: #ef4444; font-weight: 700; margin-top: 2px;">(Tồn thay đổi!)</span>
                 </td>
             `;
+        }
+
+        const scanners = (item.scanners && item.scanners.length > 0) ? 
+            item.scanners : 
+            parseKiemKhoScanners(item.user_name, item.branch);
+
+        let scannerTdHtml = '';
+        if (scanners.length > 1) {
+            scannerTdHtml = `
+                <td>
+                    <button type="button" class="btn-kiemkho-scanners-dropdown" 
+                            onclick="toggleKiemKhoScannersPopover(event, '${item.key}')" 
+                            title="Ấn để xem danh sách ${scanners.length} người tham gia quét mã này">
+                        <span style="font-size:12px;">👥</span>
+                        <span>Danh sách (${scanners.length})</span>
+                        <span style="font-size:10px; opacity:0.8;">▾</span>
+                    </button>
+                </td>
+            `;
+        } else {
+            const single = scanners[0] || { user_name: item.user_name || 'Nhân viên', branch: item.branch || 'CN1' };
+            scannerTdHtml = `<td><span class="subrow-branch-badge">${escapeHtml(single.user_name)} - ${escapeHtml(single.branch)}</span></td>`;
         }
 
         html += `
@@ -1488,10 +2178,12 @@ function renderKiemKhoTable() {
                     ${item.chenh_lech > 0 ? `+${item.chenh_lech}` : item.chenh_lech}
                 </td>
                 <td style="text-align: center;">${statusBadge}</td>
-                <td><span class="subrow-branch-badge">${escapeHtml(item.user_name || 'Nhân viên')} - ${escapeHtml(item.branch || 'CN1')}</span></td>
-                <td><span style="font-size: 12px; color: #94a3b8;">${formatDateTime(item.time_scanned)}</span></td>
+                ${scannerTdHtml}
+                <td style="white-space: nowrap;"><span style="font-size: 12px; color: #94a3b8;">${formatDateTime(item.time_scanned)}</span></td>
                 <td style="text-align: center;">
-                    <button type="button" onclick="deleteKiemKhoItem('${item.key}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px;" title="Xóa mặt hàng này khỏi phiếu">🗑️</button>
+                    ${(item.so_luong_he_thong === 0 || item.is_unmatched || (item.ten_hang_hoa && item.ten_hang_hoa.includes('Không có trong danh mục'))) ? `
+                        <button type="button" onclick="deleteKiemKhoItem('${encodeURIComponent(item.key)}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px;" title="Xóa mã không có trong danh mục này khỏi phiếu">🗑️</button>
+                    ` : ''}
                 </td>
             </tr>
         `;
@@ -1558,16 +2250,25 @@ function kiemKhoSearchFilter(query) {
 function updateKiemKhoItemQtyDirect(key, rawVal) {
     const item = kiemKhoItemsMap.get(key);
     if (!item) return;
+    const oldQty = item.so_luong_thuc_te;
     const newQty = Math.max(0, parseInt(rawVal, 10) || 0);
+    const delta = newQty - oldQty;
+
     item.so_luong_thuc_te = newQty;
     item.chenh_lech = item.so_luong_thuc_te - item.so_luong_he_thong;
     item.trang_thai = getKiemKhoStatus(item.so_luong_thuc_te, item.so_luong_he_thong);
     item.time_scanned = new Date().toISOString();
     item.is_synced = false;
+
+    const userName = getKiemKhoLoggedUserName();
+    const userBranch = getKiemKhoLoggedBranch();
+    addKiemKhoItemScanner(item, userName, userBranch);
+
     renderKiemKhoTable();
 
-    // Real-time DB Sync
-    syncKiemKhoItemToDB(item);
+    if (delta !== 0) {
+        logScanToQuetChiTietDB(item, delta);
+    }
 }
 
 // Adjust Quantity (+ / -) manually in table
@@ -1584,14 +2285,19 @@ function adjustKiemKhoItemQty(key, delta) {
         item.trang_thai = getKiemKhoStatus(item.so_luong_thuc_te, item.so_luong_he_thong);
         item.is_synced = false;
     }
+
+    const userName = getKiemKhoLoggedUserName();
+    const userBranch = getKiemKhoLoggedBranch();
+    addKiemKhoItemScanner(item, userName, userBranch);
+
     renderKiemKhoTable();
 
-    // Real-time DB Sync
-    syncKiemKhoItemToDB(item);
+    logScanToQuetChiTietDB(item, delta);
 }
 
 // Acknowledge Live System Stock Change & Hide Tick Button
-async function acknowledgeSystemStockChange(key) {
+async function acknowledgeSystemStockChange(rawKey) {
+    const key = decodeURIComponent(rawKey || '');
     const item = kiemKhoItemsMap.get(key);
     if (!item) return;
 
@@ -1603,30 +2309,59 @@ async function acknowledgeSystemStockChange(key) {
 
     renderKiemKhoTable();
 
-    if (typeof showToast === 'function') {
-        showToast('success', 'Đã Xác Nhận Tồn Hệ Thống', `✅ Đã xác nhận tồn hệ thống mới (${item.so_luong_he_thong}) cho mã "${item.ma_vach}"!`);
-    } else if (typeof window.showToast === 'function') {
-        window.showToast('success', 'Đã Xác Nhận Tồn Hệ Thống', `✅ Đã xác nhận tồn hệ thống mới (${item.so_luong_he_thong}) cho mã "${item.ma_vach}"!`);
+    if (typeof showKiemKhoToast === 'function') {
+        showKiemKhoToast('success', 'Đã Xác Nhận Tồn Hệ Thống', `✅ Đã cập nhật tồn hệ thống mới (${item.so_luong_he_thong}) lên CSDL cho mã <b>${item.ma_vach}</b>!`);
+    } else if (typeof showToast === 'function') {
+        showToast('success', 'Đã Xác Nhận Tồn Hệ Thống', `✅ Đã cập nhật tồn hệ thống mới (${item.so_luong_he_thong}) cho mã "${item.ma_vach}"!`);
     }
 }
 
 // Delete Single Item from Audit List
-async function deleteKiemKhoItem(key) {
+async function deleteKiemKhoItem(rawKey) {
+    const key = decodeURIComponent(rawKey || '');
     const item = kiemKhoItemsMap.get(key);
     if (!item) return;
 
+    // Delete locally from memory immediately
     kiemKhoItemsMap.delete(key);
     renderKiemKhoTable();
 
-    // Delete from DB in real time if session exists
-    if (currentKiemKhoPhieuId) {
+    // Delete from BOTH tables in Supabase DB (quet_chi_tiet & kiem_kho_chi_tiet)
+    if (currentKiemKhoPhieuId || currentKiemKhoMaPhieu) {
         const client = getVatTuSupabaseClient();
         if (client) {
-            const normLot = (item.lot && item.lot !== '-') ? item.lot : null;
-            let q = client.from('kiem_kho_chi_tiet').delete().eq('phieu_id', currentKiemKhoPhieuId).eq('ma_vach', item.ma_vach);
-            if (normLot) q = q.eq('lot', normLot);
-            else q = q.is('lot', null);
-            await q;
+            try {
+                // 1. Delete from kiem_kho_chi_tiet (match ma_vach & ticket)
+                let q1 = client.from('kiem_kho_chi_tiet').delete().eq('ma_vach', item.ma_vach);
+                if (currentKiemKhoPhieuId) {
+                    q1 = q1.eq('phieu_id', currentKiemKhoPhieuId);
+                } else if (currentKiemKhoMaPhieu) {
+                    q1 = q1.eq('ma_phieu', currentKiemKhoMaPhieu);
+                }
+
+                // 2. Delete from quet_chi_tiet (scan logs - match ma_vach & ticket)
+                let q2 = client.from('quet_chi_tiet').delete().eq('ma_vach', item.ma_vach);
+                if (currentKiemKhoPhieuId && currentKiemKhoMaPhieu) {
+                    q2 = q2.or(`phieu_id.eq.${currentKiemKhoPhieuId},ma_phieu.eq.${currentKiemKhoMaPhieu}`);
+                } else if (currentKiemKhoPhieuId) {
+                    q2 = q2.eq('phieu_id', currentKiemKhoPhieuId);
+                } else if (currentKiemKhoMaPhieu) {
+                    q2 = q2.eq('ma_phieu', currentKiemKhoMaPhieu);
+                }
+
+                const [res1, res2] = await Promise.all([q1, q2]);
+                console.log("GAIA KiemKho: Deleted item from DB:", { ma_vach: item.ma_vach, kiem_kho_chi_tiet: res1, quet_chi_tiet: res2 });
+
+                // Ensure memory map stays deleted and re-render
+                kiemKhoItemsMap.delete(key);
+                renderKiemKhoTable();
+
+                if (typeof showKiemKhoToast === 'function') {
+                    showKiemKhoToast('success', 'Đã Xóa Mã Lạ', `✅ Đã xóa sạch mã "<b>${escapeHtml(item.ma_vach)}</b>" khỏi CSDL thành công!`);
+                }
+            } catch (err) {
+                console.warn("deleteKiemKhoItem DB delete warning:", err);
+            }
         }
     }
 }
@@ -1868,7 +2603,8 @@ async function saveKiemKhoSession() {
                 so_luong_he_thong: item.so_luong_he_thong,
                 chenh_lech: item.chenh_lech,
                 trang_thai: item.trang_thai,
-                branch: userBranch
+                branch: userBranch,
+                user_name: item.user_name || JSON.stringify(item.scanners || [normalizeScanner(userName, userBranch)])
             }));
 
             const { error: detailErr } = await client
@@ -1912,19 +2648,23 @@ function exportKiemKhoToExcel() {
     }
 
     try {
-        const exportRows = items.map((item, idx) => ({
-            "STT": idx + 1,
-            "Mã Vạch": item.ma_vach || '',
-            "Tên Hàng Hóa": item.ten_hang_hoa || '',
-            "LOT": item.lot || '',
-            "Date": formatDate(item.date_expiry),
-            "Số Lượng Thực Tế": item.so_luong_thuc_te,
-            "Tồn Kho Hệ Thống": item.so_luong_he_thong,
-            "Chênh Lệch": item.chenh_lech,
-            "Trạng Thái": item.trang_thai === 'KHOP' ? 'ĐỦ (KHỚP)' : (item.trang_thai === 'DU' ? 'DƯ' : 'THIẾU'),
-            "Người Quét - CN": `${item.user_name || ''} - ${item.branch || ''}`,
-            "Thời Gian Quét": formatDateTime(item.time_scanned)
-        }));
+        const exportRows = items.map((item, idx) => {
+            const scanners = (item.scanners && item.scanners.length > 0) ? item.scanners : parseKiemKhoScanners(item.user_name, item.branch);
+            const scannerStr = scanners.map(s => `${s.user_name} - ${s.branch}`).join(', ');
+            return {
+                "STT": idx + 1,
+                "Mã Vạch": item.ma_vach || '',
+                "Tên Hàng Hóa": item.ten_hang_hoa || '',
+                "LOT": item.lot || '',
+                "Date": formatDate(item.date_expiry),
+                "Số Lượng Thực Tế": item.so_luong_thuc_te,
+                "Tồn Kho Hệ Thống": item.so_luong_he_thong,
+                "Chênh Lệch": item.chenh_lech,
+                "Trạng Thái": item.trang_thai === 'KHOP' ? 'ĐỦ (KHỚP)' : (item.trang_thai === 'DU' ? 'DƯ' : 'THIẾU'),
+                "Người Quét - CN": scannerStr,
+                "Thời Gian Quét": formatDateTime(item.time_scanned)
+            };
+        });
 
         const worksheet = XLSX.utils.json_to_sheet(exportRows);
 
@@ -1938,7 +2678,7 @@ function exportKiemKhoToExcel() {
             { wch: 18 }, // Tồn Kho Hệ Thống
             { wch: 14 }, // Chênh Lệch
             { wch: 16 }, // Trạng Thái
-            { wch: 24 }, // Người Quét - CN
+            { wch: 28 }, // Người Quét - CN
             { wch: 20 }  // Thời Gian Quét
         ];
         worksheet['!cols'] = colWidths;
@@ -1972,3 +2712,111 @@ window.kiemKhoGoPage = kiemKhoGoPage;
 window.kiemKhoSearchFilter = kiemKhoSearchFilter;
 window.loadKiemKhoPhieuByCode = loadKiemKhoPhieuByCode;
 window.createNewKiemKhoPhieu = createNewKiemKhoPhieu;
+window.toggleKiemKhoScannersPopover = toggleKiemKhoScannersPopover;
+window.showKiemKhoItemScanLogsModal = showKiemKhoItemScanLogsModal;
+window.closeKiemKhoItemLogsModal = closeKiemKhoItemLogsModal;
+window.deleteSingleQuetChiTietLog = deleteSingleQuetChiTietLog;
+
+// Open AppSheet-Style Scan Logs Detail Modal
+async function showKiemKhoItemScanLogsModal(rawKey) {
+    const itemKey = decodeURIComponent(rawKey || '');
+    const item = kiemKhoItemsMap.get(itemKey);
+    if (!item) {
+        console.warn("showKiemKhoItemScanLogsModal: Item not found for key:", itemKey);
+        return;
+    }
+
+    const modal = document.getElementById('kiemkho-item-logs-modal');
+    if (!modal) return;
+
+    document.getElementById('kiemkho-modal-item-name').textContent = item.ten_hang_hoa || item.ma_vach;
+    document.getElementById('kiemkho-modal-item-code').textContent = item.ma_vach || '-';
+    document.getElementById('kiemkho-modal-item-lot').textContent = item.lot || '-';
+    document.getElementById('kiemkho-modal-item-date').textContent = item.date_expiry || '-';
+    document.getElementById('kiemkho-modal-item-total').textContent = item.so_luong_thuc_te || 0;
+
+    const tbody = document.getElementById('kiemkho-item-logs-tbody');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: #94a3b8;">⏳ Đang tải nhật ký quét chi tiết...</td></tr>';
+    }
+
+    modal.style.display = 'flex';
+
+    const client = getVatTuSupabaseClient();
+    if (!client) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #ef4444;">Chưa kết nối CSDL Supabase.</td></tr>';
+        return;
+    }
+
+    try {
+        let query = client.from('quet_chi_tiet').select('*').eq('ma_vach', item.ma_vach);
+        
+        if (currentKiemKhoMaPhieu) {
+            query = query.eq('ma_phieu', currentKiemKhoMaPhieu);
+        }
+
+        const normLot = (item.lot && item.lot !== '-') ? item.lot : '-';
+        if (normLot !== '-') {
+            query = query.eq('lot', normLot);
+        }
+
+        const { data: logs, error } = await query.order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("showKiemKhoItemScanLogsModal query error:", error);
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 20px; color: #ef4444;">Lỗi CSDL: ${escapeHtml(error.message || error)}</td></tr>`;
+            return;
+        }
+
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: #94a3b8;">ℹ️ Chưa có phát quét nào cho mặt hàng này (tồn hệ thống ban đầu).</td></tr>';
+            return;
+        }
+
+        let html = '';
+        logs.forEach((log, idx) => {
+            html += `
+                <tr>
+                    <td style="text-align: center; color: #94a3b8;">${idx + 1}</td>
+                    <td><strong style="color: var(--text-color);">${escapeHtml(log.ma_vach)}</strong></td>
+                    <td>${escapeHtml(log.lot || '-')}</td>
+                    <td>${escapeHtml(log.date_expiry || '-')}</td>
+                    <td style="text-align: center; font-weight: 800; color: #10b981;">+${log.so_luong || 1}</td>
+                    <td><span class="subrow-branch-badge">${escapeHtml(log.user_name || 'Nhân viên')} - ${escapeHtml(log.branch || 'CN1')}</span></td>
+                    <td style="white-space: nowrap;"><span style="font-size: 12px; color: #94a3b8;">${formatDateTime(log.created_at)}</span></td>
+                    <td style="text-align: center;">
+                        <button type="button" onclick="deleteSingleQuetChiTietLog(${log.id}, '${encodeURIComponent(itemKey)}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 15px;" title="Xóa duy nhất phát quét này">🗑️</button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    } catch (e) {
+        console.error("showKiemKhoItemScanLogsModal exception:", e);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 20px; color: #ef4444;">Có lỗi xảy ra: ${escapeHtml(e.message || e)}</td></tr>`;
+    }
+}
+
+function closeKiemKhoItemLogsModal() {
+    const modal = document.getElementById('kiemkho-item-logs-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function deleteSingleQuetChiTietLog(logId, itemKey) {
+    if (!confirm("Bạn có chắc chắn muốn xóa phát quét này khỏi cơ sở dữ liệu?")) return;
+    const client = getVatTuSupabaseClient();
+    if (!client) return;
+
+    try {
+        const { error } = await client.from('quet_chi_tiet').delete().eq('id', logId);
+        if (!error) {
+            showKiemKhoToast('success', 'Đã Xóa Phát Quét', '✅ Đã xóa phát quét thành công!');
+            await showKiemKhoItemScanLogsModal(itemKey);
+            await syncActiveKiemKhoTicketFromDB();
+        } else {
+            showKiemKhoToast('error', 'Lỗi Xóa Bản Ghi', 'Không thể xóa: ' + error.message);
+        }
+    } catch (e) {
+        console.error("deleteSingleQuetChiTietLog error:", e);
+    }
+}

@@ -1207,7 +1207,7 @@ function renderVatTuTable(items) {
                     } else if (col.key === 'ten_mat_hang') {
                         cellContent = `<span class="subrow-label">LOT: <strong class="subrow-value">${escapeHtml(d.lot || '-')}</strong></span>`;
                     } else if (col.key === 'ten_hoa_don') {
-                        cellContent = `<span class="subrow-label">Hạn SD: <strong class="subrow-value">${escapeHtml(d.date_expiry || '-')}</strong></span>`;
+                        cellContent = `<span class="subrow-label">Hạn SD: <strong class="subrow-value">${escapeHtml(formatDate(d.date_expiry))}</strong></span>`;
                     } else if (col.key === 'ton_dau') {
                         cellContent = `<span class="subrow-value">${dTonDau.toLocaleString('vi-VN')}</span>`;
                     } else if (col.key === 'nhap' || col.key === 'so_luong_nhap') {
@@ -2175,16 +2175,65 @@ function formatVND(amount) {
 }
 
 function formatDate(dateStr) {
-    if (!dateStr) return '-';
-    try {
-        const parts = dateStr.split('-');
-        if (parts.length === 3) {
-            return `${parts[2]}/${parts[1]}/${parts[0]}`;
-        }
-        return dateStr;
-    } catch (e) {
-        return dateStr;
+    if (!dateStr || dateStr === '-' || dateStr === 'null' || dateStr === 'undefined') return '-';
+    const str = String(dateStr).trim();
+    if (!str || str === '-') return '-';
+
+    // 1. Already in DD/MM/YYYY or DD/MM/YY format
+    const ddMmYyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (ddMmYyyyMatch) {
+        const d = ddMmYyyyMatch[1].padStart(2, '0');
+        const m = ddMmYyyyMatch[2].padStart(2, '0');
+        const y = ddMmYyyyMatch[3].length === 2 ? '20' + ddMmYyyyMatch[3] : ddMmYyyyMatch[3];
+        return `${d}/${m}/${y}`;
     }
+
+    // 2. In YYYY-MM-DD or YYYY/MM/DD format (ISO date)
+    const yyyyMmDdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (yyyyMmDdMatch) {
+        const y = yyyyMmDdMatch[1];
+        const m = yyyyMmDdMatch[2].padStart(2, '0');
+        const d = yyyyMmDdMatch[3].padStart(2, '0');
+        return `${d}/${m}/${y}`;
+    }
+
+    // 3. In DD-MM-YYYY format
+    const ddMmYyyyDashMatch = str.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
+    if (ddMmYyyyDashMatch) {
+        const d = ddMmYyyyDashMatch[1].padStart(2, '0');
+        const m = ddMmYyyyDashMatch[2].padStart(2, '0');
+        const y = ddMmYyyyDashMatch[3].length === 2 ? '20' + ddMmYyyyDashMatch[3] : ddMmYyyyDashMatch[3];
+        return `${d}/${m}/${y}`;
+    }
+
+    // 4. Standard JS Date parsing for ISO timestamps
+    try {
+        const dt = new Date(str);
+        if (!isNaN(dt.getTime())) {
+            const d = String(dt.getDate()).padStart(2, '0');
+            const m = String(dt.getMonth() + 1).padStart(2, '0');
+            const y = dt.getFullYear();
+            return `${d}/${m}/${y}`;
+        }
+    } catch (e) {}
+
+    return str;
+}
+
+function formatQrStringWithStandardDate(qrStr, dateExpiry) {
+    if (!qrStr) return '';
+    const str = String(qrStr).trim();
+    if (!str.includes(';')) return str;
+    const parts = str.split(';');
+    if (parts.length >= 3) {
+        if (dateExpiry && dateExpiry !== '-' && dateExpiry !== 'null') {
+            parts[2] = formatDate(dateExpiry);
+        } else if (parts[2]) {
+            parts[2] = formatDate(parts[2]);
+        }
+        return parts.join(';');
+    }
+    return str;
 }
 
 function escapeHtml(str) {

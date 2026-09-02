@@ -2268,17 +2268,49 @@ function formatNxDateTime(dateStr) {
 }
 
 function formatDateForNx(dateStr) {
-    if (!dateStr) return '-';
-    try {
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return dateStr;
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        return `${day}/${month}/${year}`;
-    } catch (e) {
-        return dateStr;
+    if (!dateStr || dateStr === '-' || dateStr === 'null' || dateStr === 'undefined') return '-';
+    const str = String(dateStr).trim();
+    if (!str || str === '-') return '-';
+
+    // 1. Already in DD/MM/YYYY or DD/MM/YY format
+    const ddMmYyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (ddMmYyyyMatch) {
+        const d = ddMmYyyyMatch[1].padStart(2, '0');
+        const m = ddMmYyyyMatch[2].padStart(2, '0');
+        const y = ddMmYyyyMatch[3].length === 2 ? '20' + ddMmYyyyMatch[3] : ddMmYyyyMatch[3];
+        return `${d}/${m}/${y}`;
     }
+
+    // 2. In YYYY-MM-DD or YYYY/MM/DD format (ISO date)
+    const yyyyMmDdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (yyyyMmDdMatch) {
+        const y = yyyyMmDdMatch[1];
+        const m = yyyyMmDdMatch[2].padStart(2, '0');
+        const d = yyyyMmDdMatch[3].padStart(2, '0');
+        return `${d}/${m}/${y}`;
+    }
+
+    // 3. In DD-MM-YYYY format
+    const ddMmYyyyDashMatch = str.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
+    if (ddMmYyyyDashMatch) {
+        const d = ddMmYyyyDashMatch[1].padStart(2, '0');
+        const m = ddMmYyyyDashMatch[2].padStart(2, '0');
+        const y = ddMmYyyyDashMatch[3].length === 2 ? '20' + ddMmYyyyDashMatch[3] : ddMmYyyyDashMatch[3];
+        return `${d}/${m}/${y}`;
+    }
+
+    // 4. Standard JS Date parsing for ISO timestamps
+    try {
+        const dt = new Date(str);
+        if (!isNaN(dt.getTime())) {
+            const d = String(dt.getDate()).padStart(2, '0');
+            const m = String(dt.getMonth() + 1).padStart(2, '0');
+            const y = dt.getFullYear();
+            return `${d}/${m}/${y}`;
+        }
+    } catch (e) {}
+
+    return str;
 }
 
 function escapeHtml(str) {
