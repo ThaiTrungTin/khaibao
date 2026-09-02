@@ -190,15 +190,16 @@ function updateNxSaveButtonState(hasChanges = true) {
     if (selectedNxOrderId !== null) {
         // VIEWING / EDITING EXISTING ORDER MODE
         saveBtn.innerHTML = '💾 Cập Nhật';
-        saveBtn.disabled = false; // Luôn cho phép bấm để tránh hiểu nhầm là lỗi
-        saveBtn.style.cursor = 'pointer';
-        
         if (hasChanges) {
+            saveBtn.disabled = false;
             saveBtn.style.opacity = '1';
-            saveBtn.style.background = '#3b82f6'; // Bright blue for Update mode
+            saveBtn.style.cursor = 'pointer';
+            saveBtn.style.background = '#3b82f6'; // Sáng lam khi có thay đổi
         } else {
-            saveBtn.style.opacity = '0.7';
-            saveBtn.style.background = '#3b82f6'; // Keep it blue, just slightly dimmed
+            saveBtn.disabled = true;
+            saveBtn.style.opacity = '0.4';
+            saveBtn.style.cursor = 'not-allowed';
+            saveBtn.style.background = '#4b5563'; // Tối xám + khóa không cho bấm khi không có thay đổi
         }
     } else {
         // CREATING NEW DRAFT ORDER MODE
@@ -1121,6 +1122,13 @@ async function saveNxOrderToSystem() {
         // ==========================================
         // UPDATE EXISTING SAVED ORDER (selectedNxOrderId)
         // ==========================================
+        if (typeof hasUnsavedNxChanges === 'function' && !hasUnsavedNxChanges()) {
+            if (typeof showToast === 'function') {
+                showToast('warning', 'Chưa Có Thay Đổi', 'Đơn kho này chưa có bất kỳ sự thay đổi nào để cập nhật!');
+            }
+            return;
+        }
+
         showGenericConfirmModal(
             'XÁC NHẬN',
             'Cập Nhật Đơn Kho',
