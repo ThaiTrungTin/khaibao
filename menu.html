@@ -18,6 +18,9 @@
     <!-- CSS Style sheets -->
     <link rel="stylesheet" href="admin-style.css?v=9">
     <link rel="stylesheet" href="menu-style.css?v=14">
+    
+    <!-- PDF.js for automated Invoice parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
 <body>
@@ -930,10 +933,31 @@
                             <div class="nhapxuat-pane-header">
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;">
                                     <h3 class="pane-title" style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0;">📋 Danh Sách Đơn</h3>
-                                    <button type="button" class="btn-primary-sm" onclick="createNewNhapXuatOrderForm()" style="background: #10b981; color: #fff; border: none; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                        <span>+ Tạo Đơn Mới</span>
-                                    </button>
+                                    <div style="display: flex; gap: 8px;">
+                                        <div 
+                                            id="pdf-dropzone"
+                                            class="btn-secondary-sm" 
+                                            tabindex="0"
+                                            onclick="document.getElementById('nhapxuat-pdf-upload').click()"
+                                            ondragover="event.preventDefault(); this.style.borderColor='#3b82f6'; this.style.background='rgba(59,130,246,0.1)';"
+                                            ondragleave="event.preventDefault(); this.style.borderColor='var(--border-glass)'; this.style.background='var(--bg-card)';"
+                                            ondrop="event.preventDefault(); this.style.borderColor='var(--border-glass)'; this.style.background='var(--bg-card)'; if(event.dataTransfer.files.length) handleNhapXuatPdfUpload({target: {files: event.dataTransfer.files}});"
+                                            onpaste="const items = (event.clipboardData || event.originalEvent.clipboardData).items; const files = []; for (let i = 0; i < items.length; i++) { if (items[i].kind === 'file') { files.push(items[i].getAsFile()); } }; if(files.length) handleNhapXuatPdfUpload({target: {files: files}});"
+                                            style="background: var(--bg-card); color: var(--text-primary); border: 1px dashed var(--text-muted); padding: 5px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease; outline: none;" 
+                                            title="Kéo thả, dán (Ctrl+V) hoặc Click để Nhập Hóa Đơn PDF"
+                                        >
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                            </svg>
+                                            <span style="font-size: 11.5px; opacity: 0.9;">Kéo thả / Dán PDF</span>
+                                        </div>
+                                        <input type="file" id="nhapxuat-pdf-upload" multiple accept="application/pdf" style="display: none;" onchange="handleNhapXuatPdfUpload(event)">
+                                        
+                                        <button type="button" class="btn-primary-sm" onclick="createNewNhapXuatOrderForm()" style="background: #10b981; color: #fff; border: none; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                            <span>+ Tạo Đơn Mới</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <!-- Search & Filter Controls -->
@@ -945,15 +969,27 @@
                                     <input type="text" id="nhapxuat-search-input" placeholder="Tìm theo Mã đơn, Mục đích, User..." oninput="applyNhapXuatFilters()">
                                 </div>
 
-                                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                                <div style="display: flex; gap: 8px; margin-top: 8px; align-items: center;">
                                     <select id="nhapxuat-filter-loai" class="vattu-select-sm" style="flex: 1;" onchange="applyNhapXuatFilters()">
                                         <option value="all">Tất cả loại (Nhập/Xuất)</option>
                                         <option value="Nhập">📥 Nhập kho</option>
                                         <option value="Xuất">📤 Xuất kho</option>
                                     </select>
+                                    <select id="nhapxuat-filter-status" class="vattu-select-sm" style="flex: 1;" onchange="applyNhapXuatFilters()">
+                                        <option value="all">📋 Tất cả trạng thái</option>
+                                        <option value="Chờ">⏳ Đơn chờ (Chờ quét)</option>
+                                        <option value="Done">✅ Hoàn tất</option>
+                                    </select>
                                     <select id="nhapxuat-filter-branch" class="vattu-select-sm branch-filter-select" style="flex: 1; display: none;" onchange="applyNhapXuatFilters()">
                                         <option value="all">🏢 Tất cả chi nhánh</option>
                                     </select>
+                                    <button type="button" id="nhapxuat-funnel-reset-btn" onclick="resetNxFilters()" 
+                                        style="display: flex; align-items: center; justify-content: center; width: 34px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid var(--border-glass, #334155); color: var(--text-muted, #94a3b8); cursor: pointer; transition: all 0.2s; flex-shrink: 0;"
+                                        title="Xóa tất cả bộ lọc (Reset Filter)">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                        </svg>
+                                    </button>
                                 </div>
                             </div>
 
@@ -968,7 +1004,11 @@
                             <div class="nhapxuat-pane-header-right" style="padding-bottom: 12px; border-bottom: 1px solid var(--card-border); margin-bottom: 12px;">
                                 <div style="display: flex; align-items: center; justify-content: space-between;">
                                     <h3 id="nhapxuat-form-title" class="pane-title" style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0;">📝 Thông Tin Đơn Nhập / Xuất Kho</h3>
-                                    <span id="nhapxuat-mode-badge" class="badge-mode-new" style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700;">+ Đơn Mới</span>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <a id="nhapxuat-file-link" href="#" target="_blank" style="display: none; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: #3b82f6; text-decoration: none;" title="Xem File Hóa Đơn Đính Kèm">📄 Xem Hóa Đơn</a>
+                                        <span id="nhapxuat-status-badge" style="display: none; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;" title="Nhấn để hoàn tất đơn (nếu đã đủ hàng)" onclick="markNxOrderAsDone()"></span>
+                                        <span id="nhapxuat-mode-badge" class="badge-mode-new" style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700;">+ Đơn Mới</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1058,7 +1098,41 @@
                                     <div class="nx-total-summary">
                                         <span id="nx-summary-total-qty" style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">Tổng 0 sản phẩm - Số Lượng: 0</span>
                                     </div>
-                                    <div style="display: flex; gap: 10px;">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <!-- Multi-File Attachment System -->
+                                        <div id="nx-attachment-wrapper" style="position: relative; display: flex; align-items: center;">
+                                            <div 
+                                                id="nx-attach-dropzone"
+                                                tabindex="0"
+                                                onclick="handleNxAttachmentBtnClick(event)"
+                                                ondragover="event.preventDefault(); this.style.borderColor='#3b82f6'; this.style.background='rgba(59,130,246,0.15)';"
+                                                ondragleave="event.preventDefault(); this.style.borderColor='rgba(59,130,246,0.4)'; this.style.background='rgba(59,130,246,0.08)';"
+                                                ondrop="event.preventDefault(); handleNxAttachmentDrop(event);"
+                                                onpaste="handleNxAttachmentPaste(event);"
+                                                style="display: flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.08); color: #3b82f6; border: 1px dashed rgba(59, 130, 246, 0.4); padding: 5px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.2s; outline: none;"
+                                                title="Click để chọn file, Kéo thả hoặc Dán (Ctrl+V) để đính kèm"
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                                                </svg>
+                                                <span id="nx-attach-count-label">📎 Đính kèm File</span>
+                                            </div>
+                                            <input type="file" id="nx-attach-file-input" multiple style="display: none;" onchange="handleNxAttachmentSelect(event)">
+
+                                            <!-- Popover Menu for multiple files -->
+                                            <div id="nx-attach-file-menu" style="display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 8px; width: 280px; background: var(--bg-card, #1e293b); border: 1px solid var(--border-glass, #334155); border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); padding: 10px; z-index: 1000;">
+                                                <div style="font-weight: 700; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-glass, #334155); padding-bottom: 6px;">
+                                                    <span>📁 File Đính Kèm</span>
+                                                    <button type="button" onclick="document.getElementById('nx-attach-file-input').click()" style="background: rgba(59,130,246,0.2); color: #3b82f6; border: none; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer;">+ Thêm File</button>
+                                                </div>
+                                                <div id="nx-attach-file-list" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button type="button" id="btn-delete-nx-order" class="btn-cancel" onclick="deletePendingNxOrder()" style="display: none; align-items: center; gap: 6px; background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 600;">
+                                            🗑️ Xóa Đơn
+                                        </button>
                                         <button type="button" class="btn-cancel" onclick="openNxHistoryLogModal()" style="display: flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.12); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 600;">
                                             📜 Xem Lịch Sử
                                         </button>
@@ -2598,6 +2672,21 @@
         </div>
         <div class="filter-popover-search">
             <input type="text" id="thekho-filter-popover-search-input" placeholder="Tìm giá trị trong cột..." oninput="renderTheKhoFilterPopoverListOptions()">
+        </div>
+        <!-- Special Date Range Filter Section for TIME column -->
+        <div id="thekho-date-range-section" style="display: none; padding: 8px 12px; background: rgba(0,0,0,0.15); border-bottom: 1px solid var(--border-glass, #334155); flex-direction: column; gap: 6px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted, #94a3b8); text-transform: uppercase; letter-spacing: 0.5px;">📅 Lọc Theo Khoảng Thời Gian</div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="date" id="thekho-filter-date-from" class="vattu-select-sm" style="flex: 1; font-size: 11.5px; padding: 4px 6px;" onchange="handleTheKhoDateRangeChange()">
+                <span style="font-size: 11px; color: var(--text-muted, #94a3b8);">đến</span>
+                <input type="date" id="thekho-filter-date-to" class="vattu-select-sm" style="flex: 1; font-size: 11.5px; padding: 4px 6px;" onchange="handleTheKhoDateRangeChange()">
+            </div>
+            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
+                <button type="button" onclick="setTheKhoDatePreset('today')" style="background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10.5px; font-weight: 600; cursor: pointer;">Hôm nay</button>
+                <button type="button" onclick="setTheKhoDatePreset('7days')" style="background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10.5px; font-weight: 600; cursor: pointer;">7 ngày</button>
+                <button type="button" onclick="setTheKhoDatePreset('thisMonth')" style="background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10.5px; font-weight: 600; cursor: pointer;">Tháng này</button>
+                <button type="button" onclick="setTheKhoDatePreset('clear')" style="background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10.5px; font-weight: 600; cursor: pointer;">Xóa hạn</button>
+            </div>
         </div>
         <div class="filter-popover-controls">
             <label class="popover-checkbox-label select-all-label">

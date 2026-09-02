@@ -158,10 +158,12 @@ function updateBranchDropdowns() {
             branchSelect.appendChild(option);
         });
 
-        const customOpt = document.createElement("option");
-        customOpt.value = "__custom__";
-        customOpt.textContent = "➕ Thêm chi nhánh mới...";
-        branchSelect.appendChild(customOpt);
+        if (isManager) {
+            const customOpt = document.createElement("option");
+            customOpt.value = "__custom__";
+            customOpt.textContent = "➕ Thêm chi nhánh mới...";
+            branchSelect.appendChild(customOpt);
+        }
 
         if (savedVal && (branches.has(savedVal) || savedVal === "__custom__")) {
             branchSelect.value = savedVal;
@@ -658,7 +660,8 @@ function openStaffModal(staff = null) {
 
     const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
     const myRoleLower = loggedUser ? (loggedUser.role || "").toLowerCase().trim() : "";
-    const isLoggedAdmin = myRoleLower === "admin";
+    const isLoggedManager = myRoleLower.includes("quản lý") || myRoleLower.includes("quan ly") || myRoleLower.includes("manager");
+    const isLoggedAdmin = !isLoggedManager;
     const myBranch = loggedUser ? (loggedUser.branch || "Chi Nhánh TP.HCM") : "Chi Nhánh TP.HCM";
 
     const roleSelect = document.getElementById("staff-input-role");
@@ -686,13 +689,17 @@ function openStaffModal(staff = null) {
 
         if (branchInput) {
             updateBranchDropdowns();
-            const staffBranch = staff.branch || myBranch;
+            const staffBranch = isLoggedAdmin ? myBranch : (staff.branch || myBranch);
             const exists = Array.from(branchInput.options).some(o => o.value === staffBranch);
             if (!exists && staffBranch) {
                 const opt = document.createElement("option");
                 opt.value = staffBranch;
                 opt.textContent = staffBranch;
-                branchInput.insertBefore(opt, branchInput.lastElementChild);
+                if (branchInput.lastElementChild && branchInput.lastElementChild.value === "__custom__") {
+                    branchInput.insertBefore(opt, branchInput.lastElementChild);
+                } else {
+                    branchInput.appendChild(opt);
+                }
             }
             branchInput.value = staffBranch || (branchInput.options[0] ? branchInput.options[0].value : "");
             toggleStaffCustomBranch();
@@ -708,7 +715,12 @@ function openStaffModal(staff = null) {
             if (branchInput) { branchInput.disabled = true; branchInput.style.opacity = "0.5"; }
         } else {
             if (roleSelect) { roleSelect.disabled = false; roleSelect.style.opacity = "1"; }
-            if (branchInput) { branchInput.disabled = false; branchInput.style.opacity = "1"; }
+            if (branchInput) {
+                branchInput.disabled = isLoggedAdmin;
+                branchInput.style.opacity = isLoggedAdmin ? "0.7" : "1";
+                branchInput.style.cursor = isLoggedAdmin ? "not-allowed" : "default";
+                branchInput.title = isLoggedAdmin ? `Admin chỉ quản lý nhân viên thuộc chi nhánh ${myBranch}` : "";
+            }
         }
     } else {
         editingStaffId = null;
@@ -728,12 +740,18 @@ function openStaffModal(staff = null) {
                 const opt = document.createElement("option");
                 opt.value = targetVal;
                 opt.textContent = targetVal;
-                branchInput.insertBefore(opt, branchInput.lastElementChild);
+                if (branchInput.lastElementChild && branchInput.lastElementChild.value === "__custom__") {
+                    branchInput.insertBefore(opt, branchInput.lastElementChild);
+                } else {
+                    branchInput.appendChild(opt);
+                }
             }
             branchInput.value = targetVal;
             toggleStaffCustomBranch();
-            branchInput.disabled = false;
-            branchInput.style.opacity = "1";
+            branchInput.disabled = isLoggedAdmin;
+            branchInput.style.opacity = isLoggedAdmin ? "0.7" : "1";
+            branchInput.style.cursor = isLoggedAdmin ? "not-allowed" : "default";
+            branchInput.title = isLoggedAdmin ? `Admin chỉ có thể thêm nhân viên cho chi nhánh ${myBranch}` : "";
         }
     }
 

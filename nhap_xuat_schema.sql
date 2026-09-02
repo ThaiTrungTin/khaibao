@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS public.nhap_xuat (
     ma_don TEXT UNIQUE NOT NULL,
     loai_don TEXT NOT NULL CHECK (loai_don IN ('Nhập', 'Xuất')),
     muc_dich TEXT,
+    trang_thai TEXT DEFAULT 'Done' CHECK (trang_thai IN ('Chờ', 'Done')),
+    file_url TEXT,
     user_name TEXT NOT NULL,
     chi_tiet_san_pham JSONB DEFAULT '[]'::jsonb,
     tong_so_luong INT DEFAULT 0,

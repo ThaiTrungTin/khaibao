@@ -364,15 +364,22 @@ function applyTheKhoFilters() {
         });
     }
 
+    // Apply Date Range Filter if active
+    if (theKhoDateFilterRange.from || theKhoDateFilterRange.to) {
+        result = result.filter(item => {
+            const itemTime = item.created_at ? new Date(item.created_at).getTime() : 0;
+            if (theKhoDateFilterRange.from && itemTime < theKhoDateFilterRange.from) return false;
+            if (theKhoDateFilterRange.to && itemTime > theKhoDateFilterRange.to) return false;
+            return true;
+        });
+    }
+
     // Apply per-column popover filters
     for (const [colKey, selectedSet] of Object.entries(theKhoColumnFilters)) {
         if (!selectedSet || selectedSet.size === 0) continue;
 
         result = result.filter(item => {
-            let rawVal = item[colKey];
-            let valStr = (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-')
-                ? '(Trống)'
-                : String(rawVal).trim();
+            let valStr = formatTheKhoValForFilter(colKey, item[colKey]);
             return selectedSet.has(valStr);
         });
     }
@@ -597,21 +604,74 @@ function renderTheKhoTable(items) {
 }
 
 // Requirement 2: Interdependent Column Filter Options & Badge Updates
+let theKhoDateFilterRange = { from: null, to: null };
+
+function formatTheKhoValForFilter(colKey, rawVal) {
+    if (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-') {
+        return '(Trống)';
+    }
+    if (colKey === 'created_at') {
+        if (typeof formatDateTime === 'function') {
+            return formatDateTime(rawVal);
+        }
+        try {
+            const d = new Date(rawVal);
+            if (!isNaN(d.getTime())) {
+                const day = String(d.getDate()).padStart(2, '0');
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const year = d.getFullYear();
+                const hours = String(d.getHours()).padStart(2, '0');
+                const mins = String(d.getMinutes()).padStart(2, '0');
+                return `${day}/${month}/${year} ${hours}:${mins}`;
+            }
+        } catch (e) {}
+    }
+    if (colKey === 'date_expiry') {
+        if (typeof formatDateForNx === 'function') return formatDateForNx(rawVal);
+    }
+    return String(rawVal).trim();
+}
+
 function getAvailableOptionsForTheKhoColumn(colKey) {
-    const searchInput = document.getElementById('thekho-search-input');
-    const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    if (!theKhoData || theKhoData.length === 0) return [];
 
-    const loaiFilter = document.getElementById('thekho-loai-filter');
-    const selectedLoai = loaiFilter ? loaiFilter.value : '';
+    const filterBranchSelect = document.getElementById('thekho-filter-branch');
+    const selectedBranch = filterBranchSelect ? filterBranchSelect.value : 'all';
 
-    const subset = theKhoData.filter(item => {
-        const matchSearch = !searchVal || 
-            (item.ma_qr && String(item.ma_qr).toLowerCase().includes(searchVal)) ||
-            (item.ma_vach && String(item.ma_vach).toLowerCase().includes(searchVal)) ||
-            (item.lot && String(item.lot).toLowerCase().includes(searchVal)) ||
-            (item.ten_hang_hoa && String(item.ten_hang_hoa).toLowerCase().includes(searchVal)) ||
-            (item.muc_dich && String(item.muc_dich).toLowerCase().includes(searchVal)) ||
-            (item.user_name && String(item.user_name).toLowerCase().includes(searchVal));
+    let subset = theKhoData.filter(item => {
+        // Role & Branch Permission Filter: Quản lý sees all; Admin & Nhân Viên only see their branch
+        if (typeof window.canUserAccessRecord === 'function' && !window.canUserAccessRecord(item)) {
+            return false;
+        }
+
+        // Manager Branch Filter Dropdown selection
+        if (selectedBranch && selectedBranch !== 'all') {
+            let itemCN = '';
+            if (typeof extractCNCodeFromBranchString === 'function') {
+                itemCN = extractCNCodeFromBranchString(item.user_name || item.branch || '');
+            } else if (typeof window.extractCNCode === 'function') {
+                itemCN = window.extractCNCode(item.user_name || item.branch || '');
+            }
+            if (itemCN.toUpperCase() !== selectedBranch.toUpperCase()) return false;
+        }
+
+        // Date Range filter if active
+        if (theKhoDateFilterRange.from || theKhoDateFilterRange.to) {
+            const itemTime = item.created_at ? new Date(item.created_at).getTime() : 0;
+            if (theKhoDateFilterRange.from && itemTime < theKhoDateFilterRange.from) return false;
+            if (theKhoDateFilterRange.to && itemTime > theKhoDateFilterRange.to) return false;
+        }
+
+        const searchInput = document.getElementById('thekho-search-input');
+        const term = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+        const loaiFilter = document.getElementById('thekho-loai-filter');
+        const selectedLoai = loaiFilter ? loaiFilter.value : '';
+
+        let matchSearch = true;
+        if (term) {
+            matchSearch = Object.values(item).some(val => val !== null && val !== undefined && String(val).toLowerCase().includes(term));
+        }
 
         const matchLoai = !selectedLoai || item.loai === selectedLoai;
 
@@ -621,8 +681,7 @@ function getAvailableOptionsForTheKhoColumn(colKey) {
         for (const [otherCol, selectedSet] of Object.entries(theKhoColumnFilters)) {
             if (otherCol === colKey) continue;
             if (!selectedSet || selectedSet.size === 0) continue;
-            let rawVal = item[otherCol];
-            let valStr = (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-') ? '(Trống)' : String(rawVal).trim();
+            let valStr = formatTheKhoValForFilter(otherCol, item[otherCol]);
             if (!selectedSet.has(valStr)) return false;
         }
 
@@ -631,8 +690,7 @@ function getAvailableOptionsForTheKhoColumn(colKey) {
 
     const countsMap = new Map();
     subset.forEach(item => {
-        let rawVal = item[colKey];
-        let valStr = (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-') ? '(Trống)' : String(rawVal).trim();
+        let valStr = formatTheKhoValForFilter(colKey, item[colKey]);
         countsMap.set(valStr, (countsMap.get(valStr) || 0) + 1);
     });
 
@@ -669,23 +727,30 @@ function toggleTheKhoColumnFilterDropdown(event, colKey) {
     const btn = (event && event.currentTarget) ? event.currentTarget : document.querySelector(`.col-filter-btn[data-col="${colKey}"]`);
     if (btn) {
         const rect = btn.getBoundingClientRect();
-        let left = rect.left;
+        const popoverWidth = (colKey === 'created_at') ? 300 : 260;
+        let left = rect.left - 90; // Shift leftwards for easy access & clear visibility
         let top = rect.bottom + 6;
 
-        if (left + 250 > window.innerWidth) {
-            left = window.innerWidth - 260;
+        if (left + popoverWidth > window.innerWidth - 15) {
+            left = window.innerWidth - popoverWidth - 15;
         }
         if (left < 10) left = 10;
-        if (top + 380 > window.innerHeight) {
-            top = rect.top - 380;
+        if (top + 400 > window.innerHeight) {
+            top = Math.max(10, rect.top - 400);
         }
 
+        popover.style.width = `${popoverWidth}px`;
         popover.style.left = `${left}px`;
         popover.style.top = `${top}px`;
     }
 
     const titleEl = document.getElementById('thekho-filter-popover-title');
     if (titleEl) titleEl.textContent = `Lọc Cột: ${theKhoColTitles[colKey] || colKey}`;
+
+    const dateSection = document.getElementById('thekho-date-range-section');
+    if (dateSection) {
+        dateSection.style.display = (colKey === 'created_at') ? 'flex' : 'none';
+    }
 
     const searchInput = document.getElementById('thekho-filter-popover-search-input');
     if (searchInput) searchInput.value = '';
@@ -701,6 +766,62 @@ function toggleTheKhoColumnFilterDropdown(event, colKey) {
 
     popover.style.display = 'flex';
     renderTheKhoFilterPopoverListOptions();
+}
+
+function handleTheKhoDateRangeChange() {
+    const fromInput = document.getElementById('thekho-filter-date-from');
+    const toInput = document.getElementById('thekho-filter-date-to');
+
+    const fromVal = fromInput ? fromInput.value : '';
+    const toVal = toInput ? toInput.value : '';
+
+    if (fromVal) {
+        const dFrom = new Date(`${fromVal}T00:00:00`);
+        theKhoDateFilterRange.from = isNaN(dFrom.getTime()) ? null : dFrom.getTime();
+    } else {
+        theKhoDateFilterRange.from = null;
+    }
+
+    if (toVal) {
+        const dTo = new Date(`${toVal}T23:59:59`);
+        theKhoDateFilterRange.to = isNaN(dTo.getTime()) ? null : dTo.getTime();
+    } else {
+        theKhoDateFilterRange.to = null;
+    }
+
+    renderTheKhoFilterPopoverListOptions();
+    updateTheKhoColumnFilterBadgesUI();
+    applyTheKhoFilters();
+}
+
+function setTheKhoDatePreset(preset) {
+    const fromInput = document.getElementById('thekho-filter-date-from');
+    const toInput = document.getElementById('thekho-filter-date-to');
+
+    const now = new Date();
+    if (preset === 'today') {
+        if (fromInput) fromInput.value = formatDateLocalInput(now);
+        if (toInput) toInput.value = formatDateLocalInput(now);
+    } else if (preset === '7days') {
+        const start7Days = new Date(now.getTime() - 6 * 24 * 3600 * 1000);
+        if (fromInput) fromInput.value = formatDateLocalInput(start7Days);
+        if (toInput) toInput.value = formatDateLocalInput(now);
+    } else if (preset === 'thisMonth') {
+        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        if (fromInput) fromInput.value = formatDateLocalInput(startMonth);
+        if (toInput) toInput.value = formatDateLocalInput(now);
+    } else if (preset === 'clear') {
+        if (fromInput) fromInput.value = '';
+        if (toInput) toInput.value = '';
+    }
+
+    handleTheKhoDateRangeChange();
+}
+
+function formatDateLocalInput(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function renderTheKhoFilterPopoverListOptions() {
@@ -797,18 +918,20 @@ function clearCurrentTheKhoColumnFilter() {
 
 function updateTheKhoColumnFilterBadgesUI() {
     let hasActiveFilters = false;
+    const hasDateRange = !!(theKhoDateFilterRange.from || theKhoDateFilterRange.to);
 
     const allBtns = document.querySelectorAll('#view-the-kho .col-filter-btn[data-col]');
     allBtns.forEach(btn => {
         const colKey = btn.getAttribute('data-col');
         const badge = document.getElementById(`thekho-filter-badge-${colKey}`);
         const selectedSet = theKhoColumnFilters[colKey];
+        const isActive = (selectedSet && selectedSet.size > 0) || (colKey === 'created_at' && hasDateRange);
 
-        if (selectedSet && selectedSet.size > 0) {
+        if (isActive) {
             btn.classList.add('filter-active');
             hasActiveFilters = true;
             if (badge) {
-                badge.textContent = selectedSet.size;
+                badge.textContent = selectedSet ? selectedSet.size : '📅';
                 badge.style.display = 'inline-flex';
             }
         } else {
@@ -824,7 +947,7 @@ function updateTheKhoColumnFilterBadgesUI() {
     if (clearBtn) {
         const searchInput = document.getElementById('thekho-search-input');
         const hasSearch = searchInput && searchInput.value.trim() !== '';
-        if (hasActiveFilters || hasSearch || theKhoSortCol) {
+        if (hasActiveFilters || hasSearch || theKhoSortCol || hasDateRange) {
             clearBtn.classList.add('btn-clear-active');
         } else {
             clearBtn.classList.remove('btn-clear-active');
@@ -848,6 +971,12 @@ function clearAllTheKhoFilters() {
     const branchFilter = document.getElementById('thekho-filter-branch');
     if (branchFilter) branchFilter.value = 'all';
 
+    const fromInput = document.getElementById('thekho-filter-date-from');
+    const toInput = document.getElementById('thekho-filter-date-to');
+    if (fromInput) fromInput.value = '';
+    if (toInput) toInput.value = '';
+    theKhoDateFilterRange = { from: null, to: null };
+
     theKhoSortCol = null;
     theKhoSortDir = null;
     theKhoColumnFilters = {};
@@ -856,6 +985,9 @@ function clearAllTheKhoFilters() {
     updateTheKhoColumnFilterBadgesUI();
     applyTheKhoFilters();
 }
+
+window.handleTheKhoDateRangeChange = handleTheKhoDateRangeChange;
+window.setTheKhoDatePreset = setTheKhoDatePreset;
 
 // Pagination Controls & Button Rendering (Identical to Vật Tư)
 function renderTheKhoPaginationControls(totalItems, totalPages, startIdx, endIdx) {

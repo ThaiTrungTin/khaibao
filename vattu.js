@@ -1150,7 +1150,8 @@ function renderVatTuTable(items) {
                 cellContent = stats.xuat.toLocaleString('vi-VN');
             } else if (col.key === 'ton_cuoi' || col.key === 'so_luong_ton') {
                 const qtyTon = stats.ton_cuoi;
-                if (qtyTon <= 0) cellContent = `<span class="badge-stock badge-stock-empty">Hết hàng (0)</span>`;
+                if (qtyTon < 0) cellContent = `<span class="badge-stock badge-stock-empty">Âm kho (${qtyTon})</span>`;
+                else if (qtyTon === 0) cellContent = `<span class="badge-stock badge-stock-empty">Hết hàng (0)</span>`;
                 else if (qtyTon <= 10) cellContent = `<span class="badge-stock badge-stock-low">${qtyTon} (Sắp hết)</span>`;
                 else cellContent = `<span class="vattu-stock-val">${qtyTon.toLocaleString('vi-VN')}</span>`;
             } else if (col.key === 'gia_von_ton_kho_trung_binh') {
