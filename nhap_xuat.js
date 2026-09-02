@@ -97,7 +97,170 @@ function bindNhapXuatEvents() {
             checkNxOrderModified();
         });
     }
+
+    const managerBranchSelect = document.getElementById('nx-manager-branch-select');
+    if (managerBranchSelect) {
+        managerBranchSelect.addEventListener('change', () => {
+            updateNxUserFieldWithBranch();
+            const currentLoai = document.getElementById('nx-input-loai')?.value || '';
+            if (!isEditingNxOrder && currentLoai) {
+                generateNextNxOrderCode(currentLoai);
+            }
+            checkNxOrderModified();
+        });
+    }
 }
+
+// Robust helper to extract CN code from any branch string
+function extractCNCodeFromBranchString(branchStr) {
+    if (!branchStr) return '';
+    const str = String(branchStr).trim();
+    if (str === 'Toàn hệ thống' || str === 'all') return '';
+
+    const match = str.match(/CN\d+/i);
+    if (match) return match[0].toUpperCase();
+
+    const matchNum = str.match(/Chi\s*Nhánh\s*(\d+)/i) || str.match(/CN\s*(\d+)/i);
+    if (matchNum) return `CN${matchNum[1]}`;
+
+    if (str.toLowerCase().includes('huyện') || str.toLowerCase().includes('hiệp bình')) return 'CN3';
+    if (str.toLowerCase().includes('hà nội')) return 'CN2';
+    if (str.toLowerCase().includes('tp.hcm') || str.toLowerCase().includes('hcm')) return 'CN1';
+
+    return '';
+}
+
+// Fetch distinct branch strings directly from Supabase table 'staff' (column 'branch')
+async function fetchBranchesFromStaffTable() {
+    let branches = [];
+    const client = (typeof getNhapXuatSupabaseClient === 'function') ? getNhapXuatSupabaseClient() : null;
+    try {
+        if (client) {
+            const { data, error } = await client.from('staff').select('branch');
+            if (!error && data && Array.isArray(data)) {
+                data.forEach(item => {
+                    if (item && item.branch && item.branch.trim() && item.branch !== 'Toàn hệ thống') {
+                        branches.push(item.branch.trim());
+                    }
+                });
+            }
+        }
+    } catch (e) {
+        console.warn("NhapXuat: Error fetching staff table branches:", e);
+    }
+
+    // Fallback to local staffData / localStorage gaia_staff_list if Supabase table query is empty/offline
+    if (branches.length === 0) {
+        let localList = [];
+        if (typeof staffData !== 'undefined' && Array.isArray(staffData) && staffData.length > 0) {
+            localList = staffData;
+        } else {
+            try {
+                const saved = localStorage.getItem("gaia_staff_list");
+                if (saved) localList = JSON.parse(saved);
+            } catch (e) {}
+        }
+        if (!localList || localList.length === 0) {
+            if (typeof defaultStaffData !== 'undefined') localList = defaultStaffData;
+        }
+        (localList || []).forEach(s => {
+            if (s && s.branch && s.branch !== 'Toàn hệ thống') {
+                branches.push(s.branch.trim());
+            }
+        });
+    }
+
+    // Deduplicate
+    return Array.from(new Set(branches));
+}
+
+// Check if logged-in user is STRICTLY Quản Lý (Excludes Admin & Staff)
+function isStrictManagerRole(user) {
+    const u = user || (typeof window.getCurrentLoggedUser === 'function' ? window.getCurrentLoggedUser() : null);
+    if (!u) return false;
+    const roleLower = (u.role || '').toLowerCase().trim();
+    return roleLower.includes('quản lý') || roleLower.includes('quan ly') || roleLower === 'manager';
+}
+
+// Populate Branch Options ONLY for Quản Lý - Directly from 'staff' table 'branch' column
+async function populateNxManagerBranches() {
+    const branchSelect = document.getElementById('nx-manager-branch-select');
+    if (!branchSelect) return;
+
+    const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
+    const isStrictManager = isStrictManagerRole(loggedUser);
+
+    if (!isStrictManager) {
+        // Admin & Staff: Hide dropdown, auto-use their own branch from staff table
+        branchSelect.style.display = 'none';
+        return;
+    }
+
+    const rawBranches = await fetchBranchesFromStaffTable();
+
+    branchSelect.innerHTML = `<option value="" disabled selected>-- Chọn Chi Nhánh --</option>`;
+    
+    rawBranches.forEach(bStr => {
+        const code = extractCNCodeFromBranchString(bStr);
+        const optionEl = document.createElement('option');
+        optionEl.value = code || bStr;
+        optionEl.dataset.fullBranch = bStr;
+
+        let labelText = bStr;
+        if (labelText.length > 28) {
+            labelText = labelText.substring(0, 25) + '...';
+        }
+        optionEl.textContent = `📍 ${labelText}`;
+        optionEl.title = bStr;
+        branchSelect.appendChild(optionEl);
+    });
+
+    branchSelect.value = ""; // Always start EMPTY as required!
+    branchSelect.style.display = 'inline-block';
+}
+
+// Formats `#nx-input-user` as [Tên Người Đăng Nhập] - [Chi Nhánh]
+function updateNxUserFieldWithBranch() {
+    const userInput = document.getElementById('nx-input-user');
+    if (!userInput) return '';
+
+    const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
+    let rawName = loggedUser ? (loggedUser.full_name || loggedUser.email || 'Nhân viên') : 'Nhân viên';
+    rawName = String(rawName).replace(/\s*\([^)]*\)/g, '').trim();
+
+    const isStrictManager = isStrictManagerRole(loggedUser);
+    const branchSelect = document.getElementById('nx-manager-branch-select');
+
+    let selectedCN = '';
+
+    if (isStrictManager && branchSelect && branchSelect.style.display !== 'none' && branchSelect.value) {
+        selectedCN = branchSelect.value;
+    } else {
+        // Admin & Staff: Auto-add branch directly from their own 'branch' column in staff table!
+        let userBranchStr = loggedUser ? (loggedUser.branch || '') : '';
+
+        if (!userBranchStr && typeof window.getUserBranch === 'function' && loggedUser) {
+            userBranchStr = window.getUserBranch(loggedUser.full_name || loggedUser.email) || '';
+        }
+
+        selectedCN = extractCNCodeFromBranchString(userBranchStr);
+    }
+
+    let formattedUser = rawName;
+    if (selectedCN) {
+        formattedUser = `${rawName} - ${selectedCN}`;
+    }
+
+    userInput.value = formattedUser;
+    if (typeof currentDraftOrder !== 'undefined') {
+        currentDraftOrder.user_name = formattedUser;
+    }
+
+    return formattedUser;
+}
+
+
+
 
 // Fetch Orders from Supabase table 'nhap_xuat'
 async function fetchNhapXuatData() {
@@ -124,6 +287,7 @@ async function fetchNhapXuatData() {
         console.error("NhapXuat: Exception fetching orders:", err);
         nhapXuatData = getSampleNhapXuatData();
     } finally {
+        await initNhapXuatBranchFilterForManager();
         applyNhapXuatFilters();
     }
 }
@@ -150,6 +314,40 @@ function setupNhapXuatRealtimeSubscription() {
     }
 }
 
+// Init & Populate Manager Branch Filter for Nhập Xuất List
+async function initNhapXuatBranchFilterForManager() {
+    const filterBranchSelect = document.getElementById('nhapxuat-filter-branch');
+    if (!filterBranchSelect) return;
+
+    const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
+    const isStrictManager = isStrictManagerRole(loggedUser);
+
+    if (!isStrictManager) {
+        filterBranchSelect.style.display = 'none';
+        return;
+    }
+
+    const rawBranches = await fetchBranchesFromStaffTable();
+
+    filterBranchSelect.innerHTML = `<option value="all">🏢 Tất cả chi nhánh</option>`;
+    rawBranches.forEach(bStr => {
+        const code = extractCNCodeFromBranchString(bStr);
+        const optionEl = document.createElement('option');
+        optionEl.value = code || bStr;
+        optionEl.dataset.fullBranch = bStr;
+        
+        let labelText = bStr;
+        if (labelText.length > 25) {
+            labelText = labelText.substring(0, 22) + '...';
+        }
+        optionEl.textContent = `📍 ${labelText}`;
+        optionEl.title = bStr;
+        filterBranchSelect.appendChild(optionEl);
+    });
+
+    filterBranchSelect.style.display = 'inline-block';
+}
+
 // Filters & Order List Rendering
 function applyNhapXuatFilters() {
     const searchInput = document.getElementById('nhapxuat-search-input');
@@ -158,12 +356,23 @@ function applyNhapXuatFilters() {
     const filterLoaiSelect = document.getElementById('nhapxuat-filter-loai');
     const selectedLoai = filterLoaiSelect ? filterLoaiSelect.value : 'all';
 
+    const filterBranchSelect = document.getElementById('nhapxuat-filter-branch');
+    const selectedBranch = filterBranchSelect ? filterBranchSelect.value : 'all';
+
     let result = [...nhapXuatData];
 
-    // Apply Role & Branch Permission Filter
+    // Apply Role & Branch Permission Filter (Admin & Staff restricted to their own branch; Manager sees all)
     result = result.filter(item => {
         return (typeof window.canUserAccessRecord === 'function') ? window.canUserAccessRecord(item) : true;
     });
+
+    // Apply Manager Branch Filter Dropdown
+    if (selectedBranch && selectedBranch !== 'all') {
+        result = result.filter(x => {
+            const itemCN = extractCNCodeFromBranchString(x.user_name || x.branch || '');
+            return itemCN.toUpperCase() === selectedBranch.toUpperCase();
+        });
+    }
 
     if (selectedLoai && selectedLoai !== 'all') {
         result = result.filter(x => x.loai_don === selectedLoai);
@@ -180,6 +389,7 @@ function applyNhapXuatFilters() {
     filteredNhapXuatData = result;
     renderNhapXuatOrderList(filteredNhapXuatData);
 }
+
 
 let originalOrderStateSnapshot = null;
 
@@ -535,7 +745,7 @@ function selectNxOrderForView(order) {
 }
 
 // Internal: thực sự load đơn vào form (không guard)
-function _doSelectNxOrderForView(order) {
+async function _doSelectNxOrderForView(order) {
     selectedNxOrderId = order.id;
     isEditingNxOrder = true;
 
@@ -554,6 +764,15 @@ function _doSelectNxOrderForView(order) {
     document.getElementById('nx-input-time').value = formatNxDateTime(order.created_at || order.ngay_tao);
     document.getElementById('nx-input-mucdich').value = order.muc_dich || '';
     document.getElementById('nx-input-user').value = order.user_name || '';
+
+    await populateNxManagerBranches();
+    const managerSelect = document.getElementById('nx-manager-branch-select');
+    if (managerSelect && managerSelect.style.display !== 'none') {
+        const cnCode = getBranchCodeFromUser(order.user_name);
+        if (managerSelect.querySelector(`option[value="${cnCode}"]`)) {
+            managerSelect.value = cnCode;
+        }
+    }
 
     currentDraftNxItems = order.chi_tiet_san_pham ? JSON.parse(JSON.stringify(order.chi_tiet_san_pham)) : [];
     
@@ -591,7 +810,7 @@ function createNewNhapXuatOrderForm(restoreSavedDraft = false) {
 }
 
 // Internal: thực sự reset form tạo đơn mới (không guard)
-function _doCreateNewNhapXuatOrderForm() {
+async function _doCreateNewNhapXuatOrderForm() {
     selectedNxOrderId = null;
     isEditingNxOrder = false;
     originalOrderStateSnapshot = null;
@@ -606,16 +825,19 @@ function _doCreateNewNhapXuatOrderForm() {
         modeBadge.style.color = '#10b981';
     }
 
-    // Auto-fill logged-in user formatted as "Tên Nhân Viên - CN1"
+    // Auto-fill logged-in user formatted as "Tên Nhân Viên - Chi Nhánh"
     const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
-    let userNameFormatted = "Thái Trung Tín - CN1";
-    if (loggedUser) {
-        if (typeof window.formatUserWithCN === 'function') {
-            userNameFormatted = window.formatUserWithCN(loggedUser.full_name || loggedUser.email);
-        } else {
-            userNameFormatted = `${loggedUser.full_name || 'Nhân viên'} - CN1`;
-        }
+    await populateNxManagerBranches();
+
+    const branchSelect = document.getElementById('nx-manager-branch-select');
+    if (branchSelect && branchSelect.style.display !== 'none') {
+        branchSelect.value = ''; // Always start EMPTY as required!
     }
+
+    const userNameFormatted = updateNxUserFieldWithBranch();
+
+
+
 
     // Fresh Form Always (Draft disabled)
     currentDraftOrder = {
@@ -1080,6 +1302,23 @@ async function saveNxOrderToSystem() {
         return;
     }
 
+    const managerBranchSelect = document.getElementById('nx-manager-branch-select');
+    const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
+    const isManager = (typeof window.isManagerRole === 'function') ? window.isManagerRole(loggedUser) : false;
+
+    if (selectedNxOrderId === null && isManager && managerBranchSelect && managerBranchSelect.style.display !== 'none' && !managerBranchSelect.value) {
+        if (typeof showVatTuNoticeModal === 'function') {
+            showVatTuNoticeModal('warning', 'Chưa Chọn Chi Nhánh', 'Vui lòng chọn Chi Nhánh thực hiện đơn kho trước khi lưu!');
+        } else if (typeof showToast === 'function') {
+            showToast('warning', 'Chưa Chọn Chi Nhánh', 'Vui lòng chọn Chi Nhánh thực hiện đơn kho trước khi lưu!');
+        } else {
+            alert('Vui lòng chọn Chi Nhánh thực hiện đơn kho trước khi lưu!');
+        }
+        managerBranchSelect.focus();
+        return;
+    }
+
+
     if (!currentDraftNxItems || currentDraftNxItems.length === 0) {
         if (typeof showVatTuNoticeModal === 'function') {
             showVatTuNoticeModal('warning', 'Chưa Có Sản Phẩm', 'Vui lòng quét QR hoặc nhập sản phẩm vào đơn trước khi lưu!');
@@ -1346,9 +1585,12 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
         console.error("NhapXuat: Exception syncing to the_kho:", e);
     }
 
-    // Trigger realtime refresh on Thẻ Kho module if function exists
+    // Trigger realtime refresh on Thẻ Kho and Vật Tư / Kiểm Kho modules
     if (typeof fetchTheKhoData === 'function') {
         fetchTheKhoData();
+    }
+    if (typeof fetchVatTuData === 'function') {
+        fetchVatTuData();
     }
 }
 

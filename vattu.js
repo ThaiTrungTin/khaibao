@@ -11,9 +11,11 @@
    ========================================================================== */
 
 let vatTuData = [];
+let tonKhoDetailData = [];
 let filteredVatTuData = [];
 let editingVatTuId = null;
 let deletingVatTuId = null;
+let expandedVatTuRows = new Set();
 
 // Pagination State
 let vattuCurrentPage = 1;
@@ -40,35 +42,70 @@ const vattuColTitles = {
     phan_loai: 'Phân Loại',
     don_vi: 'Đơn Vị',
     cach_dung: 'Cách Dùng',
-    so_luong_nhap: 'SL Nhập',
-    so_luong_ton: 'SL Tồn',
-    gia_von_ton_kho_trung_binh: 'Giá Vốn TB',
-    tong_ton_kho: 'Tổng Tồn Kho'
+    ton_dau: 'Đầu',
+    nhap: 'Nhập',
+    xuat: 'Xuất',
+    ton_cuoi: 'Cuối',
+    gia_von_ton_kho_trung_binh: 'Giá Vốn TB'
 };
 
 // Dynamic Column Configuration State
 const defaultVatTuCols = [
-    { key: 'ma_vach', title: 'Mã Vạch', visible: true, width: '150px', align: 'left', minWidth: '100px' },
+    { key: 'ma_vach', title: 'Mã Vạch', visible: true, width: '165px', align: 'left', minWidth: '135px' },
     { key: 'ten_mat_hang', title: 'Tên Mặt Hàng', visible: true, width: '210px', align: 'left', minWidth: '130px' },
     { key: 'ten_hoa_don', title: 'Tên Hóa Đơn', visible: true, width: '190px', align: 'left', minWidth: '110px' },
+    { key: 'ton_dau', title: 'Đầu', visible: true, width: '110px', align: 'right', minWidth: '80px' },
+    { key: 'nhap', title: 'Nhập', visible: true, width: '110px', align: 'right', minWidth: '80px' },
+    { key: 'xuat', title: 'Xuất', visible: true, width: '110px', align: 'right', minWidth: '80px' },
+    { key: 'ton_cuoi', title: 'Cuối', visible: true, width: '110px', align: 'right', minWidth: '80px' },
     { key: 'nha_san_xuat', title: 'Nhà Sản Xuất', visible: true, width: '170px', align: 'left', minWidth: '100px' },
     { key: 'danh_muc', title: 'Danh Mục', visible: true, width: '140px', align: 'left', minWidth: '100px' },
     { key: 'nhom_hang', title: 'Nhóm Hàng', visible: true, width: '140px', align: 'left', minWidth: '100px' },
     { key: 'phan_loai', title: 'Phân Loại', visible: true, width: '140px', align: 'left', minWidth: '100px' },
     { key: 'don_vi', title: 'Đơn Vị', visible: true, width: '100px', align: 'left', minWidth: '80px' },
     { key: 'cach_dung', title: 'Cách Dùng', visible: true, width: '160px', align: 'left', minWidth: '100px' },
-    { key: 'so_luong_nhap', title: 'SL Nhập', visible: true, width: '120px', align: 'right', minWidth: '80px' },
-    { key: 'so_luong_ton', title: 'SL Tồn', visible: true, width: '120px', align: 'right', minWidth: '80px' },
-    { key: 'gia_von_ton_kho_trung_binh', title: 'Giá Vốn TB (đ)', visible: true, width: '160px', align: 'right', minWidth: '100px' },
-    { key: 'tong_ton_kho', title: 'Tổng Tồn Kho (đ)', visible: true, width: '160px', align: 'right', minWidth: '100px' }
+    { key: 'gia_von_ton_kho_trung_binh', title: 'Giá Vốn TB (đ)', visible: true, width: '160px', align: 'right', minWidth: '100px' }
 ];
 
 let currentVatTuCols = [];
 let pendingVatTuColsConfig = [];
+let vattuFixedColsCount = 2; // Default 2 pinned columns (Mã Vạch & Tên Mặt Hàng)
+
+function initVatTuFixedColsConfig() {
+    try {
+        const saved = localStorage.getItem('gaia_vattu_fixed_cols');
+        if (saved !== null) {
+            vattuFixedColsCount = parseInt(saved, 10);
+            if (isNaN(vattuFixedColsCount) || vattuFixedColsCount < 0) vattuFixedColsCount = 2;
+        }
+    } catch(e) {
+        vattuFixedColsCount = 2;
+    }
+}
+initVatTuFixedColsConfig();
+
+function getStickyColMeta(visIdx, visibleCols, isHeader = false) {
+    if (visIdx >= vattuFixedColsCount) {
+        return { style: '', className: '' };
+    }
+
+    let left = 0;
+    for (let i = 0; i < visIdx; i++) {
+        const colWidth = parseInt(visibleCols[i].width, 10) || 120;
+        left += colWidth;
+    }
+
+    const isLastSticky = (visIdx === vattuFixedColsCount - 1) || (visIdx === visibleCols.length - 1);
+    const className = `is-sticky-col ${isLastSticky ? 'is-sticky-col-last' : ''}`;
+    const zIndex = isHeader ? 30 : 15;
+    const style = `position: sticky; left: ${left}px; z-index: ${zIndex};`;
+
+    return { style, className };
+}
 
 function initVatTuColumnsConfig() {
     try {
-        const saved = localStorage.getItem('gaia_vattu_columns_v2');
+        const saved = localStorage.getItem('gaia_vattu_columns_v7');
         if (saved) {
             currentVatTuCols = JSON.parse(saved);
             // Handle newly added columns (if any) missing from saved config
@@ -245,7 +282,176 @@ function initVatTuModule() {
     setupVatTuRealtimeSubscription();
 }
 
-// Fetch Data from Supabase table 'san_pham' (NO FAKE DATA FALLBACK)
+// Populate Manager Branch Filter Select Dropdown
+async function initVatTuBranchFilterForManager() {
+    const filterBranchSelect = document.getElementById('vattu-filter-branch');
+    if (!filterBranchSelect) return;
+
+    const loggedUser = window.getCurrentLoggedUser ? window.getCurrentLoggedUser() : null;
+    const isManager = window.isManagerRole ? window.isManagerRole(loggedUser) : false;
+
+    if (!isManager) {
+        filterBranchSelect.style.display = 'none';
+        return;
+    }
+
+    let branches = [];
+    const client = getVatTuSupabaseClient();
+    if (client) {
+        try {
+            const { data } = await client.from('staff').select('branch');
+            if (data && data.length > 0) {
+                data.forEach(s => {
+                    if (s.branch && s.branch !== 'Toàn hệ thống') branches.push(s.branch.trim());
+                });
+            }
+        } catch (e) {
+            console.warn('Could not fetch staff branches for VatTu filter', e);
+        }
+    }
+
+    if (branches.length === 0) {
+        branches = ['Chi Nhánh TP.HCM', 'Chi Nhánh Hà Nội'];
+    }
+
+    const uniqueBranches = Array.from(new Set(branches));
+    filterBranchSelect.innerHTML = `<option value="all">🏢 Tất cả chi nhánh</option>`;
+    uniqueBranches.forEach(bStr => {
+        let code = bStr;
+        if (typeof window.extractCNCodeFromBranchString === 'function') {
+            code = window.extractCNCodeFromBranchString(bStr);
+        } else if (typeof window.extractCNCode === 'function') {
+            code = window.extractCNCode(bStr);
+        }
+
+        let labelText = bStr.trim();
+        if (code) {
+            const doublePrefixRegex = new RegExp(`^(${code}\\s*-\\s*)+`, 'i');
+            labelText = labelText.replace(doublePrefixRegex, `${code} - `);
+            if (!labelText.toUpperCase().startsWith(code.toUpperCase())) {
+                labelText = `${code} - ${labelText}`;
+            }
+        }
+
+        const optionEl = document.createElement('option');
+        optionEl.value = code;
+        optionEl.textContent = `📍 ${labelText}`;
+        optionEl.title = bStr;
+        filterBranchSelect.appendChild(optionEl);
+    });
+
+    filterBranchSelect.style.display = 'inline-block';
+    filterBranchSelect.removeEventListener('change', handleVatTuBranchFilterChange);
+    filterBranchSelect.addEventListener('change', handleVatTuBranchFilterChange);
+}
+
+function handleVatTuBranchFilterChange() {
+    vattuCurrentPage = 1;
+    applyVatTuFilters();
+}
+
+function getActiveVatTuBranchFilter() {
+    const loggedUser = window.getCurrentLoggedUser ? window.getCurrentLoggedUser() : null;
+    const isManager = window.isManagerRole ? window.isManagerRole(loggedUser) : false;
+
+    if (!isManager && loggedUser && loggedUser.branch) {
+        let userCN = '';
+        if (typeof window.extractCNCodeFromBranchString === 'function') {
+            userCN = window.extractCNCodeFromBranchString(loggedUser.branch);
+        } else if (typeof window.extractCNCode === 'function') {
+            userCN = window.extractCNCode(loggedUser.branch);
+        }
+        if (userCN && userCN !== 'ALL' && userCN !== 'TOÀN HỆ THỐNG') {
+            return userCN.toUpperCase();
+        }
+    }
+
+    const filterSelect = document.getElementById('vattu-filter-branch');
+    return filterSelect ? filterSelect.value : 'all';
+}
+
+function computeProductBranchStats(item) {
+    const activeBranch = getActiveVatTuBranchFilter();
+    const rawBarcode = (item.ma_vach || '').trim().toLowerCase();
+
+    const matchingDetails = (tonKhoDetailData || []).filter(d => {
+        const detailBarcode = (d.ma_vach || '').trim().toLowerCase();
+        const detailQr = (d.ma_qr || '').trim().toLowerCase();
+        const isMatch = (detailBarcode && detailBarcode === rawBarcode) || (detailQr && detailQr === rawBarcode);
+        if (!isMatch) return false;
+
+        if (activeBranch && activeBranch !== 'all') {
+            const dBranch = (d.chi_nhanh || '').trim().toUpperCase();
+            return dBranch === activeBranch;
+        }
+        return true;
+    });
+
+    if (matchingDetails.length > 0) {
+        const sumNhap = matchingDetails.reduce((acc, r) => acc + (Number(r.tong_nhap) || 0), 0);
+        const sumXuat = matchingDetails.reduce((acc, r) => acc + (Number(r.tong_xuat) || 0), 0);
+        const sumTonCuoi = matchingDetails.reduce((acc, r) => acc + (Number(r.ton_kho) || 0), 0);
+        const sumTonDau = sumTonCuoi - sumNhap + sumXuat;
+
+        return {
+            ton_dau: Math.max(0, sumTonDau),
+            nhap: sumNhap,
+            xuat: sumXuat,
+            ton_cuoi: sumTonCuoi,
+            details: matchingDetails
+        };
+    }
+
+    if (activeBranch && activeBranch !== 'all') {
+        return {
+            ton_dau: 0,
+            nhap: 0,
+            xuat: 0,
+            ton_cuoi: 0,
+            details: []
+        };
+    }
+
+    const tonDau = Number(item.ton_dau) || 0;
+    const nhap = Number(item.nhap) || 0;
+    const xuat = Number(item.xuat) || 0;
+    const tonCuoi = Number(item.ton_cuoi) ?? (tonDau + nhap - xuat);
+    return {
+        ton_dau: tonDau,
+        nhap: nhap,
+        xuat: xuat,
+        ton_cuoi: tonCuoi,
+        details: []
+    };
+}
+
+function toggleVatTuSubRow(itemId, event) {
+    if (event) event.stopPropagation();
+    const strId = String(itemId);
+    if (expandedVatTuRows.has(strId)) {
+        expandedVatTuRows.delete(strId);
+    } else {
+        expandedVatTuRows.add(strId);
+    }
+    renderCurrentPageData();
+}
+
+// Fetch Data from Supabase table 'san_pham' & view 'ton_kho_detail'
+// Helper to deduplicate master product records by ID or barcode
+function deduplicateVatTuData(rawList) {
+    if (!Array.isArray(rawList) || rawList.length === 0) return [];
+    const map = new Map();
+    rawList.forEach(item => {
+        const key = item.id ? `id_${item.id}` : (item.ma_vach ? `barcode_${String(item.ma_vach).trim().toLowerCase()}` : null);
+        if (!key) {
+            map.set(Symbol(), item);
+        } else if (!map.has(key)) {
+            map.set(key, item);
+        }
+    });
+    return Array.from(map.values());
+}
+
 async function fetchVatTuData() {
     showVatTuLoading(true);
     const client = getVatTuSupabaseClient();
@@ -253,34 +459,49 @@ async function fetchVatTuData() {
     if (!client) {
         console.warn("GAIA VatTu: Supabase client not available.");
         vatTuData = [];
+        tonKhoDetailData = [];
         showVatTuLoading(false);
         renderVatTuView(vatTuData);
         return;
     }
 
     try {
-        const { data, error } = await client
-            .from('san_pham')
-            .select('*')
-            .order('id', { ascending: false });
+        // Query view_vattu_tong_hop (with fallback to san_pham) and ton_kho_detail concurrently
+        const [resView, resDetail] = await Promise.all([
+            client.from('view_vattu_tong_hop').select('*'),
+            client.from('ton_kho_detail').select('*')
+        ]);
 
-        if (error) {
-            console.warn("GAIA VatTu: Could not fetch from Supabase table 'san_pham'.", error.message);
-            vatTuData = [];
+        if (resView.error) {
+            console.warn("GAIA VatTu: Could not fetch from view_vattu_tong_hop, falling back to san_pham:", resView.error.message);
+            const resSp = await client.from('san_pham').select('*').order('id', { ascending: false });
+            vatTuData = deduplicateVatTuData(resSp.data || []);
         } else {
-            vatTuData = data || [];
+            vatTuData = deduplicateVatTuData(resView.data || []);
         }
+
+        if (resDetail.error) {
+            console.warn("GAIA VatTu: Could not fetch from ton_kho_detail:", resDetail.error.message);
+            tonKhoDetailData = [];
+        } else {
+            tonKhoDetailData = resDetail.data || [];
+        }
+
         window.vatTuData = vatTuData;
+        window.tonKhoDetailData = tonKhoDetailData;
+
+        await initVatTuBranchFilterForManager();
     } catch (err) {
         console.error("GAIA VatTu: Unexpected error fetching data:", err);
         vatTuData = [];
+        tonKhoDetailData = [];
     } finally {
         showVatTuLoading(false);
         renderVatTuView(vatTuData);
     }
 }
 
-// Supabase Realtime Subscription for 100% Realtime Updates on table 'san_pham'
+// Supabase Realtime Subscription for 100% Realtime Updates on tables 'san_pham' & 'nhap_xuat'
 let vattuRealtimeChannel = null;
 
 function setupVatTuRealtimeSubscription() {
@@ -289,12 +510,20 @@ function setupVatTuRealtimeSubscription() {
 
     try {
         vattuRealtimeChannel = client
-            .channel('realtime-san-pham')
+            .channel('realtime-vattu-all')
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'san_pham' },
                 (payload) => {
-                    console.log("GAIA VatTu: Realtime database change received!", payload);
+                    console.log("GAIA VatTu: Realtime san_pham database change received!", payload);
+                    fetchVatTuDataSilently();
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'nhap_xuat' },
+                (payload) => {
+                    console.log("GAIA VatTu: Realtime nhap_xuat database change received!", payload);
                     fetchVatTuDataSilently();
                 }
             )
@@ -310,15 +539,28 @@ async function fetchVatTuDataSilently() {
     const client = getVatTuSupabaseClient();
     if (!client) return;
     try {
-        const { data, error } = await client
-            .from('san_pham')
-            .select('*')
-            .order('id', { ascending: false });
+        const [resView, resDetail] = await Promise.all([
+            client.from('view_vattu_tong_hop').select('*'),
+            client.from('ton_kho_detail').select('*')
+        ]);
 
-        if (!error && data) {
-            vatTuData = data;
-            renderVatTuView(vatTuData);
+        if (!resView.error && resView.data) {
+            vatTuData = deduplicateVatTuData(resView.data);
+            window.vatTuData = vatTuData;
+        } else {
+            const resSp = await client.from('san_pham').select('*').order('id', { ascending: false });
+            if (!resSp.error && resSp.data) {
+                vatTuData = deduplicateVatTuData(resSp.data);
+                window.vatTuData = vatTuData;
+            }
         }
+
+        if (!resDetail.error && resDetail.data) {
+            tonKhoDetailData = resDetail.data;
+            window.tonKhoDetailData = tonKhoDetailData;
+        }
+
+        renderVatTuView(vatTuData);
     } catch (err) {
         console.error("GAIA VatTu: Error in silent realtime fetch:", err);
     }
@@ -344,11 +586,12 @@ function renderVatTuStats(allData) {
     const today = new Date().toISOString().split('T')[0];
 
     allData.forEach(item => {
-        const qty = Number(item.so_luong_ton) || 0;
+        const stats = computeProductBranchStats(item);
+        const tonCuoi = stats.ton_cuoi;
         const price = Number(item.gia_von_ton_kho_trung_binh) || 0;
-        const val = Number(item.tong_ton_kho) || (qty * price);
+        const val = tonCuoi * price;
 
-        totalQty += qty;
+        totalQty += tonCuoi;
         totalVal += val;
 
         const expDate = item.date ? String(item.date) : '';
@@ -358,7 +601,7 @@ function renderVatTuStats(allData) {
             if (diffDays <= 30) isExpiringSoon = true;
         }
 
-        if (qty <= 10 || isExpiringSoon) {
+        if (tonCuoi <= 10 || isExpiringSoon) {
             warningCount++;
         }
     });
@@ -410,7 +653,8 @@ function applyVatTuFilters() {
 
         const matchCat = (catVal === 'all') || (item.danh_muc === catVal);
 
-        const qty = Number(item.so_luong_ton) || 0;
+        const stats = computeProductBranchStats(item);
+        const qty = stats.ton_cuoi;
         let matchStatus = true;
         if (statusVal === 'in_stock') matchStatus = qty > 10;
         else if (statusVal === 'low_stock') matchStatus = qty > 0 && qty <= 10;
@@ -422,6 +666,9 @@ function applyVatTuFilters() {
         for (const [colKey, selectedSet] of Object.entries(vattuColumnFilters)) {
             if (!selectedSet || selectedSet.size === 0) continue;
             let rawVal = item[colKey];
+            if (['ton_dau', 'nhap', 'xuat', 'ton_cuoi'].includes(colKey)) {
+                rawVal = stats[colKey];
+            }
             let valStr = (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-') ? '(Trống)' : String(rawVal).trim();
             if (!selectedSet.has(valStr)) {
                 return false;
@@ -435,6 +682,12 @@ function applyVatTuFilters() {
     if (vattuSortColumn && vattuSortDirection !== 'none') {
         const dir = vattuSortDirection === 'asc' ? 1 : -1;
         filteredVatTuData.sort((a, b) => {
+            if (['ton_dau', 'nhap', 'xuat', 'ton_cuoi'].includes(vattuSortColumn)) {
+                const statA = computeProductBranchStats(a)[vattuSortColumn];
+                const statB = computeProductBranchStats(b)[vattuSortColumn];
+                return (statA - statB) * dir;
+            }
+
             const valA = a[vattuSortColumn];
             const valB = b[vattuSortColumn];
 
@@ -445,7 +698,7 @@ function applyVatTuFilters() {
             if (emptyA) return 1;
             if (emptyB) return -1;
 
-            if (['so_luong_nhap', 'so_luong_ton', 'gia_von_ton_kho_trung_binh', 'tong_ton_kho'].includes(vattuSortColumn)) {
+            if (['gia_von_ton_kho_trung_binh'].includes(vattuSortColumn)) {
                 return ((Number(valA) || 0) - (Number(valB) || 0)) * dir;
             }
 
@@ -461,8 +714,18 @@ function applyVatTuFilters() {
     renderCurrentPageData();
 }
 
+let isResizingColumn = false;
+
 // 3-State Column Header Sort Click Handler (A-Z -> Z-A -> Ban đầu)
-function handleHeaderSortClick(colKey) {
+function handleHeaderSortClick(colKey, event) {
+    if (isResizingColumn) return;
+    if (event) {
+        const target = event.target;
+        if (target && (target.classList.contains('col-resizer') || target.closest('.col-resizer') || target.closest('.col-filter-btn'))) {
+            return;
+        }
+    }
+
     if (vattuSortColumn === colKey) {
         if (vattuSortDirection === 'none') {
             vattuSortDirection = 'asc';
@@ -578,7 +841,8 @@ function getAvailableOptionsForColumn(colKey) {
 
         const matchCat = (catVal === 'all') || (item.danh_muc === catVal);
 
-        const qty = Number(item.so_luong_ton) || 0;
+        const stats = computeProductBranchStats(item);
+        const qty = stats.ton_cuoi;
         let matchStatus = true;
         if (statusVal === 'in_stock') matchStatus = qty > 10;
         else if (statusVal === 'low_stock') matchStatus = qty > 0 && qty <= 10;
@@ -591,6 +855,9 @@ function getAvailableOptionsForColumn(colKey) {
             if (otherCol === colKey) continue;
             if (!selectedSet || selectedSet.size === 0) continue;
             let rawVal = item[otherCol];
+            if (['ton_dau', 'nhap', 'xuat', 'ton_cuoi'].includes(otherCol)) {
+                rawVal = stats[otherCol];
+            }
             let valStr = (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-') ? '(Trống)' : String(rawVal).trim();
             if (!selectedSet.has(valStr)) return false;
         }
@@ -601,6 +868,9 @@ function getAvailableOptionsForColumn(colKey) {
     const countsMap = new Map();
     subset.forEach(item => {
         let rawVal = item[colKey];
+        if (['ton_dau', 'nhap', 'xuat', 'ton_cuoi'].includes(colKey)) {
+            rawVal = computeProductBranchStats(item)[colKey];
+        }
         let valStr = (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-') ? '(Trống)' : String(rawVal).trim();
         countsMap.set(valStr, (countsMap.get(valStr) || 0) + 1);
     });
@@ -772,9 +1042,11 @@ function renderVatTuTableHeader() {
     const thead = document.getElementById('vattu-table-head');
     if (!thead) return;
 
+    const visibleCols = currentVatTuCols.filter(c => c.visible);
+
     let trHtml = '<tr>';
-    currentVatTuCols.forEach(col => {
-        if (!col.visible) return;
+    visibleCols.forEach((col, visIdx) => {
+        const { style: stickyStyle, className: stickyClass } = getStickyColMeta(visIdx, visibleCols, true);
 
         const sortActiveAsc = vattuSortColumn === col.key && vattuSortDirection === 'asc' ? 'sort-active-asc' : '';
         const sortActiveDesc = vattuSortColumn === col.key && vattuSortDirection === 'desc' ? 'sort-active-desc' : '';
@@ -782,7 +1054,7 @@ function renderVatTuTableHeader() {
         let filterBadgeHtml = `<span class="filter-badge" id="filter-badge-${col.key}" style="display:none;">0</span>`;
 
         trHtml += `
-            <th data-sort-col="${col.key}" class="sortable-th ${sortActiveAsc} ${sortActiveDesc}" style="width: ${col.width}; min-width: ${col.minWidth}; text-align: ${col.align};" onclick="handleHeaderSortClick('${col.key}')">
+            <th data-sort-col="${col.key}" class="sortable-th ${sortActiveAsc} ${sortActiveDesc} ${stickyClass}" style="width: ${col.width}; min-width: ${col.minWidth}; text-align: ${col.align}; ${stickyStyle}" onclick="handleHeaderSortClick('${col.key}', event)">
                 <div class="th-content" style="justify-content: ${col.align === 'right' ? 'flex-end' : 'flex-start'}; pointer-events: none;">
                     <span class="th-title-text">${escapeHtml(col.title)}</span>
                     <div class="th-actions" style="pointer-events: auto;">
@@ -834,42 +1106,60 @@ function renderVatTuTable(items) {
 
     items.forEach(item => {
         const tr = document.createElement('tr');
-        const qtyTon = Number(item.so_luong_ton) || 0;
-        const qtyNhap = Number(item.so_luong_nhap) || 0;
+        const stats = computeProductBranchStats(item);
+        const isExpanded = expandedVatTuRows.has(String(item.id));
+        const hasDetails = stats.details && stats.details.length > 0;
         const giaVon = Number(item.gia_von_ton_kho_trung_binh) || 0;
-        const tongVal = Number(item.tong_ton_kho) || (qtyTon * giaVon);
+
+        if (isExpanded) tr.classList.add('is-expanded');
 
         let trHtml = '';
 
-        currentVatTuCols.forEach(col => {
-            if (!col.visible) return;
+        const visibleCols = currentVatTuCols.filter(c => c.visible);
+
+        visibleCols.forEach((col, visIdx) => {
+            const { style: stickyStyle, className: stickyClass } = getStickyColMeta(visIdx, visibleCols);
 
             let cellContent = '';
 
             if (col.key === 'ma_vach') {
-                cellContent = `<code class="vattu-barcode-code">${escapeHtml(item.ma_vach || '-')}</code>`;
+                let toggleBtn = '';
+                if (hasDetails) {
+                    toggleBtn = `
+                        <button type="button" class="btn-subrow-toggle ${isExpanded ? 'active' : ''}" title="${isExpanded ? 'Thu gọn' : 'Xem chi tiết nhánh con'}" onclick="toggleVatTuSubRow('${item.id}', event)">
+                            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>`;
+                } else {
+                    toggleBtn = `<span style="display: inline-block; width: 22px;"></span>`;
+                }
+
+                cellContent = `<div style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">${toggleBtn}<code class="vattu-barcode-code" style="flex-shrink: 0;">${escapeHtml(item.ma_vach || '-')}</code></div>`;
             } else if (col.key === 'ten_mat_hang') {
                 cellContent = `<strong>${formatTruncateCell(item.ten_mat_hang, '-')}</strong>`;
             } else if (col.key === 'danh_muc') {
                 cellContent = `<span class="vattu-cat-tag">${escapeHtml(item.danh_muc || 'Khác')}</span>`;
             } else if (col.key === 'don_vi') {
                 cellContent = `<span class="vattu-unit-pill">${escapeHtml(item.don_vi || '-')}</span>`;
-            } else if (col.key === 'so_luong_nhap') {
-                cellContent = qtyNhap.toLocaleString('vi-VN');
-            } else if (col.key === 'so_luong_ton') {
+            } else if (col.key === 'ton_dau') {
+                cellContent = stats.ton_dau.toLocaleString('vi-VN');
+            } else if (col.key === 'nhap' || col.key === 'so_luong_nhap') {
+                cellContent = stats.nhap.toLocaleString('vi-VN');
+            } else if (col.key === 'xuat') {
+                cellContent = stats.xuat.toLocaleString('vi-VN');
+            } else if (col.key === 'ton_cuoi' || col.key === 'so_luong_ton') {
+                const qtyTon = stats.ton_cuoi;
                 if (qtyTon <= 0) cellContent = `<span class="badge-stock badge-stock-empty">Hết hàng (0)</span>`;
                 else if (qtyTon <= 10) cellContent = `<span class="badge-stock badge-stock-low">${qtyTon} (Sắp hết)</span>`;
-                else cellContent = `<span class="vattu-stock-val">${qtyTon}</span>`;
+                else cellContent = `<span class="vattu-stock-val">${qtyTon.toLocaleString('vi-VN')}</span>`;
             } else if (col.key === 'gia_von_ton_kho_trung_binh') {
                 cellContent = `<span style="font-weight: 600;">${formatVND(giaVon)}</span>`;
-            } else if (col.key === 'tong_ton_kho') {
-                cellContent = `<span style="font-weight: 700; color: #10b981;">${formatVND(tongVal)}</span>`;
             } else {
-                // Default fallback for other text columns (Truncated)
                 cellContent = formatTruncateCell(item[col.key], '-');
             }
 
-            trHtml += `<td style="text-align: ${col.align};">${cellContent}</td>`;
+            trHtml += `<td style="text-align: ${col.align}; ${stickyStyle}" class="${stickyClass}">${cellContent}</td>`;
         });
 
         // Add sticky actions
@@ -894,6 +1184,51 @@ function renderVatTuTable(items) {
 
         tr.innerHTML = trHtml;
         tbody.appendChild(tr);
+
+        // Render Expanded Child Rows directly aligned with main table columns if active & details exist
+        if (isExpanded && hasDetails) {
+            stats.details.forEach((d, idx) => {
+                const isLast = idx === stats.details.length - 1;
+                const branchTreeIcon = isLast ? '└──' : '├──';
+                const dTonDau = Math.max(0, (Number(d.ton_kho)||0) - (Number(d.tong_nhap)||0) + (Number(d.tong_xuat)||0));
+                const childTr = document.createElement('tr');
+                childTr.className = 'vattu-child-detail-row';
+
+                let childTrHtml = '';
+
+                visibleCols.forEach((col, visIdx) => {
+                    const { style: stickyStyle, className: stickyClass } = getStickyColMeta(visIdx, visibleCols);
+
+                    let cellContent = '';
+
+                    if (col.key === 'ma_vach') {
+                        cellContent = `<div style="padding-left: 20px; display: inline-flex; align-items: center; gap: 6px;"><span style="color: #3b82f6; font-weight: bold; font-family: monospace; font-size: 14px;">${branchTreeIcon}</span> <span class="subrow-branch-badge">📍 ${escapeHtml(d.chi_nhanh || '-')}</span></div>`;
+                    } else if (col.key === 'ten_mat_hang') {
+                        cellContent = `<span class="subrow-label">LOT: <strong class="subrow-value">${escapeHtml(d.lot || '-')}</strong></span>`;
+                    } else if (col.key === 'ten_hoa_don') {
+                        cellContent = `<span class="subrow-label">Hạn SD: <strong class="subrow-value">${escapeHtml(d.date_expiry || '-')}</strong></span>`;
+                    } else if (col.key === 'ton_dau') {
+                        cellContent = `<span class="subrow-value">${dTonDau.toLocaleString('vi-VN')}</span>`;
+                    } else if (col.key === 'nhap' || col.key === 'so_luong_nhap') {
+                        cellContent = `<span style="color: #10b981; font-weight: 700;">${(Number(d.tong_nhap)||0).toLocaleString('vi-VN')}</span>`;
+                    } else if (col.key === 'xuat') {
+                        cellContent = `<span style="color: #ef4444; font-weight: 700;">${(Number(d.tong_xuat)||0).toLocaleString('vi-VN')}</span>`;
+                    } else if (col.key === 'ton_cuoi' || col.key === 'so_luong_ton') {
+                        cellContent = `<span style="font-weight: 800; color: #3b82f6;">${(Number(d.ton_kho)||0).toLocaleString('vi-VN')}</span>`;
+                    } else {
+                        cellContent = `<span class="subrow-empty">-</span>`;
+                    }
+
+                    childTrHtml += `<td style="text-align: ${col.align}; ${stickyStyle}" class="${stickyClass}">${cellContent}</td>`;
+                });
+
+                // Empty sticky actions td for child row
+                childTrHtml += `<td style="text-align: center;" class="sticky-action-td"></td>`;
+
+                childTr.innerHTML = childTrHtml;
+                tbody.appendChild(childTr);
+            });
+        }
     });
 }
 
@@ -964,36 +1299,69 @@ function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx)
     btnsContainer.appendChild(btnNext);
 }
 
-// Requirement 5: Resizable Columns Dragging Handler (AppSheet Style)
+// Requirement 5: Resizable Columns Dragging Handler (AppSheet Style - Fixed persistence)
 function initColumnResizing() {
-    const resizers = document.querySelectorAll('.col-resizer');
+    const resizers = document.querySelectorAll('.vattu-table .col-resizer, #vattu-table .col-resizer, .col-resizer');
     resizers.forEach(resizer => {
         const th = resizer.parentElement;
+        if (!th) return;
         let startX, startWidth;
 
         const onMouseMove = (e) => {
             if (!startX) return;
+            isResizingColumn = true;
             const diffX = e.pageX - startX;
-            const newWidth = Math.max(60, startWidth + diffX);
+            const newWidth = Math.max(50, startWidth + diffX);
             th.style.width = `${newWidth}px`;
             th.style.minWidth = `${newWidth}px`;
+
+            const colKey = th.getAttribute('data-sort-col');
+            if (colKey && typeof currentVatTuCols !== 'undefined' && Array.isArray(currentVatTuCols)) {
+                const colObj = currentVatTuCols.find(c => c.key === colKey);
+                if (colObj) {
+                    colObj.width = `${newWidth}px`;
+                    colObj.minWidth = `${newWidth}px`;
+                }
+            }
         };
 
-        const onMouseUp = () => {
+        const onMouseUp = (e) => {
+            if (!startX) return;
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
             startX = null;
             resizer.classList.remove('resizing');
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
+
+            if (typeof currentVatTuCols !== 'undefined' && Array.isArray(currentVatTuCols)) {
+                try {
+                    localStorage.setItem('gaia_vattu_columns_v7', JSON.stringify(currentVatTuCols));
+                } catch (err) {}
+            }
+
+            // Keep flag active briefly so mouseup click event does not trigger A-Z sorting
+            setTimeout(() => {
+                isResizingColumn = false;
+            }, 250);
         };
 
         resizer.addEventListener('mousedown', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            isResizingColumn = true;
             startX = e.pageX;
             startWidth = th.offsetWidth;
             resizer.classList.add('resizing');
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
+        });
+
+        resizer.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
         });
     });
 }
@@ -1118,10 +1486,11 @@ function openEditVatTuModal(id) {
     document.getElementById('input-vattu-phan-loai').value = item.phan_loai || '';
     document.getElementById('input-vattu-don-vi').value = item.don_vi || '';
     document.getElementById('input-vattu-cach-dung').value = item.cach_dung || '';
-    document.getElementById('input-vattu-so-luong-nhap').value = item.so_luong_nhap ?? 0;
-    document.getElementById('input-vattu-so-luong-ton').value = item.so_luong_ton ?? 0;
-    document.getElementById('input-vattu-gia-von').value = item.gia_von_ton_kho_trung_binh ?? 0;
-    document.getElementById('input-vattu-tong-ton-kho').value = item.tong_ton_kho ?? ((item.so_luong_ton || 0) * (item.gia_von_ton_kho_trung_binh || 0));
+    if (document.getElementById('input-vattu-ton-dau')) document.getElementById('input-vattu-ton-dau').value = item.ton_dau ?? 0;
+    if (document.getElementById('input-vattu-nhap')) document.getElementById('input-vattu-nhap').value = item.nhap ?? item.so_luong_nhap ?? 0;
+    if (document.getElementById('input-vattu-xuat')) document.getElementById('input-vattu-xuat').value = item.xuat ?? 0;
+    if (document.getElementById('input-vattu-ton-cuoi')) document.getElementById('input-vattu-ton-cuoi').value = item.ton_cuoi ?? item.so_luong_ton ?? 0;
+    if (document.getElementById('input-vattu-gia-von')) document.getElementById('input-vattu-gia-von').value = item.gia_von_ton_kho_trung_binh ?? 0;
 
     if (modal) modal.classList.add('show');
 }
@@ -1146,10 +1515,12 @@ async function handleSaveVatTuForm(e) {
     const phanLoai = document.getElementById('input-vattu-phan-loai').value.trim();
     const donVi = document.getElementById('input-vattu-don-vi').value.trim();
     const cachDung = document.getElementById('input-vattu-cach-dung').value.trim();
-    const soLuongNhap = parseFloat(document.getElementById('input-vattu-so-luong-nhap').value) || 0;
-    const soLuongTon = parseFloat(document.getElementById('input-vattu-so-luong-ton').value) || 0;
-    const giaVon = parseFloat(document.getElementById('input-vattu-gia-von').value) || 0;
-    const tongTonKho = parseFloat(document.getElementById('input-vattu-tong-ton-kho').value) || (soLuongTon * giaVon);
+    
+    const tonDau = parseFloat(document.getElementById('input-vattu-ton-dau')?.value) || 0;
+    const nhapVal = parseFloat(document.getElementById('input-vattu-nhap')?.value) || 0;
+    const xuatVal = parseFloat(document.getElementById('input-vattu-xuat')?.value) || 0;
+    const tonCuoi = parseFloat(document.getElementById('input-vattu-ton-cuoi')?.value) || (tonDau + nhapVal - xuatVal);
+    const giaVon = parseFloat(document.getElementById('input-vattu-gia-von')?.value) || 0;
 
     let isValid = true;
 
@@ -1188,10 +1559,11 @@ async function handleSaveVatTuForm(e) {
         phan_loai: phanLoai || null,
         don_vi: donVi || null,
         cach_dung: cachDung || null,
-        so_luong_nhap: soLuongNhap,
-        so_luong_ton: soLuongTon,
-        gia_von_ton_kho_trung_binh: giaVon,
-        tong_ton_kho: tongTonKho
+        ton_dau: tonDau,
+        nhap: nhapVal,
+        xuat: xuatVal,
+        ton_cuoi: tonCuoi,
+        gia_von_ton_kho_trung_binh: giaVon
     };
 
     const client = getVatTuSupabaseClient();
@@ -1328,14 +1700,14 @@ function downloadExcelWorkbook(workbook, fileName) {
     }
 }
 
-// Download Excel Sample Template (.xlsx) - Only Header Columns
+// Download Excel Sample Template (.xlsx) - Form mới nhất kèm các cột tiêu đề & 2 dòng mẫu
 function downloadVatTuExcelTemplate() {
     if (typeof XLSX === 'undefined') {
         showVatTuNoticeModal('warning', 'Chưa Sẵn Sàng', 'Thư viện SheetJS chưa sẵn sàng. Vui lòng kiểm tra kết nối mạng!');
         return;
     }
 
-    const headers = [
+    const templateRows = [
         [
             "STT",
             "Mã Vạch",
@@ -1347,14 +1719,49 @@ function downloadVatTuExcelTemplate() {
             "Phân Loại",
             "Đơn Vị",
             "Cách Dùng",
-            "Số Lượng Nhập",
-            "Số Lượng Tồn",
-            "Giá Vốn Trung Bình (đ)",
-            "Tổng Tồn Kho (đ)"
+            "Đầu",
+            "Nhập",
+            "Xuất",
+            "Cuối",
+            "Giá Vốn TB"
+        ],
+        [
+            1,
+            "300000000197",
+            "Povidine 10% 500ml",
+            "Povidine 10% 500ml",
+            "Pharmedic",
+            "Thuốc",
+            "Vật tư y tế",
+            "Khác",
+            "Chai",
+            "Sát trùng vết thương ngoài da",
+            10,
+            50,
+            5,
+            55,
+            45000
+        ],
+        [
+            2,
+            "8935110200625",
+            "Vinco-Forte 100ml",
+            "Vinco-Forte 100ml",
+            "Vinco",
+            "Thuốc",
+            "Thuốc thú y",
+            "Khác",
+            "Chai",
+            "Tiêm bắp hoặc pha nước uống",
+            5,
+            20,
+            2,
+            23,
+            120000
         ]
     ];
 
-    const worksheet = XLSX.utils.aoa_to_sheet(headers);
+    const worksheet = XLSX.utils.aoa_to_sheet(templateRows);
 
     const colWidths = [
         { wch: 6 },  // STT
@@ -1367,10 +1774,11 @@ function downloadVatTuExcelTemplate() {
         { wch: 16 }, // Phân Loại
         { wch: 10 }, // Đơn Vị
         { wch: 34 }, // Cách Dùng
-        { wch: 15 }, // Số Lượng Nhập
-        { wch: 15 }, // Số Lượng Tồn
-        { wch: 22 }, // Giá Vốn TB
-        { wch: 22 }  // Tổng Tồn Kho
+        { wch: 10 }, // Đầu
+        { wch: 10 }, // Nhập
+        { wch: 10 }, // Xuất
+        { wch: 10 }, // Cuối
+        { wch: 18 }  // Giá Vốn TB
     ];
     worksheet['!cols'] = colWidths;
 
@@ -1387,8 +1795,9 @@ function downloadVatTuExcelTemplate() {
     );
 }
 
-// Export Current Table Data to Excel (.xlsx)
+// Open Export Choice Modal
 function exportVatTuToExcel() {
+    console.log("GAIA VatTu: exportVatTuToExcel triggered!");
     if (!vatTuData || vatTuData.length === 0) {
         showVatTuNoticeModal('warning', 'Bảng Dữ Liệu Trống', 'Bảng hiện tại đang trống, chưa có mặt hàng nào để xuất file Excel!');
         return;
@@ -1399,51 +1808,102 @@ function exportVatTuToExcel() {
         return;
     }
 
-    const exportRows = vatTuData.map((item, index) => ({
-        "STT": index + 1,
-        "Mã Vạch": item.ma_vach || '',
-        "Tên Mặt Hàng": item.ten_mat_hang || '',
-        "Tên Hóa Đơn": item.ten_hoa_don || '',
-        "Nhà Sản Xuất": item.nha_san_xuat || '',
-        "Danh Mục": item.danh_muc || '',
-        "Nhóm Hàng": item.nhom_hang || '',
-        "Phân Loại": item.phan_loai || '',
-        "Đơn Vị": item.don_vi || '',
-        "Cách Dùng": item.cach_dung || '',
-        "Số Lượng Nhập": Number(item.so_luong_nhap) || 0,
-        "Số Lượng Tồn": Number(item.so_luong_ton) || 0,
-        "Giá Vốn Trung Bình (đ)": Number(item.gia_von_ton_kho_trung_binh) || 0,
-        "Tổng Tồn Kho (đ)": Number(item.tong_ton_kho) || 0
-    }));
+    const modal = document.getElementById('vattu-excel-export-modal');
+    if (!modal) {
+        console.warn("GAIA VatTu: modal vattu-excel-export-modal not found, falling back");
+        executeVatTuExcelExport('filtered');
+        return;
+    }
+
+    // Update count badges inside modal
+    const filteredCountEl = document.getElementById('export-filtered-count-badge');
+    if (filteredCountEl) filteredCountEl.textContent = `${filteredVatTuData ? filteredVatTuData.length : 0} dòng`;
+
+    const allCountEl = document.getElementById('export-all-count-badge');
+    if (allCountEl) allCountEl.textContent = `${vatTuData ? vatTuData.length : 0} dòng`;
+
+    modal.classList.add('show');
+}
+
+function closeVatTuExcelExportModal() {
+    const modal = document.getElementById('vattu-excel-export-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+// Execute Export based on selected mode ('filtered' or 'all')
+function executeVatTuExcelExport(type) {
+    closeVatTuExcelExportModal();
+
+    const targetData = (type === 'filtered') ? filteredVatTuData : vatTuData;
+
+    if (!targetData || targetData.length === 0) {
+        showVatTuNoticeModal('warning', 'Bảng Dữ Liệu Trống', 'Không có dòng dữ liệu nào phù hợp với tùy chọn này để xuất Excel!');
+        return;
+    }
+
+    if (typeof XLSX === 'undefined') {
+        showVatTuNoticeModal('warning', 'Chưa Sẵn Sàng', 'Thư viện SheetJS chưa sẵn sàng. Vui lòng kiểm tra kết nối mạng!');
+        return;
+    }
+
+    const activeBranchCode = getActiveVatTuBranchFilter();
+    const activeBranchName = (activeBranchCode && activeBranchCode !== 'all') ? activeBranchCode : 'Tất cả chi nhánh';
+
+    const exportRows = targetData.map((item, index) => {
+        const stats = computeProductBranchStats(item);
+        const tonDauVal = stats.ton_dau;
+
+        return {
+            "STT": index + 1,
+            "Chi Nhánh": activeBranchName,
+            "Mã Vạch": item.ma_vach || '',
+            "Tên Mặt Hàng": item.ten_mat_hang || '',
+            "Tên Hóa Đơn": item.ten_hoa_don || '',
+            "Đầu": tonDauVal,
+            "Nhập": Number(stats.nhap) || 0,
+            "Xuất": Number(stats.xuat) || 0,
+            "Cuối": Number(stats.ton_cuoi) || 0,
+            "Nhà Sản Xuất": item.nha_san_xuat || '',
+            "Danh Mục": item.danh_muc || '',
+            "Nhóm Hàng": item.nhom_hang || '',
+            "Phân Loại": item.phan_loai || '',
+            "Đơn Vị": item.don_vi || '',
+            "Cách Dùng": item.cach_dung || '',
+            "Giá Vốn TB (đ)": Number(item.gia_von_ton_kho_trung_binh) || 0
+        };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    
+
     const colWidths = [
         { wch: 6 },  // STT
-        { wch: 16 }, // Mã vạch
-        { wch: 32 }, // Tên mặt hàng
-        { wch: 24 }, // Tên hóa đơn
-        { wch: 22 }, // Nhà sản xuất
-        { wch: 16 }, // Danh mục
-        { wch: 18 }, // Nhóm hàng
-        { wch: 15 }, // Phân loại
-        { wch: 10 }, // Đơn vị
-        { wch: 26 }, // Cách dùng
-        { wch: 14 }, // SL Nhập
-        { wch: 14 }, // SL Tồn
-        { wch: 20 }, // Giá vốn TB
-        { wch: 20 }  // Tổng tồn kho
+        { wch: 18 }, // Chi Nhánh
+        { wch: 16 }, // Mã Vạch
+        { wch: 32 }, // Tên Mặt Hàng
+        { wch: 24 }, // Tên Hóa Đơn
+        { wch: 12 }, // Đầu
+        { wch: 12 }, // Nhập
+        { wch: 12 }, // Xuất
+        { wch: 12 }, // Cuối
+        { wch: 22 }, // Nhà Sản Xuất
+        { wch: 16 }, // Danh Mục
+        { wch: 18 }, // Nhóm Hàng
+        { wch: 15 }, // Phân Loại
+        { wch: 10 }, // Đơn Vị
+        { wch: 26 }, // Cách Dùng
+        { wch: 18 }  // Giá Vốn TB
     ];
     worksheet['!cols'] = colWidths;
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Kho Vat Tu");
 
+    const modeStr = type === 'filtered' ? 'Bo_Loc' : 'Toan_Bo';
     const todayStr = new Date().toISOString().split('T')[0];
-    const fileName = `Danh_Muc_Kho_Vat_Tu_GAIA_${todayStr}.xlsx`;
+    const fileName = `Danh_Muc_Kho_Vat_Tu_${modeStr}_${todayStr}.xlsx`;
 
     downloadExcelWorkbook(workbook, fileName);
-    console.log(`GAIA VatTu: Exported ${exportRows.length} items to ${fileName}`);
+    console.log(`GAIA VatTu: Exported ${exportRows.length} items (${type}) to ${fileName}`);
 }
 
 // Import Excel / CSV File
@@ -1526,10 +1986,11 @@ function handleExcelImportFile(e) {
                 const don_vi = getVal('Đơn vị', 'Đơn Vị', 'Don vi', 'don_vi', 'Unit') || 'Cái';
                 const cach_dung = getVal('Cách dùng', 'Cách Dùng', 'Cach dung', 'cach_dung', 'Usage');
 
-                const so_luong_nhap = getNum('Số lượng nhập', 'Số Lượng Nhập', 'So luong nhap', 'so_luong_nhap');
-                const so_luong_ton = getNum('Số lượng tồn', 'Số Lượng Tồn', 'So luong ton', 'so_luong_ton');
+                const ton_dau = getNum('Tồn đầu', 'Tồn Đầu', 'Ton dau', 'ton_dau');
+                const nhap = getNum('Nhập', 'NHẬP', 'Số lượng nhập', 'Số Lượng Nhập', 'So luong nhap', 'so_luong_nhap', 'nhap');
+                const xuat = getNum('Xuất', 'XUẤT', 'Số lượng xuất', 'Số Lượng Xuất', 'So luong xuat', 'so_luong_xuat', 'xuat');
+                const ton_cuoi = getNum('Tồn cuối', 'Tồn Cuối', 'Ton cuoi', 'Số lượng tồn', 'Số Lượng Tồn', 'So luong ton', 'so_luong_ton', 'ton_cuoi') || (ton_dau + nhap - xuat);
                 const gia_von_ton_kho_trung_binh = getNum('Giá vốn trung bình (đ)', 'Giá vốn trung bình', 'Giá vốn TB', 'Gia von', 'gia_von_ton_kho_trung_binh');
-                const tong_ton_kho = getNum('Tổng tồn kho (đ)', 'Tổng tồn kho', 'Tong ton kho', 'tong_ton_kho') || (so_luong_ton * gia_von_ton_kho_trung_binh);
 
                 return {
                     _excelRowNumber: idx + 2, // 1-indexed Excel row (row 1 is header)
@@ -1543,10 +2004,11 @@ function handleExcelImportFile(e) {
                         phan_loai: phan_loai || null,
                         don_vi: don_vi || null,
                         cach_dung: cach_dung || null,
-                        so_luong_nhap,
-                        so_luong_ton,
-                        gia_von_ton_kho_trung_binh,
-                        tong_ton_kho
+                        ton_dau,
+                        nhap,
+                        xuat,
+                        ton_cuoi,
+                        gia_von_ton_kho_trung_binh
                     }
                 };
             });
@@ -1733,12 +2195,83 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-// Custom App Notification / Dialog Modal Window (Replaces all browser alerts)
+// Custom App Notification Router
 function showVatTuNoticeModal(type, title, message, codeSnippet = '', secondaryAction = null) {
-    // Map type to toast type
-    const toastType = (type === 'error' || type === 'danger') ? 'error' : type;
-    showToast(toastType, title, message);
+    // ONLY show Modal Window Pop-up Overlay if secondaryAction is explicitly requested (e.g. Invalid Excel Structure error with "Tải Template Mẫu" button)
+    if (secondaryAction && secondaryAction.show) {
+        showVatTuNoticeModalWindow(type, title, message, codeSnippet, secondaryAction);
+    } else {
+        // ALL OTHER notifications slide in as sleek Toast Notifications!
+        showToast(type, title, message);
+    }
 }
+
+// Custom App Dialog Modal Window (Displays real confirmation modal overlay for Excel template downloads)
+function showVatTuNoticeModalWindow(type, title, message, codeSnippet = '', secondaryAction = null) {
+    let dialogOverlay = document.getElementById('vattu-notice-dialog-overlay');
+    if (!dialogOverlay) {
+        dialogOverlay = document.createElement('div');
+        dialogOverlay.id = 'vattu-notice-dialog-overlay';
+        dialogOverlay.className = 'modal-overlay';
+        dialogOverlay.style.cssText = 'display: none; z-index: 999999;';
+        document.body.appendChild(dialogOverlay);
+    }
+
+    const typeColors = {
+        error: { bg: 'linear-gradient(135deg, #1e293b, #0f172a)', border: '#ef4444', icon: '❌', btn: '#ef4444' },
+        warning: { bg: 'linear-gradient(135deg, #1e293b, #0f172a)', border: '#f59e0b', icon: '⚠️', btn: '#f59e0b' },
+        success: { bg: 'linear-gradient(135deg, #1e293b, #0f172a)', border: '#10b981', icon: '✅', btn: '#10b981' },
+        info: { bg: 'linear-gradient(135deg, #1e293b, #0f172a)', border: '#3b82f6', icon: 'ℹ️', btn: '#3b82f6' }
+    };
+
+    const config = typeColors[type] || typeColors.info;
+
+    let secondaryBtnHtml = '';
+    if (secondaryAction && secondaryAction.show) {
+        secondaryBtnHtml = `<button type="button" id="vattu-notice-sec-btn" class="btn-toolbar-excel" style="padding: 10px 18px; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; border-radius: 8px;">${escapeHtml(secondaryAction.text || 'Tải File Mẫu')}</button>`;
+    }
+
+    dialogOverlay.innerHTML = `
+        <div class="modal-content" style="max-width: 500px; border-radius: 14px; overflow: hidden; padding: 0; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); border-left: 5px solid ${config.border}; border-top: 1px solid var(--card-border);">
+            <div style="background: ${config.bg}; padding: 18px 22px; color: #fff; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--card-border);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 24px;">${config.icon}</span>
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #fff;">${escapeHtml(title || 'Thông Báo')}</h3>
+                </div>
+                <button type="button" onclick="closeVatTuNoticeDialogModal()" style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+            <div style="padding: 22px 24px; color: var(--text-color); font-size: 14px; line-height: 1.6;">
+                <div>${message}</div>
+                ${codeSnippet ? `<pre style="margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.15); border-radius: 8px; font-size: 12px; overflow-x: auto;"><code>${escapeHtml(codeSnippet)}</code></pre>` : ''}
+            </div>
+            <div style="padding: 14px 24px; border-top: 1px solid var(--card-border); display: flex; justify-content: flex-end; gap: 10px; background: rgba(0,0,0,0.03);">
+                ${secondaryBtnHtml}
+                <button type="button" onclick="closeVatTuNoticeDialogModal()" class="btn-toolbar-primary" style="padding: 10px 22px; font-weight: 700; font-size: 13px; cursor: pointer; border-radius: 8px;">Đóng</button>
+            </div>
+        </div>
+    `;
+
+    dialogOverlay.style.display = 'flex';
+    dialogOverlay.classList.add('show');
+
+    if (secondaryAction && secondaryAction.show && typeof secondaryAction.fn === 'function') {
+        const secBtn = document.getElementById('vattu-notice-sec-btn');
+        if (secBtn) {
+            secBtn.onclick = () => {
+                secondaryAction.fn();
+            };
+        }
+    }
+}
+
+function closeVatTuNoticeDialogModal() {
+    const dialogOverlay = document.getElementById('vattu-notice-dialog-overlay');
+    if (dialogOverlay) {
+        dialogOverlay.classList.remove('show');
+        dialogOverlay.style.display = 'none';
+    }
+}
+window.closeVatTuNoticeDialogModal = closeVatTuNoticeDialogModal;
 
 function showToast(type, title, message, duration = 4500) {
     // Ensure container exists
@@ -1834,6 +2367,7 @@ window.confirmDeleteVatTu = confirmDeleteVatTu;
 window.closeDeleteVatTuModal = closeDeleteVatTuModal;
 window.executeDeleteVatTu = executeDeleteVatTu;
 window.showVatTuNoticeModal = showVatTuNoticeModal;
+window.showVatTuNoticeModalWindow = showVatTuNoticeModalWindow;
 window.closeVatTuNoticeModal = closeVatTuNoticeModal;
 window.copyVatTuCodeSnippet = copyVatTuCodeSnippet;
 window.clearAllVatTuFilters = clearAllVatTuFilters;
@@ -1872,6 +2406,21 @@ function renderColConfigList() {
     
     listEl.innerHTML = '';
     
+    // Add Fixed Column Freeze control section at top of modal list
+    const freezeHeader = document.createElement('div');
+    freezeHeader.style.cssText = 'margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--card-border); display: flex; align-items: center; justify-content: space-between;';
+    freezeHeader.innerHTML = `
+        <label style="font-size: 13px; font-weight: 600; color: var(--text-color); display: flex; align-items: center; gap: 6px;">
+            📌 Số cột ghim cố định khi cuộn ngang:
+        </label>
+        <select id="vattu-fixed-cols-select" style="padding: 5px 10px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-color); font-weight: 600; font-size: 12px; cursor: pointer;">
+            <option value="0" ${vattuFixedColsCount === 0 ? 'selected' : ''}>0 cột (Không ghim)</option>
+            <option value="1" ${vattuFixedColsCount === 1 ? 'selected' : ''}>1 cột cố định</option>
+            <option value="2" ${vattuFixedColsCount === 2 ? 'selected' : ''}>2 cột cố định (Mặc định)</option>
+        </select>
+    `;
+    listEl.appendChild(freezeHeader);
+
     pendingVatTuColsConfig.forEach((col, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === pendingVatTuColsConfig.length - 1;
@@ -1930,7 +2479,14 @@ function renderColConfigList() {
 
 function saveColumnConfig() {
     currentVatTuCols = JSON.parse(JSON.stringify(pendingVatTuColsConfig));
-    localStorage.setItem('gaia_vattu_columns_v2', JSON.stringify(currentVatTuCols));
+    localStorage.setItem('gaia_vattu_columns_v7', JSON.stringify(currentVatTuCols));
+
+    const fixedSelect = document.getElementById('vattu-fixed-cols-select');
+    if (fixedSelect) {
+        vattuFixedColsCount = parseInt(fixedSelect.value, 10) || 0;
+        localStorage.setItem('gaia_vattu_fixed_cols', vattuFixedColsCount);
+    }
+
     closeColumnConfigModal();
     vattuCurrentPage = 1;
     applyVatTuFilters();

@@ -47,6 +47,39 @@ const defaultTheKhoCols = [
 
 let currentTheKhoCols = [];
 let pendingTheKhoColsConfig = [];
+let thekhoFixedColsCount = 2; // Default 2 pinned columns for Thẻ Kho
+
+function initTheKhoFixedColsConfig() {
+    try {
+        const saved = localStorage.getItem('gaia_thekho_fixed_cols');
+        if (saved !== null) {
+            thekhoFixedColsCount = parseInt(saved, 10);
+            if (isNaN(thekhoFixedColsCount) || thekhoFixedColsCount < 0) thekhoFixedColsCount = 2;
+        }
+    } catch(e) {
+        thekhoFixedColsCount = 2;
+    }
+}
+initTheKhoFixedColsConfig();
+
+function getTheKhoStickyColMeta(visIdx, visibleCols, isHeader = false) {
+    if (visIdx >= thekhoFixedColsCount) {
+        return { style: '', className: '' };
+    }
+
+    let left = 0;
+    for (let i = 0; i < visIdx; i++) {
+        const colWidth = parseInt(visibleCols[i].width, 10) || 120;
+        left += colWidth;
+    }
+
+    const isLastSticky = (visIdx === thekhoFixedColsCount - 1) || (visIdx === visibleCols.length - 1);
+    const className = `is-sticky-col ${isLastSticky ? 'is-sticky-col-last' : ''}`;
+    const zIndex = isHeader ? 30 : 15;
+    const style = `position: sticky; left: ${left}px; z-index: ${zIndex};`;
+
+    return { style, className };
+}
 
 function initTheKhoColumnsConfig() {
     try {
@@ -166,6 +199,7 @@ async function fetchTheKhoData() {
         theKhoData = getSampleTheKhoData();
     } finally {
         showTheKhoLoading(false);
+        await initTheKhoBranchFilterForManager();
         applyTheKhoFilters();
     }
 }
@@ -246,10 +280,69 @@ function setupTheKhoRealtimeSubscription() {
     }
 }
 
+// Init & Populate Manager Branch Filter for Thẻ Kho View
+async function initTheKhoBranchFilterForManager() {
+    const filterBranchSelect = document.getElementById('thekho-filter-branch');
+    if (!filterBranchSelect) return;
+
+    const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
+    const isStrictManager = (typeof window.isManagerRole === 'function') ? window.isManagerRole(loggedUser) : false;
+
+    if (!isStrictManager) {
+        filterBranchSelect.style.display = 'none';
+        return;
+    }
+
+    let branches = [];
+    if (typeof fetchBranchesFromStaffTable === 'function') {
+        branches = await fetchBranchesFromStaffTable();
+    } else {
+        try {
+            const saved = localStorage.getItem('gaia_staff_list');
+            if (saved) {
+                const list = JSON.parse(saved);
+                (list || []).forEach(s => {
+                    if (s.branch && s.branch !== 'Toàn hệ thống') branches.push(s.branch.trim());
+                });
+            }
+        } catch (e) {}
+    }
+
+    const uniqueBranches = Array.from(new Set(branches));
+
+    filterBranchSelect.innerHTML = `<option value="all">🏢 Tất cả chi nhánh</option>`;
+    uniqueBranches.forEach(bStr => {
+        let code = bStr;
+        if (typeof extractCNCodeFromBranchString === 'function') {
+            code = extractCNCodeFromBranchString(bStr);
+        }
+
+        let labelText = bStr.trim();
+        if (code) {
+            const doublePrefixRegex = new RegExp(`^(${code}\\s*-\\s*)+`, 'i');
+            labelText = labelText.replace(doublePrefixRegex, `${code} - `);
+            if (!labelText.toUpperCase().startsWith(code.toUpperCase())) {
+                labelText = `${code} - ${labelText}`;
+            }
+        }
+
+        const optionEl = document.createElement('option');
+        optionEl.value = code || bStr;
+        optionEl.textContent = `📍 ${labelText}`;
+        optionEl.title = bStr;
+        filterBranchSelect.appendChild(optionEl);
+    });
+
+    filterBranchSelect.style.display = 'inline-block';
+}
+
 // Filters & 3-State A-Z / Z-A Sorting Execution
 function applyTheKhoFilters() {
     const searchInput = document.getElementById('thekho-search-input');
     const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+    const filterBranchSelect = document.getElementById('thekho-filter-branch');
+    const selectedBranch = filterBranchSelect ? filterBranchSelect.value : 'all';
 
     let result = arraySearchTheKho(theKhoData, searchTerm);
 
@@ -257,6 +350,19 @@ function applyTheKhoFilters() {
     result = result.filter(item => {
         return (typeof window.canUserAccessRecord === 'function') ? window.canUserAccessRecord(item) : true;
     });
+
+    // Apply Manager Branch Filter Dropdown
+    if (selectedBranch && selectedBranch !== 'all') {
+        result = result.filter(x => {
+            let itemCN = '';
+            if (typeof extractCNCodeFromBranchString === 'function') {
+                itemCN = extractCNCodeFromBranchString(x.user_name || x.branch || '');
+            } else if (typeof window.extractCNCode === 'function') {
+                itemCN = window.extractCNCode(x.user_name || x.branch || '');
+            }
+            return itemCN.toUpperCase() === selectedBranch.toUpperCase();
+        });
+    }
 
     // Apply per-column popover filters
     for (const [colKey, selectedSet] of Object.entries(theKhoColumnFilters)) {
@@ -270,6 +376,7 @@ function applyTheKhoFilters() {
             return selectedSet.has(valStr);
         });
     }
+
 
     // Working 3-State Column A-Z, Z-A Sorting
     if (theKhoSortCol && theKhoSortDir) {
@@ -340,8 +447,10 @@ function renderTheKhoTableHeader() {
 
     thead.innerHTML = '';
 
-    currentTheKhoCols.forEach(col => {
-        if (!col.visible) return;
+    const visibleCols = currentTheKhoCols.filter(c => c.visible);
+
+    visibleCols.forEach((col, visIdx) => {
+        const { style: stickyStyle, className: stickyClass } = getTheKhoStickyColMeta(visIdx, visibleCols, true);
 
         const th = document.createElement('th');
         th.setAttribute('data-sort-col', col.key);
@@ -349,10 +458,13 @@ function renderTheKhoTableHeader() {
         const sortActiveAsc = theKhoSortCol === col.key && theKhoSortDir === 'asc' ? 'sort-active-asc' : '';
         const sortActiveDesc = theKhoSortCol === col.key && theKhoSortDir === 'desc' ? 'sort-active-desc' : '';
 
-        th.className = `sortable-th ${sortActiveAsc} ${sortActiveDesc}`;
+        th.className = `sortable-th ${sortActiveAsc} ${sortActiveDesc} ${stickyClass}`;
         th.style.width = col.width;
         th.style.minWidth = col.minWidth || '60px';
         th.style.textAlign = col.align;
+        if (stickyStyle) {
+            th.style.cssText += `; ${stickyStyle}`;
+        }
 
         const selectedSet = theKhoColumnFilters[col.key];
         const hasFilter = selectedSet && selectedSet.size > 0;
@@ -436,12 +548,14 @@ function renderTheKhoTable(items) {
     if (paginationBar) paginationBar.style.display = 'flex';
     if (emptyState) emptyState.style.display = 'none';
 
+    const visibleCols = currentTheKhoCols.filter(c => c.visible);
+
     items.forEach(item => {
         const tr = document.createElement('tr');
 
         let trHtml = '';
-        currentTheKhoCols.forEach(col => {
-            if (!col.visible) return;
+        visibleCols.forEach((col, visIdx) => {
+            const { style: stickyStyle, className: stickyClass } = getTheKhoStickyColMeta(visIdx, visibleCols);
 
             let cellContent = '';
 
@@ -474,7 +588,7 @@ function renderTheKhoTable(items) {
                 cellContent = formatTruncateCell(item[col.key], '-');
             }
 
-            trHtml += `<td style="text-align: ${col.align};">${cellContent}</td>`;
+            trHtml += `<td style="text-align: ${col.align}; ${stickyStyle}" class="${stickyClass}">${cellContent}</td>`;
         });
 
         tr.innerHTML = trHtml;
@@ -731,6 +845,9 @@ function clearAllTheKhoFilters() {
     const loaiFilter = document.getElementById('thekho-loai-filter');
     if (loaiFilter) loaiFilter.value = '';
 
+    const branchFilter = document.getElementById('thekho-filter-branch');
+    if (branchFilter) branchFilter.value = 'all';
+
     theKhoSortCol = null;
     theKhoSortDir = null;
     theKhoColumnFilters = {};
@@ -874,6 +991,21 @@ function renderTheKhoColConfigList() {
     if (!listEl) return;
     
     listEl.innerHTML = '';
+
+    // Add Fixed Column Freeze control section at top of modal list
+    const freezeHeader = document.createElement('div');
+    freezeHeader.style.cssText = 'margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--card-border); display: flex; align-items: center; justify-content: space-between;';
+    freezeHeader.innerHTML = `
+        <label style="font-size: 13px; font-weight: 600; color: var(--text-color); display: flex; align-items: center; gap: 6px;">
+            📌 Số cột ghim cố định khi cuộn ngang:
+        </label>
+        <select id="thekho-fixed-cols-select" style="padding: 5px 10px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-color); font-weight: 600; font-size: 12px; cursor: pointer;">
+            <option value="0" ${thekhoFixedColsCount === 0 ? 'selected' : ''}>0 cột (Không ghim)</option>
+            <option value="1" ${thekhoFixedColsCount === 1 ? 'selected' : ''}>1 cột cố định</option>
+            <option value="2" ${thekhoFixedColsCount === 2 ? 'selected' : ''}>2 cột cố định (Mặc định)</option>
+        </select>
+    `;
+    listEl.appendChild(freezeHeader);
     
     pendingTheKhoColsConfig.forEach((col, idx) => {
         const isFirst = idx === 0;
@@ -931,17 +1063,52 @@ function renderTheKhoColConfigList() {
 function saveTheKhoColumnConfig() {
     currentTheKhoCols = JSON.parse(JSON.stringify(pendingTheKhoColsConfig));
     localStorage.setItem('gaia_thekho_columns_v1', JSON.stringify(currentTheKhoCols));
+
+    const fixedSelect = document.getElementById('thekho-fixed-cols-select');
+    if (fixedSelect) {
+        thekhoFixedColsCount = parseInt(fixedSelect.value, 10) || 0;
+        localStorage.setItem('gaia_thekho_fixed_cols', thekhoFixedColsCount);
+    }
+
     closeTheKhoColumnConfigModal();
     theKhoCurrentPage = 1;
     applyTheKhoFilters();
 }
 
-// Export Current Filtered or Full Table Data to Excel (.xlsx)
+// Open Export Excel Choice Modal for Thẻ Kho
 function exportTheKhoToExcel() {
-    const dataToExport = theKhoFilteredData && theKhoFilteredData.length > 0 ? theKhoFilteredData : theKhoData;
+    const filteredCount = theKhoFilteredData ? theKhoFilteredData.length : 0;
+    const allCount = theKhoData ? theKhoData.length : 0;
 
-    if (!dataToExport || dataToExport.length === 0) {
-        showVatTuNoticeModal('warning', 'Bảng Dữ Liệu Trống', 'Không có dữ liệu nhật ký thẻ kho nào để xuất file Excel!');
+    const filteredBadge = document.getElementById('thekho-export-filtered-count-badge');
+    const allBadge = document.getElementById('thekho-export-all-count-badge');
+
+    if (filteredBadge) filteredBadge.textContent = `${filteredCount} dòng`;
+    if (allBadge) allBadge.textContent = `${allCount} dòng`;
+
+    const modal = document.getElementById('thekho-excel-export-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('show');
+    }
+}
+
+function closeTheKhoExcelExportModal() {
+    const modal = document.getElementById('thekho-excel-export-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
+}
+
+// Execute Export based on selected mode ('filtered' or 'all') for Thẻ Kho
+function executeTheKhoExcelExport(type) {
+    closeTheKhoExcelExportModal();
+
+    const targetData = (type === 'filtered') ? theKhoFilteredData : theKhoData;
+
+    if (!targetData || targetData.length === 0) {
+        showVatTuNoticeModal('warning', 'Bảng Dữ Liệu Trống', 'Không có dòng dữ liệu Thẻ Kho nào phù hợp với tùy chọn này để xuất Excel!');
         return;
     }
 
@@ -950,44 +1117,51 @@ function exportTheKhoToExcel() {
         return;
     }
 
-    const exportRows = dataToExport.map((item, index) => ({
-        "STT": index + 1,
-        "Mã QR": item.ma_qr || '',
-        "Mã Vạch": item.ma_vach || '',
-        "LOT": item.lot || '',
-        "Date": formatDate(item.date_expiry),
-        "Tên Hàng Hóa": item.ten_hang_hoa || '',
-        "Loại": item.loai || '',
-        "Số Lượng": Number(item.so_luong) || 0,
-        "Mục Đích / Ghi Chú": item.muc_dich || '',
-        "User": item.user_name || '',
-        "Time": formatDateTime(item.created_at)
-    }));
+    try {
+        const exportRows = targetData.map((item, index) => ({
+            "STT": index + 1,
+            "Mã Đơn": item.ma_don || '',
+            "Mã QR": item.ma_qr || '',
+            "Mã Vạch": item.ma_vach || '',
+            "LOT": item.lot || '',
+            "Date": formatDate(item.date_expiry),
+            "Tên Hàng Hóa": item.ten_hang_hoa || '',
+            "Loại": item.loai || '',
+            "Số Lượng": Number(item.so_luong) || 0,
+            "Mục Đích / Ghi Chú": item.muc_dich || '',
+            "User / Chi Nhánh": formatUserWithCN(item.user_name),
+            "Thời Gian": formatDateTime(item.created_at)
+        }));
 
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    
-    const colWidths = [
-        { wch: 6 },  // STT
-        { wch: 16 }, // Mã QR
-        { wch: 18 }, // Mã vạch
-        { wch: 14 }, // LOT
-        { wch: 14 }, // Date
-        { wch: 32 }, // Tên hàng hóa
-        { wch: 10 }, // Loại
-        { wch: 12 }, // Số lượng
-        { wch: 30 }, // Mục đích
-        { wch: 20 }, // User
-        { wch: 20 }  // Time
-    ];
-    worksheet['!cols'] = colWidths;
+        const worksheet = XLSX.utils.json_to_sheet(exportRows);
+        
+        const colWidths = [
+            { wch: 6 },  // STT
+            { wch: 18 }, // Mã Đơn
+            { wch: 16 }, // Mã QR
+            { wch: 18 }, // Mã Vạch
+            { wch: 14 }, // LOT
+            { wch: 14 }, // Date
+            { wch: 32 }, // Tên hàng hóa
+            { wch: 10 }, // Loại
+            { wch: 12 }, // Số lượng
+            { wch: 30 }, // Mục đích
+            { wch: 22 }, // User / Chi Nhánh
+            { wch: 20 }  // Thời Gian
+        ];
+        worksheet['!cols'] = colWidths;
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Nhat Ky The Kho");
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Nhat Ky The Kho");
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const fileName = `Nhat_Ky_The_Kho_GAIA_${todayStr}.xlsx`;
+        const todayStr = new Date().toISOString().split('T')[0];
+        const fileName = `Nhat_Ky_The_Kho_GAIA_${type === 'filtered' ? 'Bo_Loc' : 'Toan_Bo'}_${todayStr}.xlsx`;
 
-    downloadExcelWorkbook(workbook, fileName);
+        downloadExcelWorkbook(workbook, fileName);
+    } catch (err) {
+        console.error("TheKho: Error generating Excel workbook:", err);
+        showVatTuNoticeModal('error', 'Lỗi Xuất File Excel', 'Có lỗi xảy ra khi khởi tạo file Excel: ' + err.message);
+    }
 }
 
 // QR Modal Dialog Renderer
@@ -1100,4 +1274,7 @@ window.clearCurrentTheKhoColumnFilter = clearCurrentTheKhoColumnFilter;
 window.applyCurrentTheKhoColumnFilter = applyCurrentTheKhoColumnFilter;
 window.closeTheKhoColumnFilterDropdown = closeTheKhoColumnFilterDropdown;
 window.changeTheKhoPage = changeTheKhoPage;
+window.exportTheKhoToExcel = exportTheKhoToExcel;
+window.closeTheKhoExcelExportModal = closeTheKhoExcelExportModal;
+window.executeTheKhoExcelExport = executeTheKhoExcelExport;
 window.showTheKhoQrModal = showTheKhoQrModal;

@@ -570,7 +570,7 @@ window.isManagerRole = function (user) {
     const u = user || window.getCurrentLoggedUser();
     if (!u) return false;
     const roleLower = (u.role || "").toLowerCase().trim();
-    return roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower.includes("manager");
+    return roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower === "manager";
 };
 
 window.getUserBranch = function (userNameOrEmail) {
@@ -609,8 +609,8 @@ if (typeof window.extractCNCode !== 'function') {
         const str = String(branchStr).toUpperCase().trim();
         const match = str.match(/CN\s*(\d+)/) || str.match(/CHI\s*NHÁNH\s*(\d+)/) || str.match(/CƠ\s*SỞ\s*(\d+)/);
         if (match) return `CN${match[1]}`;
-        if (str.includes("TP.HCM") || str.includes("TPHCM") || str.includes("HỒ CHÍ MINH")) return "CN_TPHCM";
-        if (str.includes("HÀ NỘI") || str.includes("HANOI")) return "CN_HANOI";
+        if (str.includes("TP.HCM") || str.includes("TPHCM") || str.includes("HỒ CHÍ MINH")) return "CN1";
+        if (str.includes("HÀ NỘI") || str.includes("HANOI")) return "CN2";
         return str;
     };
 }
@@ -625,33 +625,55 @@ window.canUserAccessRecord = function (record) {
         return true;
     }
 
-    // Rule 2: Admin & Nhân Viên ONLY view data of their branch (via User branch)
-    const userBranch = loggedUser.branch || "Chi Nhánh TP.HCM";
-    const userCN = window.extractCNCode(userBranch);
+    // Rule 2: Admin & Nhân Viên ONLY view data of their own branch
+    let userBranchStr = loggedUser.branch || "";
+    if (!userBranchStr && typeof window.getUserBranch === 'function') {
+        userBranchStr = window.getUserBranch(loggedUser.full_name || loggedUser.email) || "";
+    }
 
-    if (!userBranch || userBranch === "Toàn hệ thống" || userBranch === "all") {
+    let userCN = '';
+    if (typeof window.extractCNCodeFromBranchString === 'function') {
+        userCN = window.extractCNCodeFromBranchString(userBranchStr);
+    } else {
+        userCN = window.extractCNCode(userBranchStr);
+    }
+
+    if (!userCN || userCN === "ALL" || userCN === "TOÀN HỆ THỐNG") {
         return true;
     }
 
     // Determine branch of the record creator/owner
-    let recordBranch = record.branch || record.chi_nhanh || "";
-    if (!recordBranch && record.user_name) {
-        recordBranch = window.getUserBranch(record.user_name);
+    let recordCN = '';
+    if (record.user_name) {
+        if (typeof window.extractCNCodeFromBranchString === 'function') {
+            recordCN = window.extractCNCodeFromBranchString(record.user_name);
+        }
     }
 
-    if (recordBranch) {
-        const recordCN = window.extractCNCode(recordBranch);
-        if (userCN && recordCN && userCN === recordCN) return true;
-        if (recordBranch.toLowerCase().trim() === userBranch.toLowerCase().trim()) return true;
+    if (!recordCN && (record.branch || record.chi_nhanh)) {
+        const b = record.branch || record.chi_nhanh;
+        if (typeof window.extractCNCodeFromBranchString === 'function') {
+            recordCN = window.extractCNCodeFromBranchString(b);
+        } else {
+            recordCN = window.extractCNCode(b);
+        }
     }
 
-    // Fallback: Check if record creator is the logged user themselves
-    if (record.user_name && loggedUser.full_name) {
-        const recordUser = record.user_name.toLowerCase().trim();
-        const me = loggedUser.full_name.toLowerCase().trim();
-        if (recordUser.includes(me) || me.includes(recordUser)) return true;
+    if (!recordCN && record.user_name) {
+        const userB = window.getUserBranch(record.user_name);
+        if (userB) {
+            if (typeof window.extractCNCodeFromBranchString === 'function') {
+                recordCN = window.extractCNCodeFromBranchString(userB);
+            } else {
+                recordCN = window.extractCNCode(userB);
+            }
+        }
     }
 
-    // If record branch matches user branch, allow access; otherwise restrict
-    return false;
+    if (userCN && recordCN) {
+        return userCN.toUpperCase() === recordCN.toUpperCase();
+    }
+
+    return true;
 };
+
