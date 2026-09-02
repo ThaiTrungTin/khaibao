@@ -1560,23 +1560,23 @@ body {
 
 /* Stacked left column in modal details */
 .detail-left-stack {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 20px;
     grid-column: 1 / -1;
 }
 
 /* Grid stack layout when HAS photos exist */
 .detail-two-col.has-photos .detail-left-stack {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 20px;
     grid-column: auto;
 }
 
 /* Responsive adjustments for modal grids under 900px screen width */
 @media (max-width: 900px) {
-    .detail-left-stack {
+    .detail-left-stack > div:first-child {
         grid-template-columns: 1fr !important;
     }
     .detail-two-col.has-photos {
