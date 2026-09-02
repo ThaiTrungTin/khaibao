@@ -1163,6 +1163,30 @@ function renderVatTuTable(items) {
             trHtml += `<td style="text-align: ${col.align}; ${stickyStyle}" class="${stickyClass}">${cellContent}</td>`;
         });
 
+        const hasTransaction = (
+            Number(stats.nhap || 0) !== 0 ||
+            Number(stats.xuat || 0) !== 0 ||
+            Number(stats.ton_cuoi || 0) !== 0 ||
+            Number(stats.ton_dau || 0) !== 0 ||
+            (stats.details && stats.details.some(d => (Number(d.tong_nhap)||0) !== 0 || (Number(d.tong_xuat)||0) !== 0 || (Number(d.ton_kho)||0) !== 0))
+        );
+
+        const deleteBtnHtml = hasTransaction ? `
+            <button type="button" class="btn-action-icon btn-delete-vattu" disabled title="Mặt hàng đã phát sinh Nhập/Xuất/Tồn kho (khác 0) - Không thể xóa!" style="opacity: 0.25; cursor: not-allowed; pointer-events: none;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+            </button>
+        ` : `
+            <button type="button" class="btn-action-icon btn-delete-vattu" title="Xóa mặt hàng này (Chưa phát sinh Nhập/Xuất/Tồn)" onclick="confirmDeleteVatTu('${item.id}')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+            </button>
+        `;
+
         // Add sticky actions
         trHtml += `
             <td style="text-align: center;" class="sticky-action-td">
@@ -1173,12 +1197,7 @@ function renderVatTuTable(items) {
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                         </svg>
                     </button>
-                    <button type="button" class="btn-action-icon btn-delete-vattu" title="Xóa" onclick="confirmDeleteVatTu('${item.id}')">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                    </button>
+                    ${deleteBtnHtml}
                 </div>
             </td>
         `;
@@ -1627,6 +1646,20 @@ async function handleSaveVatTuForm(e) {
 function confirmDeleteVatTu(id) {
     const item = vatTuData.find(x => String(x.id) === String(id));
     if (!item) return;
+
+    const stats = computeProductBranchStats(item);
+    const hasTransaction = (
+        Number(stats.nhap || 0) !== 0 ||
+        Number(stats.xuat || 0) !== 0 ||
+        Number(stats.ton_cuoi || 0) !== 0 ||
+        Number(stats.ton_dau || 0) !== 0 ||
+        (stats.details && stats.details.some(d => (Number(d.tong_nhap)||0) !== 0 || (Number(d.tong_xuat)||0) !== 0 || (Number(d.ton_kho)||0) !== 0))
+    );
+
+    if (hasTransaction) {
+        showVatTuNoticeModal('warning', 'Không Thể Xóa Vật Tư', `Vật tư <strong>${escapeHtml(item.ten_mat_hang || item.ma_vach)}</strong> đã phát sinh Nhập/Xuất hoặc số lượng tồn kho khác 0. Không thể xóa!`);
+        return;
+    }
 
     deletingVatTuId = item.id;
     const textEl = document.getElementById('delete-vattu-name-text');
