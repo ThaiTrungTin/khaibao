@@ -175,6 +175,23 @@ function bindNhapXuatEvents() {
             renderNxDraftItemsTable();
         });
     }
+
+    const scannerInput = document.getElementById('nx-qr-scanner-input');
+    if (scannerInput) {
+        scannerInput.addEventListener('input', handleNxScannerInputSearch);
+        scannerInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideNxScannerDropdown();
+            }
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        const wrap = document.querySelector('.nx-scanner-input-wrap');
+        if (wrap && !wrap.contains(e.target)) {
+            hideNxScannerDropdown();
+        }
+    });
 }
 
 // Robust helper to extract CN code from any branch string
@@ -1374,6 +1391,254 @@ function speakScanCount(count) {
 
 
 
+// =========================================================================
+// Scanner Autocomplete & Product Search with Child LOT/Date Sub-Branches
+// =========================================================================
+
+function hideNxScannerDropdown() {
+    const dropdown = document.getElementById('nx-scanner-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+        dropdown.innerHTML = '';
+    }
+}
+
+function handleNxScannerInputSearch(event) {
+    const query = (event.target.value || '').trim();
+    const dropdown = document.getElementById('nx-scanner-dropdown');
+    if (!dropdown) return;
+
+    if (!query) {
+        hideNxScannerDropdown();
+        return;
+    }
+
+    // Nếu quét mã QR đầy đủ có dấu chấm phẩy thì không cần bung popup tìm kiếm
+    if (query.includes(';')) {
+        hideNxScannerDropdown();
+        return;
+    }
+
+    let allVatTu = (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData) && window.vatTuData.length > 0) ? window.vatTuData : (typeof vatTuData !== 'undefined' ? vatTuData : []);
+    if (!allVatTu || allVatTu.length === 0) {
+        hideNxScannerDropdown();
+        return;
+    }
+
+    const userName = document.getElementById('nx-input-user')?.value || currentDraftOrder?.user_name || '';
+    const branchCode = extractCNCodeFromBranchString(userName) || 'CN1';
+
+    const qLower = query.toLowerCase();
+    const matchedList = allVatTu.filter(item => {
+        const name1 = (item.ten_mat_hang || '').toLowerCase();
+        const name2 = (item.ten_hoa_don || '').toLowerCase();
+        const barcode = (item.ma_vach || '').toLowerCase();
+        return name1.includes(qLower) || name2.includes(qLower) || barcode.includes(qLower);
+    }).slice(0, 15);
+
+    if (matchedList.length === 0) {
+        dropdown.innerHTML = `
+            <div style="padding: 10px 12px; font-size: 12px; color: var(--text-muted); text-align: center;">
+                Không tìm thấy vật tư khớp với "<strong>${escapeHtml(query)}</strong>"
+            </div>
+        `;
+        dropdown.style.display = 'flex';
+        return;
+    }
+
+    let html = '';
+    const allDetails = (typeof window.tonKhoDetailData !== 'undefined' && Array.isArray(window.tonKhoDetailData)) ? window.tonKhoDetailData : (typeof tonKhoDetailData !== 'undefined' ? tonKhoDetailData : []);
+
+    matchedList.forEach(p => {
+        const rawBarcode = (p.ma_vach || '').trim().toLowerCase();
+        
+        // Phân quyền lọc các nhánh con (LOT/Date) theo Chi Nhánh đang làm việc
+        const subDetails = allDetails.filter(d => {
+            const dBarcode = (d.ma_vach || '').trim().toLowerCase();
+            const dQr = (d.ma_qr || '').trim().toLowerCase();
+            if (dBarcode !== rawBarcode && dQr !== rawBarcode) return false;
+
+            if (branchCode && branchCode !== 'all') {
+                const dBranch = extractCNCodeFromBranchString(d.chi_nhanh);
+                return dBranch === branchCode;
+            }
+            return true;
+        });
+
+        const pName = p.ten_mat_hang || p.ten_hoa_don || 'Vật tư';
+        const pBarcode = p.ma_vach || '-';
+
+        if (subDetails.length > 0) {
+            html += `
+                <div class="nx-search-item">
+                    <div class="nx-search-item-header" onclick="addNxItemFromSearch('${p.id}', '-', null)" title="Thêm mặt hàng này (LOT mặc định)">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <code class="vattu-barcode-code" style="margin: 0;">${escapeHtml(pBarcode)}</code>
+                            <strong style="font-size: 13px;">${escapeHtml(pName)}</strong>
+                        </div>
+                        <span style="font-size: 11px; color: #60a5fa; font-weight: 600;">${subDetails.length} nhánh LOT (${branchCode})</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 5px;">
+                        ${subDetails.map(d => {
+                            const lotStr = d.lot || '-';
+                            const dateStr = d.date ? formatDateForNx(d.date) : (d.date_expiry ? formatDateForNx(d.date_expiry) : '-');
+                            const stockNum = Number(d.ton_kho || d.ton_cuoi || 0);
+                            const stockColor = stockNum > 0 ? '#10b981' : '#ef4444';
+                            const safeLot = String(lotStr).replace(/'/g, "\\'");
+                            const safeDate = dateStr !== '-' ? String(dateStr).replace(/'/g, "\\'") : '';
+                            return `
+                                <div class="nx-search-subitem" onclick="event.stopPropagation(); addNxItemFromSearch('${p.id}', '${safeLot}', '${safeDate}')" title="Chọn nhánh LOT: ${escapeHtml(lotStr)} (Tồn: ${stockNum})">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="color: #3b82f6; font-weight: bold;">↳</span>
+                                        <span class="badge-lot">LOT: ${escapeHtml(lotStr)}</span>
+                                        <span class="badge-date">HSD: ${escapeHtml(dateStr)}</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span class="stock-tag" style="color: ${stockColor}; font-size: 11.5px;">Tồn: ${stockNum.toLocaleString('vi-VN')}</span>
+                                        <span class="branch-tag">${escapeHtml(d.chi_nhanh || branchCode)}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="nx-search-item" onclick="addNxItemFromSearch('${p.id}', '-', null)" title="Thêm mặt hàng này vào đơn">
+                    <div class="nx-search-item-header">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <code class="vattu-barcode-code" style="margin: 0;">${escapeHtml(pBarcode)}</code>
+                            <strong style="font-size: 13px;">${escapeHtml(pName)}</strong>
+                        </div>
+                        <span style="font-size: 11px; color: var(--text-muted);">${escapeHtml(p.don_vi || 'Sản phẩm')}</span>
+                    </div>
+                </div>
+            `;
+        }
+    });
+
+    dropdown.innerHTML = html;
+    dropdown.style.display = 'flex';
+}
+
+function addNxItemFromSearch(productId, lot = '-', date_expiry = null) {
+    const allVatTu = (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData)) ? window.vatTuData : (typeof vatTuData !== 'undefined' ? vatTuData : []);
+    const product = allVatTu.find(x => String(x.id) === String(productId));
+    if (!product) return;
+
+    const ma_vach = product.ma_vach || '';
+    const ten_hang_hoa = product.ten_mat_hang || product.ten_hoa_don || 'Vật tư y tế';
+    const cleanLot = (lot && lot !== 'null' && lot !== 'undefined') ? lot : '-';
+    let cleanDate = date_expiry ? formatDateForNx(date_expiry) : null;
+    const ma_qr = `${ma_vach};${cleanLot};${cleanDate || ''}`;
+
+    const currentMaDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || 'ĐƠN-NHÁP';
+    const currentLoai = document.getElementById('nx-input-loai')?.value || currentDraftOrder.loai_don || 'Nhập';
+    const isPendingOrder = currentDraftOrder.trang_thai === 'Chờ';
+
+    let existingIndex = currentDraftNxItems.findIndex(item => {
+        return (item.ma_vach === ma_vach && (item.lot || '-') === cleanLot);
+    });
+
+    let scannedCount = 1;
+
+    if (existingIndex !== -1) {
+        const item = currentDraftNxItems[existingIndex];
+        const oldQty = Number(item.so_luong) || 0;
+        const newQty = oldQty + 1;
+        
+        if (isPendingOrder && item.so_luong_yeu_cau && newQty > item.so_luong_yeu_cau) {
+            playScanErrorSound();
+            if (typeof showToast === 'function') {
+                showToast('warning', 'Quá Số Lượng', `Sản phẩm đã đủ số lượng yêu cầu (${item.so_luong_yeu_cau})!`);
+            }
+            hideNxScannerDropdown();
+            return;
+        }
+
+        item.so_luong = newQty;
+        scannedCount = newQty;
+        if (cleanDate && (!item.date_expiry || item.date_expiry === '-')) item.date_expiry = cleanDate;
+
+        logNxOrderAction(
+            currentMaDon,
+            currentLoai,
+            'SỬA_SL',
+            `Chọn từ tìm kiếm -> Tăng số lượng [${ten_hang_hoa}] từ ${oldQty} lên ${newQty}`
+        );
+    } else {
+        if (isPendingOrder) {
+            playScanErrorSound();
+            if (typeof showToast === 'function') {
+                showToast('error', 'Sai Sản Phẩm', `Sản phẩm "${ten_hang_hoa}" không nằm trong đơn hóa đơn này!`);
+            }
+            hideNxScannerDropdown();
+            return;
+        }
+
+        currentDraftNxItems.push({
+            ma_qr: ma_qr,
+            ma_vach: ma_vach,
+            lot: cleanLot,
+            date_expiry: cleanDate,
+            ten_hang_hoa: ten_hang_hoa,
+            so_luong: 1
+        });
+
+        logNxOrderAction(
+            currentMaDon,
+            currentLoai,
+            'THÊM_SP',
+            `Thêm sản phẩm [${ten_hang_hoa}] (Mã vạch: ${ma_vach}, LOT: ${cleanLot}) với số lượng 1`
+        );
+    }
+
+    if (currentLoai === 'Xuất') {
+        const userName = document.getElementById('nx-input-user')?.value || '';
+        const branchCode = extractCNCodeFromBranchString(userName);
+        const availableStock = getAvailableStockInNx(ma_vach, cleanLot, cleanDate, branchCode, currentMaDon);
+        const maxAllowed = Math.max(0, availableStock);
+
+        if (scannedCount > maxAllowed) {
+            playScanErrorSound();
+            scannedCount = maxAllowed;
+            if (existingIndex !== -1) {
+                currentDraftNxItems[existingIndex].so_luong = maxAllowed;
+            } else if (currentDraftNxItems.length > 0) {
+                const target = currentDraftNxItems.find(x => x.ma_vach === ma_vach && (x.lot || '-') === cleanLot);
+                if (target) target.so_luong = maxAllowed;
+            }
+
+            if (typeof showToast === 'function') {
+                if (maxAllowed === 0) {
+                    showToast('error', 'Đã Hết Hàng', `Mã ${ma_vach} (LOT: ${cleanLot}) đã HẾT HÀNG ở ${branchCode}!`);
+                } else {
+                    showToast('warning', 'Chạm Mức Tồn', `Mã ${ma_vach} (LOT: ${cleanLot}) chỉ còn tồn ${availableStock} ở ${branchCode}.`);
+                }
+            }
+        }
+    }
+
+    speakScanCount(scannedCount);
+
+    const scannerInput = document.getElementById('nx-qr-scanner-input');
+    if (scannerInput) {
+        scannerInput.value = '';
+        scannerInput.focus();
+    }
+    hideNxScannerDropdown();
+
+    currentDraftOrder.items = currentDraftNxItems;
+    saveNxDraftToStorage();
+    renderNxDraftItemsTable();
+    renderNhapXuatOrderList(filteredNhapXuatData);
+    checkNxOrderModified();
+}
+
+window.addNxItemFromSearch = addNxItemFromSearch;
+window.hideNxScannerDropdown = hideNxScannerDropdown;
+
 // Requirement: QR / Barcode Scanner Add & Parsing Logic
 async function handleNxQrScannerAdd() {
     const scannerInput = document.getElementById('nx-qr-scanner-input');
@@ -2364,56 +2629,207 @@ async function handleNhapXuatPdfUpload(event) {
         }
         if (!branchCode) branchCode = 'CN1';
 
+        // Preload products once to guarantee matching even if VatTu tab hasn't been loaded
+        let allProducts = (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData) && window.vatTuData.length > 0) ? window.vatTuData : [];
+        if (allProducts.length === 0) {
+            const client = getNhapXuatSupabaseClient();
+            if (client) {
+                try {
+                    const resView = await client.from('view_vattu_tong_hop').select('*');
+                    if (resView.data && resView.data.length > 0) {
+                        allProducts = resView.data;
+                    } else {
+                        const resSp = await client.from('san_pham').select('*');
+                        if (resSp.data && resSp.data.length > 0) {
+                            allProducts = resSp.data;
+                        }
+                    }
+                    if (allProducts.length > 0) {
+                        window.vatTuData = allProducts;
+                    }
+                } catch (e) {
+                    console.warn("Could not preload products for PDF parsing:", e);
+                }
+            }
+        }
+
+        const processedInvoiceCodesInBatch = new Set();
+
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
             
-            // Re-extract using the raw strings directly to keep line structure
+            // Extract lines from PDF bằng cách gom nhóm theo tọa độ dòng thực tế (Y) và sắp xếp trái sang phải (X)
             let rawLines = [];
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                 const page = await pdf.getPage(pageNum);
                 const textContent = await page.getTextContent();
-                let lastY = -1;
-                let currentLine = '';
-                textContent.items.forEach(item => {
-                    if (lastY !== item.transform[5] && lastY !== -1) {
-                        rawLines.push(currentLine.trim());
-                        currentLine = '';
+                const pageItems = textContent.items || [];
+                if (pageItems.length === 0) continue;
+
+                const lineGroups = [];
+                pageItems.forEach(item => {
+                    if (!item.str || !item.str.trim()) return;
+                    const x = item.transform[4];
+                    const y = item.transform[5];
+                    
+                    let group = lineGroups.find(g => Math.abs(g.y - y) <= 4.0);
+                    if (!group) {
+                        group = { y: y, items: [] };
+                        lineGroups.push(group);
                     }
-                    currentLine += item.str + ' ';
-                    lastY = item.transform[5];
+                    group.items.push({ x: x, str: item.str });
                 });
-                if (currentLine) rawLines.push(currentLine.trim());
+
+                // Sắp xếp dòng từ trên xuống dưới (Y giảm dần)
+                lineGroups.sort((a, b) => b.y - a.y);
+
+                // Trong mỗi dòng sắp xếp từ trái qua phải (X tăng dần)
+                lineGroups.forEach(g => {
+                    g.items.sort((a, b) => a.x - b.x);
+                    const lineText = g.items.map(it => it.str).join(' ').trim();
+                    if (lineText) {
+                        rawLines.push(lineText);
+                    }
+                });
             }
 
             const fullTextFromLines = rawLines.join('\n');
 
-            // 1. Extract Invoice Number (Số hóa đơn | Mã HĐ : SPXXXXX)
-            const maHoaDonMatch = fullTextFromLines.match(/(?:Số hóa đơn|Mã HĐ)\s*:\s*(SP\d+)/i);
-            const maHoaDon = maHoaDonMatch ? maHoaDonMatch[1] : `HD-${Date.now()}`;
+            // 1. Extract Invoice Number: Lấy chính xác chuỗi nằm sau "Mã HĐ:"
+            let maHoaDon = null;
+            const maHoaDonMatch = fullTextFromLines.match(/Mã\s*HĐ\s*[:：]?\s*([^\r\n]+)/i) 
+                || fullTextFromLines.match(/(?:Số hóa đơn|Mã hóa đơn|Số HĐ|Mã đơn)\s*[:：]?\s*([^\r\n]+)/i);
+            if (maHoaDonMatch) {
+                let rawMa = maHoaDonMatch[1].trim();
+                const splitParts = rawMa.split(/\s+(?:Ngày|Khách hàng|Thú cưng|SĐT)\s*[:：]/i);
+                maHoaDon = splitParts[0].trim();
+            } else {
+                for (let k = 0; k < rawLines.length; k++) {
+                    const l = rawLines[k].trim();
+                    if (/^Mã\s*HĐ\s*[:：]?$/i.test(l) && k + 1 < rawLines.length) {
+                        maHoaDon = rawLines[k + 1].trim();
+                        break;
+                    }
+                }
+            }
+            if (!maHoaDon) {
+                maHoaDon = `HD-${Date.now()}`;
+            }
 
-            // Check Duplicate by Invoice Number
-            const isDuplicate = typeof nhapXuatData !== 'undefined' && nhapXuatData.some(order => order.muc_dich && order.muc_dich.includes(maHoaDon));
-            if (isDuplicate) {
+            // Check Duplicate by Invoice Number (trong Database và trong cùng đợt Upload hiện tại)
+            const isDuplicateInDb = typeof nhapXuatData !== 'undefined' && nhapXuatData.some(order => order.muc_dich && (order.muc_dich === maHoaDon || order.muc_dich.startsWith(maHoaDon + ' ') || order.muc_dich.includes(maHoaDon)));
+            const isDuplicateInBatch = processedInvoiceCodesInBatch.has(maHoaDon);
+
+            if (isDuplicateInDb || isDuplicateInBatch) {
                 duplicateCount++;
-                console.log(`Bỏ qua hóa đơn ${maHoaDon} vì đã tồn tại.`);
+                console.log(`Bỏ qua hóa đơn ${maHoaDon} vì đã tồn tại hoặc bị trùng trong danh sách tải.`);
                 if (typeof showToast === 'function') {
-                    showToast('error', 'Đơn đã xuất', `Hóa đơn ${maHoaDon} đã tồn tại trong hệ thống!`);
+                    showToast('error', 'Đơn Đã Tồn Tại', `Hóa đơn ${maHoaDon} đã tồn tại trong hệ thống hoặc bị trùng trong đợt tải!`);
                 }
                 continue;
             }
 
-            // 2. Extract Pet Name (Tên thú cưng | Thú cưng : Quýt)
-            const petNameMatch = fullTextFromLines.match(/(?:Tên thú cưng|Thú cưng)\s*:\s*([^\n]+)/i);
-            const petName = petNameMatch ? petNameMatch[1].trim() : 'Không Tên';
+            // 2. Extract Pet Name (Tên thú cưng | Thú cưng : Chít)
+            let petName = '';
+            const petNameMatch = fullTextFromLines.match(/(?:Tên thú cưng|Thú cưng)\s*[:：]?\s*([^\r\n]+)/i);
+            if (petNameMatch) {
+                let rawPet = petNameMatch[1].trim();
+                const splitParts = rawPet.split(/\s+(?:Cân nặng|Cân|Loài|Giống|SĐT|Khách hàng|Tuổi|Giới tính)\s*[:：]/i);
+                petName = splitParts[0].trim();
+            }
 
-            // 3. Extract items
+            // Nếu không có tên thú cưng thực tế hoặc là tên GAIA / Bệnh viện -> Mục đích chỉ lấy đúng Mã HĐ
+            const invalidKeywords = ['không tên', 'khong ten', 'gaia', 'bệnh viện', 'phòng khám', 'tp.hcm', 'tphcm', 'hospital'];
+            let finalMucDich = maHoaDon;
+            if (petName && !invalidKeywords.some(kw => petName.toLowerCase().includes(kw))) {
+                finalMucDich = `${maHoaDon} - ${petName}`;
+            }
+
+            // 3. Extract items: Đối soát với Tên Hàng Hóa / Tên Mặt Hàng trong View Vật Tư
             const items = [];
-            
+
+            // Helper tìm sản phẩm trong danh mục kho (so sánh với tên hàng hóa trong View Vật Tư)
+            function findVatTuInStore(queryName) {
+                if (!queryName || !allProducts || allProducts.length === 0) return null;
+                
+                const norm = (str) => {
+                    if (!str) return '';
+                    return str.toLowerCase()
+                        .replace(/\s*-\s*(túi|lon|chai|gói|hộp|tuýp|viên|lần|cái|vỉ|bình|miếng|ống|cây|cuộn|cặp|kg|liều|lọ|set|bộ)$/i, '')
+                        .replace(/,/g, '.')
+                        .replace(/[\(\)\[\]\-\_\:\/]/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                };
+
+                const normQuery = norm(queryName);
+                if (!normQuery) return null;
+
+                // 1. So sánh trực tiếp hoặc chứa chuỗi 2 chiều
+                for (const vt of allProducts) {
+                    const t1 = norm(vt.ten_mat_hang);
+                    const t2 = norm(vt.ten_hoa_don);
+                    if (t1 && (t1 === normQuery || normQuery.includes(t1) || t1.includes(normQuery))) {
+                        return vt;
+                    }
+                    if (t2 && (t2 === normQuery || normQuery.includes(t2) || t2.includes(normQuery))) {
+                        return vt;
+                    }
+                }
+
+                // 2. Khớp theo từng từ khóa đặc trưng (token matching)
+                for (const vt of allProducts) {
+                    for (const name of [vt.ten_mat_hang, vt.ten_hoa_don]) {
+                        if (!name) continue;
+                        const normName = norm(name);
+                        const tokens = normName.split(' ').filter(w => w.length > 1 && !/^(cho|dành|mèo|chó|thuốc|loại)$/i.test(w));
+                        if (tokens.length >= 2 && tokens.every(tok => normQuery.includes(tok))) {
+                            return vt;
+                        }
+                    }
+                }
+
+                // 3. Khớp tương tự (fuzzy/similarity)
+                const queryTokens = normQuery.split(' ').filter(w => w.length > 1);
+                let bestMatch = null;
+                let bestScore = 0;
+                for (const vt of allProducts) {
+                    for (const name of [vt.ten_mat_hang, vt.ten_hoa_don]) {
+                        if (!name) continue;
+                        const normName = norm(name);
+                        const vtTokens = normName.split(' ').filter(w => w.length > 1);
+                        if (vtTokens.length === 0) continue;
+                        let matchCount = 0;
+                        for (const tok of vtTokens) {
+                            if (queryTokens.includes(tok) || queryTokens.some(q => q.includes(tok) || tok.includes(q))) {
+                                matchCount++;
+                            }
+                        }
+                        const score = matchCount / vtTokens.length;
+                        if (score >= 0.6 && score > bestScore) {
+                            bestScore = score;
+                            bestMatch = vt;
+                        }
+                    }
+                }
+                return bestMatch;
+            }
+
             for (let j = 0; j < rawLines.length; j++) {
                 let line = rawLines[j].trim();
                 if (!line) continue;
+
+                // Dừng lại khi gặp các dòng tổng kết hóa đơn
+                if (/(?:Tổng tiền|Tổng thanh toán|Khách trả|Tiền thừa|Điểm tích lũy|5% VAT|8% VAT|Hình thức thanh toán)/i.test(line)) {
+                    break;
+                }
+
+                // Bỏ qua dòng kẻ phân cách
+                if (/^[\-\=\_\.\s]{3,}$/.test(line)) {
+                    continue;
+                }
                 
                 // Loại bỏ số thứ tự đứng đầu nếu có (VD: "1. Tên SP" -> "Tên SP")
                 line = line.replace(/^\d+[\.\-]\s+/, '');
@@ -2423,30 +2839,31 @@ async function handleNhapXuatPdfUpload(event) {
                 // Kiểm tra xem dòng tiếp theo CÓ PHẢI LÀ DÒNG CHỨA SỐ KHÔNG (Giá, SL, Thành tiền)
                 if (j + 1 < rawLines.length) {
                     const nextLine = rawLines[j+1].trim();
-                    // Nếu dòng tiếp theo chứa chủ yếu là số, dấu phẩy, dấu chấm và khoảng trắng
+                    // Nếu dòng tiếp theo chứa các con số (VD: "400,000 1 400,000")
                     if (/^[\d,\.\s]+$/.test(nextLine)) {
                         const numbers = nextLine.replace(/,/g, '').match(/\d+/g);
                         if (numbers && numbers.length >= 2) {
                             let qty = 1;
                             if (numbers.length >= 3) {
-                                qty = parseInt(numbers[1]); // Giá [Số Lượng] ThànhTien
+                                qty = parseInt(numbers[1], 10) || 1; // Giá [Số Lượng] ThànhTien
                             } else {
-                                qty = parseInt(numbers[0]); // Fallback
+                                qty = parseInt(numbers[0], 10) || 1; // Fallback
                             }
                             
-                            // Try to match currentItemName with vatTuData
-                            let matchedVatTu = null;
-                            if (typeof window.vatTuData !== 'undefined') {
-                                matchedVatTu = window.vatTuData.find(vt => {
-                                    const t = (vt.ten_mat_hang || vt.ten_hoa_don || '').toLowerCase();
-                                    const query = currentItemName.toLowerCase();
-                                    // So sánh 2 chiều, hoặc loại bỏ các hậu tố "- Túi", "- Lon"
-                                    const cleanQuery = query.replace(/\s*-\s*(túi|lon|chai|gói|hộp|tuýp|viên)$/i, '');
-                                    return t.includes(cleanQuery) || cleanQuery.includes(t) || t.includes(query) || query.includes(t);
-                                });
+                            // 1. Thử tìm với tên ở dòng hiện tại
+                            let matchedVatTu = findVatTuInStore(currentItemName);
+
+                            // 2. Nếu tên sản phẩm bị ngắt xuống dòng trước đó (VD: dòng j-1 là "Nội & ngoại...", dòng j là "7,5kg - Tuýp")
+                            if (!matchedVatTu && j > 0) {
+                                const prevLine = rawLines[j-1].trim();
+                                if (prevLine && !/^[\d,\.\s]+$/.test(prevLine) && !/^[\-\=\_\.\s]{3,}$/.test(prevLine) && !/(?:Mã HĐ|Ngày|Khách hàng|Thú cưng|Loài|Giống|Tổng|Giá bán|Đơn giá)/i.test(prevLine)) {
+                                    const combinedName = prevLine + ' ' + currentItemName;
+                                    matchedVatTu = findVatTuInStore(combinedName);
+                                }
                             }
                             
                             if (matchedVatTu) {
+                                console.log(`PDF Item matched: "${currentItemName}" -> "${matchedVatTu.ten_mat_hang || matchedVatTu.ten_hoa_don}" (SL: ${qty})`);
                                 items.push({
                                     ma_qr: matchedVatTu.ma_vach || '',
                                     ma_vach: matchedVatTu.ma_vach || '',
@@ -2455,6 +2872,8 @@ async function handleNhapXuatPdfUpload(event) {
                                     so_luong_yeu_cau: qty,
                                     so_luong: 0 // Đã quét = 0
                                 });
+                            } else {
+                                console.log(`PDF Item ignored / not found in store: "${currentItemName}"`);
                             }
                         }
                     }
@@ -2490,7 +2909,7 @@ async function handleNhapXuatPdfUpload(event) {
                 const payload = {
                     ma_don: maDon,
                     loai_don: 'Xuất',
-                    muc_dich: `${maHoaDon} - ${petName}`,
+                    muc_dich: finalMucDich,
                     trang_thai: 'Chờ',
                     file_url: file_url,
                     user_name: userNameFormatted,
@@ -2502,12 +2921,16 @@ async function handleNhapXuatPdfUpload(event) {
                 if (error) {
                     console.error("Error creating order from PDF:", error);
                 } else {
+                    processedInvoiceCodesInBatch.add(maHoaDon);
+                    if (typeof nhapXuatData !== 'undefined') {
+                        nhapXuatData.unshift(payload);
+                    }
                     // Create Log
                     await supabaseClient.from('nhap_xuat_log').insert([{
                         ma_don: maDon,
                         loai_don: 'Xuất',
                         hanh_dong: 'TẠO_ĐƠN',
-                        noi_dung: `Tạo đơn tự động từ Hóa Đơn PDF (${maHoaDon} - ${petName}) gồm ${items.length} mã sản phẩm.`,
+                        noi_dung: `Tạo đơn tự động từ Hóa Đơn PDF (${finalMucDich}) gồm ${items.length} mã sản phẩm.`,
                         user_name: userNameFormatted
                     }]);
                     successCount++;
@@ -2522,6 +2945,13 @@ async function handleNhapXuatPdfUpload(event) {
                     showToast('success', 'Tạo Đơn Thành Công', `Đã tạo thành công ${successCount} đơn xuất kho (Trạng thái: Chờ) từ File PDF.`);
                 } else {
                     alert(`Đã tạo thành công ${successCount} đơn xuất kho (Trạng thái: Chờ) từ File PDF.`);
+                }
+                if (duplicateCount > 0) {
+                    setTimeout(() => {
+                        if (typeof showToast === 'function') {
+                            showToast('warning', 'Bỏ Qua Đơn Trùng', `Bỏ qua ${duplicateCount} file do mã hóa đơn đã tồn tại hoặc trùng nhau trong đợt tải.`);
+                        }
+                    }, 800);
                 }
                 fetchNhapXuatData();
             }, 300);

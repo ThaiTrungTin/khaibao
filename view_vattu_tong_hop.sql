@@ -3,6 +3,9 @@
 -- Tự động tính toán Tồn Đầu, Nhập, Xuất, Tồn Cuối cho từng Vật Tư theo Chi Nhánh trên Supabase Server
 -- ==========================================================================
 
+-- Xóa View cũ nếu có để tránh lỗi PostgreSQL (cannot change name/position of view column)
+DROP VIEW IF EXISTS public.view_vattu_tong_hop CASCADE;
+
 CREATE OR REPLACE VIEW public.view_vattu_tong_hop AS
 SELECT 
     sp.id,
@@ -13,6 +16,7 @@ SELECT
     sp.danh_muc,
     sp.nhom_hang,
     sp.phan_loai,
+    sp.phong_ban,
     sp.don_vi,
     sp.cach_dung,
     sp.gia_von_ton_kho_trung_binh,
@@ -34,7 +38,13 @@ GROUP BY
     sp.danh_muc,
     sp.nhom_hang,
     sp.phan_loai,
+    sp.phong_ban,
     sp.don_vi,
     sp.cach_dung,
     sp.gia_von_ton_kho_trung_binh,
     tk.chi_nhanh;
+
+-- Cấp quyền SELECT công khai cho public.view_vattu_tong_hop
+GRANT SELECT ON public.view_vattu_tong_hop TO anon, authenticated, service_role;
+
+

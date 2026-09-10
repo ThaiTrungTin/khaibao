@@ -2320,6 +2320,83 @@ html, body {
     color: #ffffff;
 }
 
+.btn-qr-subrow {
+    background: rgba(2, 132, 199, 0.12);
+    color: #0284c7;
+    position: relative;
+}
+
+.btn-qr-subrow:hover {
+    background: #0284c7;
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.btn-qr-subrow.active-has-count {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.btn-qr-subrow.active-has-count:hover {
+    background: #10b981;
+    color: #ffffff;
+}
+
+.subrow-qr-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 800;
+    min-width: 16px;
+    height: 16px;
+    line-height: 14px;
+    text-align: center;
+    border-radius: 10px;
+    padding: 0 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    border: 1.5px solid #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.toolbar-qr-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 800;
+    min-width: 18px;
+    height: 18px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 10px;
+    padding: 0 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    border: 1.5px solid #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+/* Hide number input spinners on QR quantity */
+input.vattu-qr-input-qty::-webkit-outer-spin-button,
+input.vattu-qr-input-qty::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input.vattu-qr-input-qty {
+    -moz-appearance: textfield;
+}
+
 /* Modal Form Grids */
 .vattu-modal-card {
     max-width: 840px !important;
@@ -3990,6 +4067,97 @@ html, body {
     background: rgba(16, 185, 129, 0.1);
     padding: 1px 5px;
     border-radius: 4px;
+}
+
+/* Autocomplete Dropdown for Scanner Input */
+.nx-scanner-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #0f172a !important; /* 100% Đậm đặc không trong suốt */
+    border: 1.5px solid #334155 !important;
+    border-radius: 10px;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    max-height: 420px;
+    overflow-y: auto;
+    z-index: 99999 !important;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.nx-search-item {
+    border-radius: 8px;
+    padding: 10px 14px;
+    background: #1e293b !important; /* Khối nền đặc, tách biệt hoàn toàn với bảng bên dưới */
+    border: 1px solid #334155 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    transition: all 0.15s ease;
+}
+
+.nx-search-item:hover {
+    border-color: #3b82f6 !important;
+    background: #253347 !important;
+}
+
+.nx-search-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    padding: 2px 0;
+}
+
+.nx-search-item-header:hover strong {
+    color: #38bdf8 !important;
+}
+
+.nx-search-item-header strong {
+    font-size: 13.5px;
+    color: #f8fafc !important;
+}
+
+.nx-search-subitem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px 8px 16px;
+    margin-top: 6px;
+    border-radius: 6px;
+    background: #0b1120 !important; /* Khối con nền đặc tối tương phản cao */
+    border: 1px solid #334155 !important;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.nx-search-subitem:hover {
+    background: #1e3a5f !important;
+    border-color: #60a5fa !important;
+}
+
+.nx-search-subitem .badge-lot {
+    background: #1e293b;
+    color: #f1f5f9;
+    border: 1px solid #475569;
+}
+
+.nx-search-subitem .branch-tag {
+    background: #1e3a8a !important;
+    color: #93c5fd !important;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+.nx-search-subitem .stock-tag {
+    font-weight: 700;
 }
 
 .nhapxuat-form-row,

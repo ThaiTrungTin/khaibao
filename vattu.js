@@ -40,6 +40,7 @@ const vattuColTitles = {
     danh_muc: 'Danh Mục',
     nhom_hang: 'Nhóm Hàng',
     phan_loai: 'Phân Loại',
+    phong_ban: 'Phòng Ban',
     don_vi: 'Đơn Vị',
     cach_dung: 'Cách Dùng',
     ton_dau: 'Đầu',
@@ -62,6 +63,7 @@ const defaultVatTuCols = [
     { key: 'danh_muc', title: 'Danh Mục', visible: true, width: '140px', align: 'left', minWidth: '100px' },
     { key: 'nhom_hang', title: 'Nhóm Hàng', visible: true, width: '140px', align: 'left', minWidth: '100px' },
     { key: 'phan_loai', title: 'Phân Loại', visible: true, width: '140px', align: 'left', minWidth: '100px' },
+    { key: 'phong_ban', title: 'Phòng Ban', visible: true, width: '140px', align: 'left', minWidth: '100px' },
     { key: 'don_vi', title: 'Đơn Vị', visible: true, width: '100px', align: 'left', minWidth: '80px' },
     { key: 'cach_dung', title: 'Cách Dùng', visible: true, width: '160px', align: 'left', minWidth: '100px' },
     { key: 'gia_von_ton_kho_trung_binh', title: 'Giá Vốn TB (đ)', visible: true, width: '160px', align: 'right', minWidth: '100px' }
@@ -1242,14 +1244,55 @@ function renderVatTuTable(items) {
                     childTrHtml += `<td style="text-align: ${col.align}; ${stickyStyle}" class="${stickyClass}">${cellContent}</td>`;
                 });
 
-                // Empty sticky actions td for child row
-                childTrHtml += `<td style="text-align: center;" class="sticky-action-td"></td>`;
+                // QR print button for child row
+                const cBarcode = (d.ma_vach || item.ma_vach || '').trim();
+                const cLot = (d.lot && d.lot !== '-') ? d.lot.trim() : '';
+                const cExp = (formatDate(d.date_expiry) === '-' ? '' : formatDate(d.date_expiry));
+                const cTen = d.ten_hang_hoa || item.ten_mat_hang || item.ten_vt || '';
+
+                const matchedQr = (typeof vattuQrRows !== 'undefined' && Array.isArray(vattuQrRows)) ? vattuQrRows.find(r => 
+                    r.ma_vach && r.ma_vach.trim().toLowerCase() === cBarcode.toLowerCase() &&
+                    String(r.lot || '').trim().toLowerCase() === cLot.toLowerCase() &&
+                    String(r.date_expiry || '').trim().toLowerCase() === cExp.toLowerCase()
+                ) : null;
+
+                const cCount = matchedQr ? (parseInt(matchedQr.quantity, 10) || 1) : 0;
+                const badgeHtml = cCount > 0 ? `<span class="subrow-qr-badge">1</span>` : '';
+                const btnTitle = cCount > 0 ? 'Đã thêm vào danh sách in QR' : 'Thêm mã QR vào cửa sổ in';
+                const activeClass = cCount > 0 ? 'active-has-count' : '';
+
+                childTrHtml += `
+                    <td style="text-align: center;" class="sticky-action-td">
+                        <div class="vattu-action-btns" style="justify-content: center;">
+                            <button type="button" class="btn-action-icon btn-qr-subrow ${activeClass}" 
+                                data-barcode="${escapeHtml(cBarcode)}" 
+                                data-ten="${escapeHtml(cTen)}" 
+                                data-lot="${escapeHtml(cLot)}" 
+                                data-exp="${escapeHtml(cExp)}" 
+                                title="${btnTitle}" 
+                                onclick="handleSubrowQrButtonClick(this, event)">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                    <path d="M14 14h3v3h-3z"></path>
+                                    <path d="M20 14v7h-7"></path>
+                                </svg>
+                                ${badgeHtml}
+                            </button>
+                        </div>
+                    </td>
+                `;
 
                 childTr.innerHTML = childTrHtml;
                 tbody.appendChild(childTr);
             });
         }
     });
+
+    if (typeof updateAllQrCountBadges === 'function') {
+        updateAllQrCountBadges();
+    }
 }
 
 // Requirement 1: Render Pagination Buttons & Range Info
@@ -1392,6 +1435,7 @@ function initVatTuComboboxes() {
         { id: 'input-vattu-danh-muc', key: 'danh_muc' },
         { id: 'input-vattu-nhom-hang', key: 'nhom_hang' },
         { id: 'input-vattu-phan-loai', key: 'phan_loai' },
+        { id: 'input-vattu-phong-ban', key: 'phong_ban' },
         { id: 'input-vattu-don-vi', key: 'don_vi' }
     ];
 
@@ -1503,7 +1547,8 @@ function openEditVatTuModal(id) {
     document.getElementById('input-vattu-nha-san-xuat').value = item.nha_san_xuat || '';
     document.getElementById('input-vattu-danh-muc').value = item.danh_muc || 'Thuốc';
     document.getElementById('input-vattu-nhom-hang').value = item.nhom_hang || '';
-    document.getElementById('input-vattu-phan-loai').value = item.phan_loai || '';
+    if (document.getElementById('input-vattu-phan-loai')) document.getElementById('input-vattu-phan-loai').value = item.phan_loai || '';
+    if (document.getElementById('input-vattu-phong-ban')) document.getElementById('input-vattu-phong-ban').value = item.phong_ban || '';
     document.getElementById('input-vattu-don-vi').value = item.don_vi || '';
     document.getElementById('input-vattu-cach-dung').value = item.cach_dung || '';
     if (document.getElementById('input-vattu-ton-dau')) document.getElementById('input-vattu-ton-dau').value = item.ton_dau ?? 0;
@@ -1533,6 +1578,7 @@ async function handleSaveVatTuForm(e) {
     const danhMuc = document.getElementById('input-vattu-danh-muc').value;
     const nhomHang = document.getElementById('input-vattu-nhom-hang').value.trim();
     const phanLoai = document.getElementById('input-vattu-phan-loai').value.trim();
+    const phongBan = document.getElementById('input-vattu-phong-ban')?.value.trim() || null;
     const donVi = document.getElementById('input-vattu-don-vi').value.trim();
     const cachDung = document.getElementById('input-vattu-cach-dung').value.trim();
     
@@ -1577,6 +1623,7 @@ async function handleSaveVatTuForm(e) {
         danh_muc: danhMuc || 'Thuốc',
         nhom_hang: nhomHang || null,
         phan_loai: phanLoai || null,
+        phong_ban: phongBan || null,
         don_vi: donVi || null,
         cach_dung: cachDung || null,
         ton_dau: tonDau,
@@ -1751,6 +1798,7 @@ function downloadVatTuExcelTemplate() {
             "Danh Mục",
             "Nhóm Hàng",
             "Phân Loại",
+            "Phòng Ban",
             "Đơn Vị",
             "Cách Dùng",
             "Đầu",
@@ -1768,6 +1816,7 @@ function downloadVatTuExcelTemplate() {
             "Thuốc",
             "Vật tư y tế",
             "Khác",
+            "Kho Dược",
             "Chai",
             "Sát trùng vết thương ngoài da",
             10,
@@ -1785,6 +1834,7 @@ function downloadVatTuExcelTemplate() {
             "Thuốc",
             "Thuốc thú y",
             "Khác",
+            "Phòng Tiêm",
             "Chai",
             "Tiêm bắp hoặc pha nước uống",
             5,
@@ -1806,6 +1856,7 @@ function downloadVatTuExcelTemplate() {
         { wch: 16 }, // Danh Mục
         { wch: 18 }, // Nhóm Hàng
         { wch: 16 }, // Phân Loại
+        { wch: 18 }, // Phòng Ban
         { wch: 10 }, // Đơn Vị
         { wch: 34 }, // Cách Dùng
         { wch: 10 }, // Đầu
@@ -1901,6 +1952,7 @@ function executeVatTuExcelExport(type) {
             "Danh Mục": item.danh_muc || '',
             "Nhóm Hàng": item.nhom_hang || '',
             "Phân Loại": item.phan_loai || '',
+            "Phòng Ban": item.phong_ban || '',
             "Đơn Vị": item.don_vi || '',
             "Cách Dùng": item.cach_dung || '',
             "Giá Vốn TB (đ)": Number(item.gia_von_ton_kho_trung_binh) || 0
@@ -1923,6 +1975,7 @@ function executeVatTuExcelExport(type) {
         { wch: 16 }, // Danh Mục
         { wch: 18 }, // Nhóm Hàng
         { wch: 15 }, // Phân Loại
+        { wch: 18 }, // Phòng Ban
         { wch: 10 }, // Đơn Vị
         { wch: 26 }, // Cách Dùng
         { wch: 18 }  // Giá Vốn TB
@@ -2017,6 +2070,7 @@ function handleExcelImportFile(e) {
                 const danh_muc = getVal('Danh mục', 'Danh Mục', 'Danh muc', 'danh_muc', 'Category') || 'Thuốc';
                 const nhom_hang = getVal('Nhóm hàng', 'Nhóm Hàng', 'Nhom hang', 'nhom_hang', 'Group');
                 const phan_loai = getVal('Phân loại', 'Phân Loại', 'Phan loai', 'phan_loai', 'Classification');
+                const phong_ban = getVal('Phòng ban', 'Phòng Ban', 'Phong ban', 'phong_ban', 'Department');
                 const don_vi = getVal('Đơn vị', 'Đơn Vị', 'Don vi', 'don_vi', 'Unit') || 'Cái';
                 const cach_dung = getVal('Cách dùng', 'Cách Dùng', 'Cach dung', 'cach_dung', 'Usage');
 
@@ -2036,6 +2090,7 @@ function handleExcelImportFile(e) {
                         danh_muc: danh_muc || 'Thuốc',
                         nhom_hang: nhom_hang || null,
                         phan_loai: phan_loai || null,
+                        phong_ban: phong_ban || null,
                         don_vi: don_vi || null,
                         cach_dung: cach_dung || null,
                         ton_dau,
@@ -2575,8 +2630,900 @@ function saveColumnConfig() {
     applyVatTuFilters();
 }
 
+// ==========================================================================
+// BATCH QR CODE LABEL PRINTING (Excel Grid Style + Auto Lookup + Paste Support)
+// ==========================================================================
+
+let vattuQrRows = [];
+
+function getQrSettingsUserKey(suffix) {
+    let userId = 'default';
+    if (typeof currentUser !== 'undefined' && currentUser && (currentUser.id || currentUser.email)) {
+        userId = String(currentUser.id || currentUser.email).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    } else {
+        const saved = localStorage.getItem("gaia_logged_user");
+        if (saved) {
+            try {
+                const u = JSON.parse(saved);
+                if (u && (u.id || u.email)) {
+                    userId = String(u.id || u.email).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+                }
+            } catch(e) {}
+        }
+    }
+    return `gaia_qr_user_cfg_${userId}_${suffix}`;
+}
+
+function getQrPresetDefaults(presetVal) {
+    let qr = 8.0;
+    let meta = 5.0;
+    let title = 5.5;
+
+    if (presetVal === '72x10_dual') {
+        qr = 5.5; meta = 4.5; title = 4.8;
+    } else if (presetVal === '72x15_dual' || presetVal === '80x15_dual' || presetVal === '100x15_dual') {
+        qr = 8.0; meta = 5.0; title = 5.5;
+    } else if (presetVal === '40x25_single') {
+        qr = 15.0; meta = 7.2; title = 8.0;
+    } else if (presetVal === '50x30_single') {
+        qr = 19.0; meta = 8.0; title = 9.0;
+    } else if (presetVal === '72x22_dual') {
+        qr = 13.0; meta = 6.2; title = 7.0;
+    } else if (presetVal === 'a4_sheet') {
+        qr = 18.0; meta = 8.0; title = 9.0;
+    } else if (presetVal === 'custom') {
+        const customH = parseFloat(document.getElementById('vattu-qr-custom-h')?.value) || 15;
+        const customW = parseFloat(document.getElementById('vattu-qr-custom-w')?.value) || 80;
+        const customCols = parseInt(document.getElementById('vattu-qr-custom-cols')?.value, 10) || 2;
+        const labelW = customW / customCols;
+        const cardH = Math.max(5, customH - 2.5);
+        qr = parseFloat(Math.min(cardH * 0.6, labelW * 0.35).toFixed(1));
+        meta = (customH > 20) ? 8.0 : 5.0;
+        title = (customH > 20) ? 9.0 : 5.5;
+    }
+    return { qr, meta, title };
+}
+
+function handleQrPaperPresetChange(isUserAction = true) {
+    const presetSelect = document.getElementById('vattu-qr-paper-preset');
+    const customWrap = document.getElementById('vattu-qr-custom-paper-wrap');
+    if (!presetSelect) return;
+
+    const val = presetSelect.value;
+    if (customWrap) {
+        customWrap.style.display = (val === 'custom') ? 'flex' : 'none';
+    }
+
+    if (isUserAction) {
+        const defaults = getQrPresetDefaults(val);
+        const qrEl = document.getElementById('vattu-qr-size-custom');
+        const metaEl = document.getElementById('vattu-qr-font-meta-custom');
+        const titleEl = document.getElementById('vattu-qr-font-title-custom');
+
+        if (qrEl) qrEl.value = defaults.qr;
+        if (metaEl) metaEl.value = defaults.meta;
+        if (titleEl) titleEl.value = defaults.title;
+    }
+
+    localStorage.setItem(getQrSettingsUserKey('paper_preset'), val);
+    saveQrMarginSettings();
+}
+
+function saveQrMarginSettings() {
+    const top = document.getElementById('vattu-qr-margin-top')?.value || '0';
+    const bottom = document.getElementById('vattu-qr-margin-bottom')?.value || '0';
+    const left = document.getElementById('vattu-qr-margin-left')?.value || '0';
+    const right = document.getElementById('vattu-qr-margin-right')?.value || '0';
+
+    const customW = document.getElementById('vattu-qr-custom-w')?.value || '80';
+    const customH = document.getElementById('vattu-qr-custom-h')?.value || '15';
+    const customCols = document.getElementById('vattu-qr-custom-cols')?.value || '2';
+
+    const customQrSize = document.getElementById('vattu-qr-size-custom')?.value || '';
+    const customFontMeta = document.getElementById('vattu-qr-font-meta-custom')?.value || '';
+    const customFontTitle = document.getElementById('vattu-qr-font-title-custom')?.value || '';
+
+    localStorage.setItem(getQrSettingsUserKey('margin_top'), top);
+    localStorage.setItem(getQrSettingsUserKey('margin_bottom'), bottom);
+    localStorage.setItem(getQrSettingsUserKey('margin_left'), left);
+    localStorage.setItem(getQrSettingsUserKey('margin_right'), right);
+
+    localStorage.setItem(getQrSettingsUserKey('custom_w'), customW);
+    localStorage.setItem(getQrSettingsUserKey('custom_h'), customH);
+    localStorage.setItem(getQrSettingsUserKey('custom_cols'), customCols);
+
+    localStorage.setItem(getQrSettingsUserKey('custom_qr_size'), customQrSize);
+    localStorage.setItem(getQrSettingsUserKey('custom_font_meta'), customFontMeta);
+    localStorage.setItem(getQrSettingsUserKey('custom_font_title'), customFontTitle);
+}
+
+function resetQrSizeDefaults() {
+    const presetSelect = document.getElementById('vattu-qr-paper-preset');
+    const val = presetSelect ? presetSelect.value : '80x15_dual';
+    const defaults = getQrPresetDefaults(val);
+
+    const qrEl = document.getElementById('vattu-qr-size-custom');
+    const metaEl = document.getElementById('vattu-qr-font-meta-custom');
+    const titleEl = document.getElementById('vattu-qr-font-title-custom');
+
+    if (qrEl) qrEl.value = defaults.qr;
+    if (metaEl) metaEl.value = defaults.meta;
+    if (titleEl) titleEl.value = defaults.title;
+
+    saveQrMarginSettings();
+}
+
+function loadQrMarginSettings() {
+    const savedPreset = localStorage.getItem(getQrSettingsUserKey('paper_preset')) || '80x15_dual';
+    const presetSelect = document.getElementById('vattu-qr-paper-preset');
+    if (presetSelect) {
+        presetSelect.value = savedPreset;
+    }
+
+    const top = localStorage.getItem(getQrSettingsUserKey('margin_top')) || '0';
+    const bottom = localStorage.getItem(getQrSettingsUserKey('margin_bottom')) || '0';
+    const left = localStorage.getItem(getQrSettingsUserKey('margin_left')) || '0';
+    const right = localStorage.getItem(getQrSettingsUserKey('margin_right')) || '0';
+
+    const customW = localStorage.getItem(getQrSettingsUserKey('custom_w')) || '80';
+    const customH = localStorage.getItem(getQrSettingsUserKey('custom_h')) || '15';
+    const customCols = localStorage.getItem(getQrSettingsUserKey('custom_cols')) || '2';
+
+    let customQrSize = localStorage.getItem(getQrSettingsUserKey('custom_qr_size'));
+    let customFontMeta = localStorage.getItem(getQrSettingsUserKey('custom_font_meta'));
+    let customFontTitle = localStorage.getItem(getQrSettingsUserKey('custom_font_title'));
+
+    const defaults = getQrPresetDefaults(savedPreset);
+
+    if (customQrSize === null || customQrSize === '' || isNaN(parseFloat(customQrSize)) || parseFloat(customQrSize) < 1) {
+        customQrSize = defaults.qr;
+    }
+    if (customFontMeta === null || customFontMeta === '' || isNaN(parseFloat(customFontMeta)) || parseFloat(customFontMeta) < 1) {
+        customFontMeta = defaults.meta;
+    }
+    if (customFontTitle === null || customFontTitle === '' || isNaN(parseFloat(customFontTitle)) || parseFloat(customFontTitle) < 1) {
+        customFontTitle = defaults.title;
+    }
+
+    if (document.getElementById('vattu-qr-margin-top')) document.getElementById('vattu-qr-margin-top').value = top;
+    if (document.getElementById('vattu-qr-margin-bottom')) document.getElementById('vattu-qr-margin-bottom').value = bottom;
+    if (document.getElementById('vattu-qr-margin-left')) document.getElementById('vattu-qr-margin-left').value = left;
+    if (document.getElementById('vattu-qr-margin-right')) document.getElementById('vattu-qr-margin-right').value = right;
+
+    if (document.getElementById('vattu-qr-custom-w')) document.getElementById('vattu-qr-custom-w').value = customW;
+    if (document.getElementById('vattu-qr-custom-h')) document.getElementById('vattu-qr-custom-h').value = customH;
+    if (document.getElementById('vattu-qr-custom-cols')) document.getElementById('vattu-qr-custom-cols').value = customCols;
+
+    if (document.getElementById('vattu-qr-size-custom')) document.getElementById('vattu-qr-size-custom').value = customQrSize;
+    if (document.getElementById('vattu-qr-font-meta-custom')) document.getElementById('vattu-qr-font-meta-custom').value = customFontMeta;
+    if (document.getElementById('vattu-qr-font-title-custom')) document.getElementById('vattu-qr-font-title-custom').value = customFontTitle;
+}
+
+function openVatTuQrPrintModal() {
+    const modal = document.getElementById('vattu-qr-print-modal');
+    if (!modal) return;
+
+    loadQrMarginSettings();
+    handleQrPaperPresetChange(false);
+
+    if (!vattuQrRows || vattuQrRows.length === 0) {
+        vattuQrRows = [
+            { id: Date.now(), ma_vach: '', ten_vt: '', lot: '', date_expiry: '', quantity: 1 }
+        ];
+    }
+
+    renderVatTuQrPrintRows();
+    modal.classList.add('show');
+
+    // Attach paste listener to table body
+    const tbody = document.getElementById('vattu-qr-print-tbody');
+    if (tbody) {
+        tbody.removeEventListener('paste', handleVatTuQrTablePaste);
+        tbody.addEventListener('paste', handleVatTuQrTablePaste);
+    }
+}
+
+function closeVatTuQrPrintModal() {
+    const modal = document.getElementById('vattu-qr-print-modal');
+    if (modal) modal.classList.remove('show');
+    updateAllQrCountBadges();
+}
+
+function addVatTuQrPrintRow(data = {}) {
+    const rawLot = (data.lot || '').trim();
+    const cleanLot = (rawLot === '-' || rawLot.toLowerCase() === 'null') ? '' : rawLot;
+    vattuQrRows.push({
+        id: Date.now() + Math.random(),
+        ma_vach: data.ma_vach || '',
+        ten_vt: data.ten_vt || '',
+        lot: cleanLot,
+        date_expiry: data.date_expiry || '',
+        quantity: data.quantity !== undefined ? data.quantity : 1
+    });
+    renderVatTuQrPrintRows();
+}
+
+function removeVatTuQrPrintRow(index) {
+    if (vattuQrRows.length <= 1) {
+        vattuQrRows = [{ id: Date.now(), ma_vach: '', ten_vt: '', lot: '', date_expiry: '', quantity: 1 }];
+    } else {
+        vattuQrRows.splice(index, 1);
+    }
+    renderVatTuQrPrintRows();
+}
+
+function clearVatTuQrPrintTable() {
+    vattuQrRows = [
+        { id: Date.now(), ma_vach: '', ten_vt: '', lot: '', date_expiry: '', quantity: 1 }
+    ];
+    renderVatTuQrPrintRows();
+}
+
+function handleVatTuQrQtyChange(idx, val) {
+    if (!vattuQrRows[idx]) return;
+    let parsed = parseInt(val, 10);
+    if (isNaN(parsed) || parsed < 1) parsed = 1;
+    if (parsed > 999) parsed = 999;
+    vattuQrRows[idx].quantity = parsed;
+    updateAllQrCountBadges();
+}
+
+function updateAllQrCountBadges() {
+    const validRows = (vattuQrRows || []).filter(r => r.ma_vach && String(r.ma_vach).trim() !== '');
+    const totalLabels = validRows.reduce((sum, r) => sum + (Math.max(1, parseInt(r.quantity, 10) || 1)), 0);
+    const totalDistinctQr = validRows.length;
+
+    // 1. Modal summary text
+    const summaryCountEl = document.getElementById('vattu-qr-summary-count');
+    if (summaryCountEl) {
+        summaryCountEl.textContent = `${totalDistinctQr} mã (${totalLabels} tem)`;
+    }
+
+    // 2. Modal print button count
+    const btnCountEl = document.getElementById('vattu-qr-btn-count');
+    if (btnCountEl) {
+        btnCountEl.textContent = totalLabels;
+    }
+
+    // 3. Main toolbar button badge
+    const toolbarBadge = document.getElementById('vattu-qr-toolbar-badge');
+    if (toolbarBadge) {
+        if (totalLabels > 0) {
+            toolbarBadge.textContent = totalLabels;
+            toolbarBadge.style.display = 'inline-flex';
+        } else {
+            toolbarBadge.style.display = 'none';
+        }
+    }
+
+    // 4. Update any child row QR button badges currently on screen
+    document.querySelectorAll('.btn-qr-subrow').forEach(btn => {
+        const bBarcode = (btn.getAttribute('data-barcode') || '').trim();
+        const bLot = (btn.getAttribute('data-lot') || '').trim();
+        const bExp = (btn.getAttribute('data-exp') || '').trim();
+
+        const matched = validRows.find(r => 
+            String(r.ma_vach).trim().toLowerCase() === bBarcode.toLowerCase() &&
+            String(r.lot || '').trim().toLowerCase() === (bLot === '-' ? '' : bLot).toLowerCase() &&
+            String(r.date_expiry || '').trim().toLowerCase() === (bExp === '-' ? '' : bExp).toLowerCase()
+        );
+
+        let badgeEl = btn.querySelector('.subrow-qr-badge');
+
+        if (matched) {
+            btn.classList.add('active-has-count');
+            btn.title = 'Đã thêm vào danh sách in QR';
+            if (!badgeEl) {
+                badgeEl = document.createElement('span');
+                badgeEl.className = 'subrow-qr-badge';
+                badgeEl.textContent = '1';
+                btn.appendChild(badgeEl);
+            }
+        } else {
+            btn.classList.remove('active-has-count');
+            btn.title = 'Thêm mã QR vào cửa sổ in';
+            if (badgeEl) badgeEl.remove();
+        }
+    });
+}
+
+function handleSubrowQrButtonClick(btn, event) {
+    if (event) event.stopPropagation();
+    if (!btn) return;
+    const barcode = btn.getAttribute('data-barcode') || '';
+    const ten = btn.getAttribute('data-ten') || '';
+    const lot = btn.getAttribute('data-lot') || '';
+    const exp = btn.getAttribute('data-exp') || '';
+    addVatTuChildToQrPrint(barcode, ten, lot, exp, event);
+}
+
+function addVatTuChildToQrPrint(maVach, tenVt, lot, dateExpiry, event) {
+    if (event) event.stopPropagation();
+
+    const cleanBarcode = (maVach || '').trim();
+    if (!cleanBarcode) {
+        showVatTuNoticeModal('warning', 'Thiếu Mã Vạch', 'Mặt hàng này chưa có mã vạch để tạo tem QR!');
+        return;
+    }
+
+    const rawLot = (lot || '').trim();
+    const cleanLot = (rawLot === '-' || rawLot.toLowerCase() === 'null') ? '' : rawLot;
+    const cleanExpiry = (dateExpiry || '').trim();
+    const cleanTen = (tenVt || cleanBarcode).trim();
+
+    // Check if already in vattuQrRows (1 mã QR chỉ thêm 1 lần thôi, ấn 2 lần không có hiệu lực)
+    const alreadyExists = (vattuQrRows || []).some(r => 
+        r.ma_vach && String(r.ma_vach).trim().toLowerCase() === cleanBarcode.toLowerCase() &&
+        String(r.lot || '').trim().toLowerCase() === cleanLot.toLowerCase() &&
+        String(r.date_expiry || '').trim().toLowerCase() === cleanExpiry.toLowerCase()
+    );
+
+    if (alreadyExists) {
+        if (typeof showToast === 'function') {
+            showToast('warning', 'Đã Có Trong Danh Sách', 'Mã QR này đã có trong danh sách in rồi!');
+        }
+        return;
+    }
+
+    // If vattuQrRows only has 1 blank row, clear it
+    if (vattuQrRows.length === 1 && (!vattuQrRows[0].ma_vach || vattuQrRows[0].ma_vach.trim() === '')) {
+        vattuQrRows = [];
+    }
+
+    vattuQrRows.push({
+        id: Date.now() + Math.random(),
+        ma_vach: cleanBarcode,
+        ten_vt: cleanTen,
+        lot: cleanLot,
+        date_expiry: cleanExpiry,
+        quantity: 1
+    });
+
+    // Thêm thôi chứ không cần mở cửa sổ ra, khi cần in user tự mở
+    // Update all badges and counts
+    updateAllQrCountBadges();
+
+    if (typeof showToast === 'function') {
+        showToast('success', 'Đã Thêm QR', `Đã thêm vào danh sách in: ${cleanTen.slice(0, 30)}`);
+    }
+}
+
+function renderVatTuQrPrintRows() {
+    const tbody = document.getElementById('vattu-qr-print-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = vattuQrRows.map((row, idx) => {
+        return `
+            <tr data-row-index="${idx}">
+                <td style="text-align: center; font-weight: bold; color: #64748b; padding: 6px;">${idx + 1}</td>
+                <td style="padding: 4px;">
+                    <input type="text" class="vattu-qr-input-ma-vach" data-idx="${idx}" value="${escapeHtml(row.ma_vach)}" placeholder="Nhập / quẹt mã vạch" style="width: 100%; padding: 6px 8px; font-size: 13px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--bg-card); color: var(--text-color);" oninput="handleVatTuQrMaVachChange(${idx}, this.value)">
+                </td>
+                <td style="padding: 4px;">
+                    <input type="text" class="vattu-qr-input-ten-vt" data-idx="${idx}" value="${escapeHtml(row.ten_vt)}" placeholder="Tự động điền theo mã vạch" readonly style="width: 100%; padding: 6px 8px; font-size: 13px; border: 1px solid var(--card-border); border-radius: 6px; background: rgba(0,0,0,0.05); color: var(--text-color); font-weight: 600; cursor: not-allowed;">
+                </td>
+                <td style="padding: 4px;">
+                    <input type="text" class="vattu-qr-input-lot" data-idx="${idx}" value="${escapeHtml(row.lot || '')}" placeholder="LOT" style="width: 100%; padding: 6px 8px; font-size: 13px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--bg-card); color: var(--text-color);" oninput="vattuQrRows[${idx}].lot = this.value">
+                </td>
+                <td style="padding: 4px;">
+                    <input type="text" class="vattu-qr-input-date" data-idx="${idx}" value="${escapeHtml(row.date_expiry || '')}" placeholder="dd/mm/yyyy" style="width: 100%; padding: 6px 8px; font-size: 13px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--bg-card); color: var(--text-color);" oninput="vattuQrRows[${idx}].date_expiry = this.value">
+                </td>
+                <td style="padding: 4px; text-align: center;">
+                    <input type="number" class="vattu-qr-input-qty" data-idx="${idx}" value="${row.quantity || 1}" min="1" max="999" style="width: 55px; padding: 6px 4px; font-size: 13px; text-align: center; border: 1px solid var(--card-border); border-radius: 6px; background: var(--bg-card); color: var(--text-color); font-weight: bold;" oninput="handleVatTuQrQtyChange(${idx}, this.value)">
+                </td>
+                <td style="text-align: center; padding: 4px;">
+                    <button type="button" onclick="removeVatTuQrPrintRow(${idx})" title="Xóa hàng" style="background: none; border: none; color: #ef4444; font-size: 16px; cursor: pointer; padding: 4px;">&times;</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    updateAllQrCountBadges();
+}
+
+function handleVatTuQrMaVachChange(idx, val) {
+    const cleanBarcode = (val || '').trim();
+    vattuQrRows[idx].ma_vach = cleanBarcode;
+
+    const tenInput = document.querySelector(`.vattu-qr-input-ten-vt[data-idx="${idx}"]`);
+
+    if (!cleanBarcode) {
+        vattuQrRows[idx].ten_vt = '';
+        if (tenInput) tenInput.value = '';
+        updateAllQrCountBadges();
+        return;
+    }
+
+    // Lookup barcode in vatTuData or tonKhoDetailData
+    const matched = lookupVatTuByBarcode(cleanBarcode);
+    if (matched) {
+        vattuQrRows[idx].ten_vt = matched.ten_mat_hang || matched.ten_hang_hoa || '';
+        if (tenInput) tenInput.value = vattuQrRows[idx].ten_vt;
+    } else {
+        // Sai mã hoặc xóa số không tìm được -> xóa tên cũ ngay lập tức
+        vattuQrRows[idx].ten_vt = '';
+        if (tenInput) tenInput.value = '';
+    }
+
+    updateAllQrCountBadges();
+}
+
+function lookupVatTuByBarcode(barcode) {
+    if (!barcode) return null;
+    const lower = barcode.trim().toLowerCase();
+    let found = vatTuData.find(x => 
+        (x.ma_vach && String(x.ma_vach).trim().toLowerCase() === lower) ||
+        (x.ma_qr && String(x.ma_qr).trim().toLowerCase() === lower)
+    );
+    if (!found && typeof tonKhoDetailData !== 'undefined' && Array.isArray(tonKhoDetailData)) {
+        found = tonKhoDetailData.find(x => 
+            (x.ma_vach && String(x.ma_vach).trim().toLowerCase() === lower) ||
+            (x.ma_qr && String(x.ma_qr).trim().toLowerCase() === lower)
+        );
+    }
+    return found || null;
+}
+
+// Paste Excel Data (Ctrl+V) Handler
+function handleVatTuQrTablePaste(e) {
+    const clipboardData = e.clipboardData || window.clipboardData;
+    if (!clipboardData) return;
+
+    const pastedText = clipboardData.getData('text');
+    if (!pastedText || (!pastedText.includes('\t') && !pastedText.includes('\n'))) return;
+
+    e.preventDefault();
+
+    const activeEl = document.activeElement;
+    let startIdx = 0;
+    if (activeEl && activeEl.hasAttribute('data-idx')) {
+        startIdx = parseInt(activeEl.getAttribute('data-idx'), 10) || 0;
+    }
+
+    const lines = pastedText.split(/\r\n|\r|\n/).filter(line => line.length > 0);
+    if (lines.length === 0) return;
+
+    // Parse pasted lines into rows
+    lines.forEach((line, i) => {
+        const cols = line.split('\t').map(c => c.trim());
+        const targetIdx = startIdx + i;
+
+        const ma_vach = cols[0] || '';
+        const rawLot = cols[2] || '';
+        const lot = (rawLot === '-' || rawLot.toLowerCase() === 'null') ? '' : rawLot;
+        const rawDate = cols[3] || '';
+        const rawQty = cols[4] || '1';
+
+        const parsedQty = parseInt(rawQty, 10) || 1;
+        // Tên VT dù bên ngoài có điền và dán vào thì kệ, cứ chạy theo mã vạch tìm ra tên
+        const matched = lookupVatTuByBarcode(ma_vach);
+        const ten_vt = matched ? (matched.ten_mat_hang || matched.ten_hang_hoa || '') : '';
+
+        const rowData = {
+            id: Date.now() + Math.random() + i,
+            ma_vach: ma_vach,
+            ten_vt: ten_vt,
+            lot: lot,
+            date_expiry: rawDate,
+            quantity: parsedQty
+        };
+
+        if (targetIdx < vattuQrRows.length) {
+            vattuQrRows[targetIdx] = rowData;
+        } else {
+            vattuQrRows.push(rowData);
+        }
+    });
+
+    renderVatTuQrPrintRows();
+}
+
+// Helper to normalize any date input to strict dd/mm/yyyy format
+function normalizeToDDMMYYYY(dateStr) {
+    if (!dateStr || dateStr === '-' || dateStr === 'null' || dateStr === 'undefined') return '-';
+    const str = String(dateStr).trim();
+    if (!str || str === '-') return '-';
+
+    // 1. If DD/MM/YYYY
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+        const parts = str.split('/');
+        return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+    }
+
+    // 2. If YYYY-MM-DD
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
+        const parts = str.split('-');
+        return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+    }
+
+    // 3. If DD-MM-YYYY
+    if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(str)) {
+        const parts = str.split('-');
+        return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+    }
+
+    // 4. Try Date object
+    try {
+        const dt = new Date(str);
+        if (!isNaN(dt.getTime())) {
+            const d = String(dt.getDate()).padStart(2, '0');
+            const m = String(dt.getMonth() + 1).padStart(2, '0');
+            const y = dt.getFullYear();
+            return `${d}/${m}/${y}`;
+        }
+    } catch(e) {}
+
+    return str;
+}
+
+// Execute Batch QR Label Printing
+function executeVatTuQrBatchPrint() {
+    const validRows = vattuQrRows.filter(r => r.ma_vach && r.ma_vach.trim() !== '');
+
+    if (validRows.length === 0) {
+        showVatTuNoticeModal('warning', 'Chưa Nhập Mã Vạch', 'Vui lòng nhập hoặc dán ít nhất 1 mã vạch để thực hiện in tem QR!');
+        return;
+    }
+
+    // Generate list of individual labels expanded by quantity
+    const labels = [];
+    let count = 0;
+
+    validRows.forEach(row => {
+        const maVach = row.ma_vach.trim();
+        const rawLot = (row.lot || '').trim();
+        const lot = (rawLot === '-' || rawLot.toLowerCase() === 'null') ? '' : rawLot;
+        
+        const rawDate = (row.date_expiry || '').trim();
+        const normalizedDate = normalizeToDDMMYYYY(rawDate);
+        const formattedDate = (normalizedDate === '-' || normalizedDate.toLowerCase() === 'null') ? '' : normalizedDate;
+
+        const qty = Math.max(1, parseInt(row.quantity, 10) || 1);
+
+        // Build QR string dynamically omitting empty fields and their ; separators
+        const qrParts = [maVach];
+        if (lot) qrParts.push(lot);
+        if (formattedDate) qrParts.push(formattedDate);
+        const qrString = qrParts.join(';');
+
+        for (let q = 0; q < qty; q++) {
+            count++;
+            labels.push({
+                id: `qr_print_${count}_${Date.now()}`,
+                ma_vach: maVach,
+                ten_vt: row.ten_vt || maVach,
+                lot: lot,
+                date_expiry: formattedDate,
+                qrString: qrString
+            });
+        }
+    });
+
+    closeVatTuQrPrintModal();
+    printVatTuQrLabels(labels);
+}
+
+function formatLotWithLeadingEllipsis(lot, maxLen = 10) {
+    if (!lot || lot === '-' || String(lot).trim() === '') return '-';
+    const clean = String(lot).trim();
+    if (clean.length <= maxLen) return clean;
+    return '...' + clean.slice(-(maxLen - 3));
+}
+
+// Open Printable Popup Window with QR Codes
+function printVatTuQrLabels(labels) {
+    const presetSelect = document.getElementById('vattu-qr-paper-preset');
+    const presetVal = presetSelect ? presetSelect.value : '80x15_dual';
+
+    const marginTopMm = parseFloat(document.getElementById('vattu-qr-margin-top')?.value) || 0;
+    const marginBottomMm = parseFloat(document.getElementById('vattu-qr-margin-bottom')?.value) || 0;
+    const marginLeftMm = parseFloat(document.getElementById('vattu-qr-margin-left')?.value) || 0;
+    const marginRightMm = parseFloat(document.getElementById('vattu-qr-margin-right')?.value) || 0;
+
+    const customQrSize = parseFloat(document.getElementById('vattu-qr-size-custom')?.value);
+    const customFontMeta = parseFloat(document.getElementById('vattu-qr-font-meta-custom')?.value);
+    const customFontTitle = parseFloat(document.getElementById('vattu-qr-font-title-custom')?.value);
+    const customScale = parseFloat(document.getElementById('vattu-qr-scale-custom')?.value) || 100;
+
+    let paperWidth = 80;
+    let paperHeight = 15;
+    let cols = 2;
+    let labelWidth = 40;
+    let labelHeight = 15;
+    let cardHeight = 12.5;
+    let qrSizeMm = 8.0;
+    let metaFontSize = '5.0pt';
+    let titleFontSize = '5.5pt';
+    let isA4 = false;
+
+    if (presetVal === '72x10_dual') {
+        paperWidth = 72; paperHeight = 10; cols = 2; labelWidth = 36; labelHeight = 10; cardHeight = 8.0;
+        qrSizeMm = 5.5; metaFontSize = '4.5pt'; titleFontSize = '4.8pt';
+    } else if (presetVal === '72x15_dual') {
+        paperWidth = 72; paperHeight = 15; cols = 2; labelWidth = 36; labelHeight = 15; cardHeight = 12.5;
+        qrSizeMm = 10.0; metaFontSize = '5.0pt'; titleFontSize = '5.5pt';
+    } else if (presetVal === '80x15_dual') {
+        paperWidth = 80; paperHeight = 15; cols = 2; labelWidth = 40; labelHeight = 15; cardHeight = 12.5;
+        qrSizeMm = 8.0; metaFontSize = '5.0pt'; titleFontSize = '5.5pt';
+    } else if (presetVal === '40x25_single') {
+        paperWidth = 40; paperHeight = 25; cols = 1; labelWidth = 40; labelHeight = 25; cardHeight = 22.0;
+        qrSizeMm = 15; metaFontSize = '7.2pt'; titleFontSize = '8.0pt';
+    } else if (presetVal === '50x30_single') {
+        paperWidth = 50; paperHeight = 30; cols = 1; labelWidth = 50; labelHeight = 30; cardHeight = 27.0;
+        qrSizeMm = 19; metaFontSize = '8.0pt'; titleFontSize = '9.0pt';
+    } else if (presetVal === '72x22_dual') {
+        paperWidth = 72; paperHeight = 22; cols = 2; labelWidth = 36; labelHeight = 22; cardHeight = 19.5;
+        qrSizeMm = 13; metaFontSize = '6.2pt'; titleFontSize = '7.0pt';
+    } else if (presetVal === '100x15_dual') {
+        paperWidth = 100; paperHeight = 15; cols = 2; labelWidth = 50; labelHeight = 15; cardHeight = 12.5;
+        qrSizeMm = 8.0; metaFontSize = '5.0pt'; titleFontSize = '5.5pt';
+    } else if (presetVal === 'a4_sheet') {
+        isA4 = true; paperWidth = 210; paperHeight = 297; cols = 3; labelWidth = 65; labelHeight = 30; cardHeight = 28.0;
+        qrSizeMm = 18; metaFontSize = '8.0pt'; titleFontSize = '9.0pt';
+    } else if (presetVal === 'custom') {
+        const customW = parseFloat(document.getElementById('vattu-qr-custom-w')?.value) || 80;
+        const customH = parseFloat(document.getElementById('vattu-qr-custom-h')?.value) || 15;
+        const customCols = parseInt(document.getElementById('vattu-qr-custom-cols')?.value, 10) || 2;
+        paperWidth = customW;
+        paperHeight = customH;
+        cols = customCols;
+        labelWidth = customW / customCols;
+        labelHeight = customH;
+        cardHeight = Math.max(5, customH - 2.5);
+        qrSizeMm = Math.min(cardHeight * 0.6, labelWidth * 0.35);
+        metaFontSize = (labelHeight > 20) ? '8pt' : '5.0pt';
+        titleFontSize = (labelHeight > 20) ? '9pt' : '5.5pt';
+    }
+
+    // Apply User Custom Overrides if specified
+    if (!isNaN(customQrSize) && customQrSize > 0) {
+        qrSizeMm = customQrSize;
+    }
+    if (!isNaN(customFontMeta) && customFontMeta > 0) {
+        metaFontSize = `${customFontMeta}pt`;
+    }
+    if (!isNaN(customFontTitle) && customFontTitle > 0) {
+        titleFontSize = `${customFontTitle}pt`;
+    }
+
+    let pagesHtml = '';
+    if (!isA4) {
+        for (let i = 0; i < labels.length; i += cols) {
+            const pageLabels = labels.slice(i, i + cols);
+            const cardsHtml = pageLabels.map(item => `
+                <div class="qr-label-card">
+                    <div class="qr-label-top">
+                        <div class="qr-code-img-wrap" id="qr-img-${item.id}"></div>
+                        <div class="qr-label-right-meta">
+                            <div class="qr-meta-row"><span>LOT:</span><div class="qr-meta-val" title="${escapeHtml(item.lot || '-')}">${escapeHtml(formatLotWithLeadingEllipsis(item.lot, 10))}</div></div>
+                            <div class="qr-meta-row"><span>HSD:</span><div class="qr-meta-val" title="${escapeHtml(item.date_expiry || '-')}">${escapeHtml(item.date_expiry || '-')}</div></div>
+                        </div>
+                    </div>
+                    <div class="qr-label-title" title="${escapeHtml(item.ten_vt)}">${escapeHtml(item.ten_vt)}</div>
+                </div>
+            `).join('');
+            pagesHtml += `<div class="qr-page-row"><div class="qr-grid">${cardsHtml}</div></div>`;
+        }
+    } else {
+        const cardsHtml = labels.map(item => `
+            <div class="qr-label-card">
+                <div class="qr-label-top">
+                    <div class="qr-code-img-wrap" id="qr-img-${item.id}"></div>
+                    <div class="qr-label-right-meta">
+                        <div class="qr-meta-row"><span>LOT:</span><div class="qr-meta-val" title="${escapeHtml(item.lot || '-')}">${escapeHtml(formatLotWithLeadingEllipsis(item.lot, 10))}</div></div>
+                        <div class="qr-meta-row"><span>HSD:</span><div class="qr-meta-val" title="${escapeHtml(item.date_expiry || '-')}">${escapeHtml(item.date_expiry || '-')}</div></div>
+                    </div>
+                </div>
+                <div class="qr-label-title" title="${escapeHtml(item.ten_vt)}">${escapeHtml(item.ten_vt)}</div>
+            </div>
+        `).join('');
+        pagesHtml = `<div class="qr-grid">${cardsHtml}</div>`;
+    }
+
+    const printWin = window.open('', '_blank', 'width=950,height=750');
+    if (!printWin) {
+        showVatTuNoticeModal('warning', 'Bật Popup', 'Trình duyệt đang chặn cửa sổ bật lên (popup). Vui lòng cho phép popup để in tem QR!');
+        return;
+    }
+
+    printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>In Tem Mã QR (${paperWidth}x${paperHeight}mm)</title>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+            <style>
+                @page {
+                    size: ${isA4 ? 'A4 portrait' : `${paperWidth}mm ${paperHeight}mm`};
+                    margin: ${marginTopMm}mm ${marginRightMm}mm ${marginBottomMm}mm ${marginLeftMm}mm;
+                }
+                html, body {
+                    margin: 0;
+                    padding: ${marginTopMm}mm ${marginRightMm}mm ${marginBottomMm}mm ${marginLeftMm}mm;
+                    width: 100%;
+                    box-sizing: border-box;
+                    background: #fff;
+                    color: #000;
+                    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                    text-rendering: optimizeLegibility;
+                    -webkit-print-color-adjust: exact;
+                }
+                .qr-page-row {
+                    width: ${paperWidth}mm;
+                    height: ${paperHeight}mm;
+                    box-sizing: border-box;
+                    overflow: hidden;
+                    page-break-after: always;
+                    break-after: page;
+                    page-break-inside: avoid;
+                }
+                .qr-grid {
+                    display: grid;
+                    grid-template-columns: repeat(${cols}, 1fr);
+                    gap: ${isA4 ? '4mm 4mm' : '0 1.5mm'};
+                    width: 100%;
+                    height: 100%;
+                    padding: ${isA4 ? '0' : '0 0.5mm'};
+                    box-sizing: border-box;
+                    align-items: center;
+                }
+                .qr-label-card {
+                    width: ${labelWidth - 0.8}mm;
+                    height: ${cardHeight}mm;
+                    box-sizing: border-box;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                    padding: ${labelHeight <= 10 ? '0.2mm 0.5mm' : '0.3mm 0.6mm'};
+                    border: 1px dashed #cbd5e1;
+                    overflow: hidden;
+                    page-break-inside: avoid;
+                    background: #fff;
+                    margin: auto 0;
+                }
+                .qr-label-top {
+                    display: flex;
+                    flex-direction: row;
+                    align-items: center;
+                    justify-content: flex-start;
+                    height: ${qrSizeMm + 0.3}mm;
+                    width: 100%;
+                    overflow: hidden;
+                    flex-shrink: 0;
+                }
+                .qr-code-img-wrap {
+                    width: ${qrSizeMm}mm;
+                    height: ${qrSizeMm}mm;
+                    flex-shrink: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .qr-code-img-wrap img, .qr-code-img-wrap canvas {
+                    width: ${qrSizeMm}mm !important;
+                    height: ${qrSizeMm}mm !important;
+                    display: block;
+                    image-rendering: -webkit-optimize-contrast;
+                    image-rendering: crisp-edges;
+                    image-rendering: pixelated;
+                }
+                .qr-label-right-meta {
+                    flex: 1;
+                    min-width: 0;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    text-align: left;
+                    padding-left: 1.5mm;
+                    overflow: hidden;
+                    height: ${qrSizeMm}mm;
+                }
+                .qr-meta-row {
+                    font-size: ${metaFontSize};
+                    font-weight: 700;
+                    line-height: 1.2;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    color: #000000;
+                    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+                    display: flex;
+                    align-items: center;
+                    gap: 2px;
+                    max-width: 100%;
+                }
+                .qr-meta-row span {
+                    font-weight: 800;
+                    flex-shrink: 0;
+                    color: #000000;
+                }
+                .qr-meta-val {
+                    flex: 1;
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    direction: rtl;
+                    text-align: left;
+                    font-weight: 700;
+                    color: #000000;
+                }
+                .qr-label-title {
+                    width: 100%;
+                    flex: 1;
+                    min-height: 0;
+                    display: flex;
+                    align-items: center;
+                    font-size: ${titleFontSize};
+                    font-weight: 700;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    color: #000000;
+                    text-align: left;
+                    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+                    margin-top: 0.2mm;
+                }
+                .qr-label-card:nth-child(even) {
+                    margin-left: 2mm;
+                }
+                @media print {
+                    .qr-label-card { border: none !important; }
+                    button { display: none !important; }
+                }
+            </style>
+        </head>
+        <body>
+            ${pagesHtml}
+            <script>
+                const labelsData = ${JSON.stringify(labels)};
+                window.onload = function() {
+                    labelsData.forEach(item => {
+                        const el = document.getElementById('qr-img-' + item.id);
+                        if (el && typeof QRCode !== 'undefined') {
+                            try {
+                                new QRCode(el, {
+                                    text: item.qrString,
+                                    width: 256,
+                                    height: 256,
+                                    correctLevel: QRCode.CorrectLevel.H
+                                });
+                            } catch(e) {
+                                console.error('QRCode Error:', e);
+                            }
+                        }
+                    });
+                    setTimeout(function() {
+                        window.print();
+                    }, 600);
+                };
+            <\/script>
+        </body>
+        </html>
+    `);
+    printWin.document.close();
+}
+
 // Expose to window for any inline onclick handlers
 window.downloadVatTuExcelTemplate = downloadVatTuExcelTemplate;
 window.openColumnConfigModal = openColumnConfigModal;
 window.closeColumnConfigModal = closeColumnConfigModal;
 window.saveColumnConfig = saveColumnConfig;
+window.openVatTuQrPrintModal = openVatTuQrPrintModal;
+window.closeVatTuQrPrintModal = closeVatTuQrPrintModal;
+window.addVatTuQrPrintRow = addVatTuQrPrintRow;
+window.removeVatTuQrPrintRow = removeVatTuQrPrintRow;
+window.clearVatTuQrPrintTable = clearVatTuQrPrintTable;
+window.executeVatTuQrBatchPrint = executeVatTuQrBatchPrint;
+window.handleQrPaperPresetChange = handleQrPaperPresetChange;
+window.resetQrSizeDefaults = resetQrSizeDefaults;
+window.saveQrMarginSettings = saveQrMarginSettings;
+window.loadQrMarginSettings = loadQrMarginSettings;
+window.getQrSettingsUserKey = getQrSettingsUserKey;
+window.formatLotWithLeadingEllipsis = formatLotWithLeadingEllipsis;
+window.addVatTuChildToQrPrint = addVatTuChildToQrPrint;
+window.handleSubrowQrButtonClick = handleSubrowQrButtonClick;
+window.handleVatTuQrQtyChange = handleVatTuQrQtyChange;
+window.updateAllQrCountBadges = updateAllQrCountBadges;
+
