@@ -71,6 +71,7 @@ function initNhapXuatModule() {
     fetchNhapXuatData();
     createNewNhapXuatOrderForm(true); // true = restore draft if available
     setupNhapXuatRealtimeSubscription();
+    initNxFolderWatcher();
 }
 
 function bindNhapXuatEvents() {
@@ -482,7 +483,9 @@ function applyNhapXuatFilters() {
             if (selectedStatus === 'Chờ') {
                 return x.trang_thai === 'Chờ';
             } else if (selectedStatus === 'Done') {
-                return x.trang_thai === 'Done' || !x.trang_thai || x.trang_thai === 'Đã hoàn tất' || x.trang_thai === 'Hoàn tất';
+                return (x.trang_thai === 'Done' || (!x.trang_thai && x.trang_thai !== 'Đã hủy') || x.trang_thai === 'Đã hoàn tất' || x.trang_thai === 'Hoàn tất') && x.trang_thai !== 'Đã hủy';
+            } else if (selectedStatus === 'Đã hủy') {
+                return x.trang_thai === 'Đã hủy';
             }
             return true;
         });
@@ -559,7 +562,8 @@ function updateNxFilterDropdownOptions() {
     if (selectedStatus && selectedStatus !== 'all') {
         recordsForLoai = recordsForLoai.filter(x => {
             if (selectedStatus === 'Chờ') return x.trang_thai === 'Chờ';
-            if (selectedStatus === 'Done') return x.trang_thai === 'Done' || !x.trang_thai || x.trang_thai === 'Đã hoàn tất' || x.trang_thai === 'Hoàn tất';
+            if (selectedStatus === 'Done') return (x.trang_thai === 'Done' || (!x.trang_thai && x.trang_thai !== 'Đã hủy') || x.trang_thai === 'Đã hoàn tất' || x.trang_thai === 'Hoàn tất') && x.trang_thai !== 'Đã hủy';
+            if (selectedStatus === 'Đã hủy') return x.trang_thai === 'Đã hủy';
             return true;
         });
     }
@@ -598,12 +602,14 @@ function updateNxFilterDropdownOptions() {
 
     const countStatusAll = recordsForStatus.length;
     const countStatusCho = recordsForStatus.filter(x => x.trang_thai === 'Chờ').length;
-    const countStatusDone = recordsForStatus.filter(x => x.trang_thai === 'Done' || !x.trang_thai || x.trang_thai === 'Đã hoàn tất' || x.trang_thai === 'Hoàn tất').length;
+    const countStatusDone = recordsForStatus.filter(x => (x.trang_thai === 'Done' || (!x.trang_thai && x.trang_thai !== 'Đã hủy') || x.trang_thai === 'Đã hoàn tất' || x.trang_thai === 'Hoàn tất') && x.trang_thai !== 'Đã hủy').length;
+    const countStatusHuy = recordsForStatus.filter(x => x.trang_thai === 'Đã hủy').length;
 
     if (filterStatusSelect) {
         const optAll = filterStatusSelect.querySelector('option[value="all"]');
         const optCho = filterStatusSelect.querySelector('option[value="Chờ"]');
         const optDone = filterStatusSelect.querySelector('option[value="Done"]');
+        const optHuy = filterStatusSelect.querySelector('option[value="Đã hủy"]');
 
         if (optAll) optAll.textContent = `📋 Tất cả trạng thái (${countStatusAll})`;
         if (optCho) {
@@ -613,6 +619,10 @@ function updateNxFilterDropdownOptions() {
         if (optDone) {
             optDone.textContent = `✅ Hoàn tất (${countStatusDone})`;
             optDone.disabled = countStatusDone === 0 && selectedStatus !== 'Done';
+        }
+        if (optHuy) {
+            optHuy.textContent = `❌ Đã hủy (${countStatusHuy})`;
+            optHuy.disabled = countStatusHuy === 0 && selectedStatus !== 'Đã hủy';
         }
     }
 
@@ -761,6 +771,55 @@ function checkNxOrderModified() {
     updateNxSaveButtonState(isModified);
 }
 
+// Helper: Phân biệt nguồn gốc của đơn (Thư mục tự động, PDF tải lên, hoặc Tạo thủ công/quét tay)
+function getNxOrderSourceInfo(order) {
+    if (!order) return { type: 'thu_cong', label: '✍️ Thủ công', icon: '✍️', bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: 'rgba(16, 185, 129, 0.35)', desc: 'Đơn tự tạo hoặc quét mã trực tiếp' };
+
+    let src = order.nguon_don;
+    if (!src) {
+        // Fallback cho đơn cũ chưa có trường nguon_don
+        const mucDich = (order.muc_dich || '').toLowerCase();
+        if (mucDich.includes('[auto folder]') || mucDich.includes('[tự động theo dõi]') || mucDich.includes('[tự động')) {
+            src = 'auto_folder';
+        } else {
+            // Mặc định là thủ công — KHÔNG dựa vào file_url vì đính kèm PDF ≠ đơn nhập từ PDF
+            src = 'thu_cong';
+        }
+    }
+
+    if (src === 'auto_folder') {
+        return {
+            type: 'auto_folder',
+            label: '📁 Thư mục',
+            icon: '📁',
+            bg: 'rgba(6, 182, 212, 0.15)',
+            color: '#06b6d4',
+            border: 'rgba(6, 182, 212, 0.35)',
+            desc: 'Đơn tự động nạp từ Thư mục theo dõi'
+        };
+    } else if (src === 'pdf_import') {
+        return {
+            type: 'pdf_import',
+            label: '📄 File PDF',
+            icon: '📄',
+            bg: 'rgba(168, 85, 247, 0.15)',
+            color: '#c084fc',
+            border: 'rgba(168, 85, 247, 0.35)',
+            desc: 'Đơn trích xuất từ File PDF hóa đơn tải lên'
+        };
+    } else {
+        return {
+            type: 'thu_cong',
+            label: '✍️ Thủ công',
+            icon: '✍️',
+            bg: 'rgba(16, 185, 129, 0.15)',
+            color: '#10b981',
+            border: 'rgba(16, 185, 129, 0.35)',
+            desc: 'Đơn tự tạo hoặc quét mã trực tiếp'
+        };
+    }
+}
+
 function renderNhapXuatOrderList(orders) {
     const listEl = document.getElementById('nhapxuat-order-list');
     if (!listEl) return;
@@ -813,16 +872,30 @@ function renderNhapXuatOrderList(orders) {
     orders.forEach(order => {
         const isSelected = selectedNxOrderId === order.id;
         const isNhap = order.loai_don === 'Nhập';
+        const isCancelled = order.trang_thai === 'Đã hủy';
+        const isPending = order.trang_thai === 'Chờ';
+        const srcInfo = getNxOrderSourceInfo(order);
+
+        let statusBadgeHtml = '';
+        if (isCancelled) {
+            statusBadgeHtml = '<span style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">❌ Đã Hủy</span>';
+        } else if (isPending) {
+            statusBadgeHtml = '<span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">⏳ Chờ</span>';
+        }
 
         const card = document.createElement('div');
-        card.className = `nx-order-card ${isSelected ? 'selected' : ''}`;
+        card.className = `nx-order-card ${isSelected ? 'selected' : ''} ${isCancelled ? 'order-cancelled' : ''}`;
+        if (isCancelled) {
+            card.style.opacity = '0.75';
+            card.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+        }
         card.onclick = () => selectNxOrderForView(order);
 
         card.innerHTML = `
             <div class="nx-card-top">
-                <div style="display: flex; gap: 6px; align-items: center;">
-                    <span class="nx-card-code">${escapeHtml(order.ma_don)}</span>
-                    ${order.trang_thai === 'Chờ' ? '<span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">⏳ Chờ</span>' : ''}
+                <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+                    <span class="nx-card-code" style="${isCancelled ? 'text-decoration: line-through; color: #ef4444;' : ''}">${escapeHtml(order.ma_don)}</span>
+                    ${statusBadgeHtml}
                 </div>
                 <span class="nx-card-type ${isNhap ? 'nhap' : 'xuat'}">${isNhap ? '📥 Nhập' : '📤 Xuất'}</span>
             </div>
@@ -1000,6 +1073,10 @@ function renderNxOrderLogs(logs) {
                 actionBadge = `<span class="badge-lot" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; font-size: 11px;">❌ Xóa SP</span>`;
             } else if (log.hanh_dong === 'SỬA_SL') {
                 actionBadge = `<span class="badge-lot" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; font-size: 11px;">✏️ Sửa SL</span>`;
+            } else if (log.hanh_dong === 'HỦY_ĐƠN') {
+                actionBadge = `<span class="badge-lot" style="background: rgba(239, 68, 68, 0.25); color: #ef4444; font-size: 11px; font-weight: 700;">🗑️ Hủy Đơn</span>`;
+            } else if (log.hanh_dong === 'KHÔI_PHỤC_ĐƠN') {
+                actionBadge = `<span class="badge-lot" style="background: rgba(16, 185, 129, 0.25); color: #10b981; font-size: 11px; font-weight: 700;">↩️ Khôi Phục</span>`;
             } else {
                 actionBadge = `<span class="badge-lot" style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; font-size: 11px;">💾 Cập Nhật</span>`;
             }
@@ -1076,10 +1153,16 @@ async function _doSelectNxOrderForView(order) {
     const titleEl = document.getElementById('nhapxuat-form-title');
     const modeBadge = document.getElementById('nhapxuat-mode-badge');
     const statusBadge = document.getElementById('nhapxuat-status-badge');
+    const sourceBadge = document.getElementById('nhapxuat-source-badge');
     const fileLink = document.getElementById('nhapxuat-file-link');
 
     if (titleEl) titleEl.textContent = `📋 Chi Tiết Đơn ${order.ma_don}`;
     
+    // Render Source Origin Badge
+    if (sourceBadge) {
+        sourceBadge.style.display = 'none'; // User requested to hide this badge completely
+    }
+
     if (fileLink) {
         if (order.file_url) {
             fileLink.style.display = 'inline-block';
@@ -1089,9 +1172,22 @@ async function _doSelectNxOrderForView(order) {
         }
     }
 
+    const isCancelled = order.trang_thai === 'Đã hủy';
+    const isPending = order.trang_thai === 'Chờ';
+
     if (statusBadge) {
-        if (order.trang_thai === 'Chờ') {
-            statusBadge.style.display = 'none'; // Bỏ nút "⏳ Đang Chờ Quét (Nhấn để Hoàn Tất)" theo yêu cầu
+        if (isCancelled) {
+            statusBadge.style.display = 'inline-block';
+            statusBadge.textContent = '❌ Đã Hủy';
+            statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+            statusBadge.style.color = '#ef4444';
+            statusBadge.onclick = null;
+        } else if (isPending) {
+            statusBadge.style.display = 'inline-block';
+            statusBadge.textContent = '⏳ Đang Chờ Quét';
+            statusBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+            statusBadge.style.color = '#f59e0b';
+            statusBadge.onclick = null;
         } else {
             statusBadge.style.display = 'inline-block';
             statusBadge.textContent = '✅ Đã Hoàn Tất';
@@ -1107,17 +1203,42 @@ async function _doSelectNxOrderForView(order) {
         modeBadge.style.color = '#3b82f6';
     }
 
-    const btnDelete = document.getElementById('btn-delete-nx-order');
-    const btnDownload = document.getElementById('btn-download-nx-pdf');
-    
-    if (btnDelete) {
-        if (order.trang_thai === 'Chờ') {
-            btnDelete.style.display = 'flex';
-        } else {
-            btnDelete.style.display = 'none';
+    // Buttons & Scanner Control
+    const btnCancel = document.getElementById('btn-cancel-nx-order');
+    const btnRestore = document.getElementById('btn-restore-nx-order');
+    const btnHardDelete = document.getElementById('btn-hard-delete-nx-order');
+    const btnSave = document.getElementById('btn-save-nx-order');
+    const scannerInput = document.getElementById('nx-qr-scanner-input');
+    const scanTrigger = document.querySelector('.btn-scan-trigger');
+
+    const srcInfo = getNxOrderSourceInfo(order);
+    const isPdfOrder = srcInfo.type === 'pdf_import';
+    const hasNoProducts = !currentDraftNxItems || currentDraftNxItems.length === 0;
+    const canHardDelete = isPdfOrder || isPending || hasNoProducts;
+
+    if (isCancelled) {
+        if (btnCancel) btnCancel.style.display = 'none';
+        if (btnRestore) btnRestore.style.display = 'flex';
+        if (btnHardDelete) btnHardDelete.style.display = canHardDelete ? 'flex' : 'none';
+        if (btnSave) btnSave.style.display = 'flex'; // Allow saving attached files
+        if (scannerInput) {
+            scannerInput.disabled = true;
+            scannerInput.placeholder = 'Đơn đã bị hủy - Không thể quét hoặc chỉnh sửa';
         }
+        if (scanTrigger) scanTrigger.disabled = true;
+    } else {
+        if (btnCancel) btnCancel.style.display = 'flex';
+        if (btnRestore) btnRestore.style.display = 'none';
+        if (btnHardDelete) btnHardDelete.style.display = canHardDelete ? 'flex' : 'none';
+        if (btnSave) btnSave.style.display = 'flex';
+        if (scannerInput) {
+            scannerInput.disabled = false;
+            scannerInput.placeholder = 'Quét QR / Mã vạch hoặc tìm tên vật tư...';
+        }
+        if (scanTrigger) scanTrigger.disabled = false;
     }
-    
+
+    const btnDownload = document.getElementById('btn-download-nx-pdf');
     if (btnDownload) {
         if (order.file_url) {
             btnDownload.href = order.file_url;
@@ -1127,11 +1248,17 @@ async function _doSelectNxOrderForView(order) {
         }
     }
 
+    const loaiInput = document.getElementById('nx-input-loai');
+    const mucDichInput = document.getElementById('nx-input-mucdich');
+    
     document.getElementById('nx-input-madon').value = order.ma_don || '';
-    document.getElementById('nx-input-loai').value = order.loai_don || 'Nhập';
+    loaiInput.value = order.loai_don || 'Nhập';
     document.getElementById('nx-input-time').value = formatNxDateTime(order.created_at || order.ngay_tao);
-    document.getElementById('nx-input-mucdich').value = order.muc_dich || '';
+    mucDichInput.value = order.muc_dich || '';
     document.getElementById('nx-input-user').value = order.user_name || '';
+
+    loaiInput.disabled = isCancelled;
+    mucDichInput.disabled = isCancelled;
 
     await populateNxManagerBranches();
     const managerSelect = document.getElementById('nx-manager-branch-select');
@@ -1211,15 +1338,31 @@ async function _doCreateNewNhapXuatOrderForm() {
     const titleEl = document.getElementById('nhapxuat-form-title');
     const modeBadge = document.getElementById('nhapxuat-mode-badge');
     const statusBadge = document.getElementById('nhapxuat-status-badge');
+    const sourceBadge = document.getElementById('nhapxuat-source-badge');
     const fileLink = document.getElementById('nhapxuat-file-link');
 
     if (statusBadge) statusBadge.style.display = 'none';
+    if (sourceBadge) sourceBadge.style.display = 'none';
     if (fileLink) fileLink.style.display = 'none';
     
-    const btnDelete = document.getElementById('btn-delete-nx-order');
+    const btnCancel = document.getElementById('btn-cancel-nx-order');
+    const btnRestore = document.getElementById('btn-restore-nx-order');
+    const btnHardDelete = document.getElementById('btn-hard-delete-nx-order');
+    const btnSave = document.getElementById('btn-save-nx-order');
     const btnDownload = document.getElementById('btn-download-nx-pdf');
-    if (btnDelete) btnDelete.style.display = 'none';
+    const scannerInput = document.getElementById('nx-qr-scanner-input');
+    const scanTrigger = document.querySelector('.btn-scan-trigger');
+
+    if (btnCancel) btnCancel.style.display = 'none';
+    if (btnRestore) btnRestore.style.display = 'none';
+    if (btnHardDelete) btnHardDelete.style.display = 'none';
+    if (btnSave) btnSave.style.display = 'flex';
     if (btnDownload) btnDownload.style.display = 'none';
+    if (scannerInput) {
+        scannerInput.disabled = false;
+        scannerInput.placeholder = 'Quét QR / Mã vạch hoặc tìm tên vật tư...';
+    }
+    if (scanTrigger) scanTrigger.disabled = false;
 
     if (titleEl) titleEl.textContent = '📝 Tạo Đơn Nhập / Xuất Kho Mới';
     if (modeBadge) {
@@ -1239,14 +1382,12 @@ async function _doCreateNewNhapXuatOrderForm() {
 
     const userNameFormatted = updateNxUserFieldWithBranch();
 
-
-
-
     // Fresh Form Always (Draft disabled)
     currentDraftOrder = {
         ma_don: 'ĐƠN-NHÁP',
         loai_don: '', // Initial loại đơn is EMPTY
         muc_dich: '',
+        nguon_don: 'thu_cong',
         user_name: userNameFormatted,
         items: []
     };
@@ -1265,7 +1406,6 @@ async function _doCreateNewNhapXuatOrderForm() {
     renderNhapXuatOrderList(filteredNhapXuatData);
     updateNxSaveButtonState(true);
 
-    const scannerInput = document.getElementById('nx-qr-scanner-input');
     if (scannerInput) scannerInput.focus();
 }
 
@@ -1897,12 +2037,23 @@ function renderNxDraftItemsTable() {
         }
 
         let qtyDisplay = `<input type="number" min="0" class="form-control-sm" style="width: 75px; text-align: right; font-weight: 700; color: #10b981;" value="${qty}" onchange="updateNxDraftItemQty(${idx}, this.value)">`;
-        if (currentDraftOrder.trang_thai === 'Chờ' && item.so_luong_yeu_cau) {
+        if (currentDraftOrder.trang_thai === 'Đã hủy') {
+            const prevQty = item.so_luong_truoc_khi_huy != null ? item.so_luong_truoc_khi_huy : item.so_luong;
+            qtyDisplay = `<div style="display: flex; align-items: center; justify-content: flex-end;">
+                            <span style="text-decoration: line-through; color: #ef4444; font-size: 13.5px; font-weight: 700; padding-right: 8px;">${prevQty}</span>
+                          </div>`;
+        } else if (currentDraftOrder.trang_thai === 'Chờ' && item.so_luong_yeu_cau) {
             qtyDisplay = `<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
                             <span style="font-size: 11px; color: var(--text-muted);">Cần quét: <strong style="color: var(--text-primary);">${item.so_luong_yeu_cau}</strong></span>
                             <input type="number" min="0" max="${item.so_luong_yeu_cau}" class="form-control-sm" style="width: 75px; text-align: right; font-weight: 700; color: ${qty >= item.so_luong_yeu_cau ? '#10b981' : '#ef4444'};" value="${qty}" onchange="updateNxDraftItemQty(${idx}, this.value)">
                           </div>`;
         }
+
+        const deleteActionHtml = currentDraftOrder.trang_thai === 'Đã hủy'
+            ? `<span style="color: var(--text-muted); font-size: 12px;">-</span>`
+            : `<button type="button" class="btn-action-icon btn-delete-vattu" onclick="removeNxDraftItem(${idx})" title="Xóa khỏi đơn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+               </button>`;
 
         tr.innerHTML = `
             <td style="text-align: center; font-weight: 600;">${idx + 1}</td>
@@ -1921,9 +2072,7 @@ function renderNxDraftItemsTable() {
                 ${qtyDisplay}
             </td>
             <td style="text-align: center;">
-                <button type="button" class="btn-action-icon btn-delete-vattu" onclick="removeNxDraftItem(${idx})" title="Xóa khỏi đơn">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                </button>
+                ${deleteActionHtml}
             </td>
         `;
         tbody.appendChild(tr);
@@ -1935,6 +2084,7 @@ function renderNxDraftItemsTable() {
 }
 
 function updateNxDraftItemQty(idx, newQty) {
+    if (currentDraftOrder && currentDraftOrder.trang_thai === 'Đã hủy') return;
     const item = currentDraftNxItems[idx];
     if (!item) return;
 
@@ -2273,14 +2423,14 @@ async function saveNxOrderToSystem() {
                         const { error: err1 } = await client
                             .from('nhap_xuat')
                             .update(updatePayload)
-                            .eq('ma_don', maDon);
+                            .eq('id', selectedNxOrderId);
 
                         if (err1) {
-                            console.warn("NhapXuat: Error updating by ma_don, trying by ID:", err1.message);
+                            console.warn("NhapXuat: Error updating by ID, trying by ma_don:", err1.message);
                             await client
                                 .from('nhap_xuat')
                                 .update(updatePayload)
-                                .eq('id', selectedNxOrderId);
+                                .eq('ma_don', maDon);
                         }
                     }
 
@@ -2387,41 +2537,285 @@ async function saveNxOrderToSystem() {
     }
 }
 
-// Helper: Chuẩn hóa ngày thành YYYY-MM-DD để khớp với kiểu DATE của PostgreSQL table 'the_kho'
-async function deletePendingNxOrder() {
-    if (!selectedNxOrderId || !currentDraftOrder || currentDraftOrder.trang_thai !== 'Chờ') return;
-    
+// =========================================================================
+// XÓA / HỦY ĐƠN VÀ KHÔI PHỤC ĐƠN (áp dụng cho tất cả các đơn)
+// =========================================================================
+async function cancelNxOrder() {
+    if (!selectedNxOrderId || !currentDraftOrder) {
+        if (typeof showToast === 'function') {
+            showToast('warning', 'Chưa Chọn Đơn', 'Vui lòng chọn một đơn kho để thực hiện xóa/hủy.');
+        }
+        return;
+    }
+
+    const maDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || '';
+    const loaiDon = document.getElementById('nx-input-loai')?.value || currentDraftOrder.loai_don || 'Nhập';
+
     showGenericConfirmModal(
-        'XÁC NHẬN XÓA',
-        'Xóa Đơn Chờ',
-        `Bạn có chắc chắn muốn xóa đơn <strong>${currentDraftOrder.ma_don}</strong> không?`,
-        'Đơn này chưa được quét hoàn tất, bạn có thể xóa nó. Hành động này không thể hoàn tác.',
+        'XÁC NHẬN HỦY ĐƠN',
+        `Xóa / Hủy Đơn Kho ${maDon}`,
+        `Bạn có chắc chắn muốn xóa/hủy đơn [<strong>${escapeHtml(maDon)}</strong>] không?<br><br>` +
+        `• Toàn bộ số lượng đã quét sẽ được <strong>đưa về 0</strong>.<br>` +
+        `• Tự động thu hồi và hoàn trả số lượng trong Thẻ Kho.<br>` +
+        `• Khóa chức năng quét và không cho phép thay đổi dữ liệu.<br>` +
+        `<em>(Bạn có thể nhấn nút "Hủy Xóa / Khôi Phục" bất cứ lúc nào để tiếp tục thực hiện).</em>`,
+        'Thao tác này sẽ được ghi lại đầy đủ vào Nhật ký Lịch sử.',
         '#ef4444',
-        'Xóa Đơn',
+        'Xác Nhận Hủy Đơn',
         async () => {
             try {
                 const client = getNhapXuatSupabaseClient();
-                if (!client) throw new Error("Supabase client not initialized");
                 
-                const { error } = await client.from('nhap_xuat').delete().eq('id', selectedNxOrderId);
-                if (error) throw error;
-                
-                if (typeof showToast === 'function') {
-                    showToast('success', 'Đã Xóa', `Đã xóa đơn ${currentDraftOrder.ma_don} thành công!`);
+                // 1. Đưa số lượng quét về 0 cho tất cả sản phẩm (nhưng lưu lại số cũ để khôi phục nếu cần)
+                currentDraftNxItems = (currentDraftNxItems || []).map(item => ({
+                    ...item,
+                    so_luong_truoc_khi_huy: item.so_luong || 0,
+                    so_luong: 0
+                }));
+                const tongSoLuong = 0;
+
+                // 2. Thu hồi trong Thẻ Kho (the_kho) nếu đã từng đồng bộ
+                if (client && maDon) {
+                    try {
+                        await client.from('the_kho').delete().eq('ma_don', maDon);
+                    } catch (tkErr) {
+                        console.warn("NhapXuat: Error clearing the_kho for cancelled order:", tkErr);
+                    }
                 }
-                
-                await fetchNhapXuatData();
-                createNewNhapXuatOrderForm(false);
-            } catch (err) {
-                console.error("Lỗi xóa đơn:", err);
+
+                // 3. Cập nhật trạng thái 'Đã hủy' trong Supabase
+                const updatePayload = {
+                    trang_thai: 'Đã hủy',
+                    chi_tiet_san_pham: currentDraftNxItems,
+                    tong_so_luong: tongSoLuong
+                };
+
+                if (client) {
+                    const { error: err1 } = await client
+                        .from('nhap_xuat')
+                        .update(updatePayload)
+                        .eq('id', selectedNxOrderId);
+
+                    if (err1) {
+                        await client
+                            .from('nhap_xuat')
+                            .update(updatePayload)
+                            .eq('ma_don', maDon);
+                    }
+                }
+
+                // 4. Cập nhật bộ nhớ cục bộ
+                const idx = nhapXuatData.findIndex(x => String(x.id) === String(selectedNxOrderId) || x.ma_don === maDon);
+                if (idx !== -1) {
+                    nhapXuatData[idx] = { ...nhapXuatData[idx], ...updatePayload };
+                }
+                currentDraftOrder.trang_thai = 'Đã hủy';
+                currentDraftOrder.chi_tiet_san_pham = currentDraftNxItems;
+                currentDraftOrder.tong_so_luong = 0;
+
+                // 5. Ghi log lịch sử thao tác
+                await logNxOrderAction(
+                    maDon,
+                    loaiDon,
+                    'HỦY_ĐƠN',
+                    `Đã hủy đơn kho ${maDon}. Toàn bộ số lượng đã quét đưa về 0, khóa quét và chỉnh sửa.`
+                );
+
                 if (typeof showToast === 'function') {
-                    showToast('error', 'Lỗi', 'Có lỗi xảy ra khi xóa đơn!');
+                    showToast('success', 'Đã Hủy Đơn', `Đã hủy đơn ${maDon} thành công. Đã đưa số lượng quét về 0 và lưu vào lịch sử.`);
+                }
+
+                // 6. Cập nhật giao diện
+                _doSelectNxOrderForView(currentDraftOrder);
+                applyNhapXuatFilters();
+
+                // Kích hoạt làm mới Thẻ kho và Vật tư
+                if (typeof fetchTheKhoData === 'function') fetchTheKhoData();
+                if (typeof fetchVatTuData === 'function') fetchVatTuData();
+
+            } catch (err) {
+                console.error("Lỗi khi hủy đơn kho:", err);
+                if (typeof showToast === 'function') {
+                    showToast('error', 'Lỗi', 'Có lỗi xảy ra khi hủy đơn kho!');
                 }
             }
         }
     );
 }
-window.deletePendingNxOrder = deletePendingNxOrder;
+
+// HỦY XÓA / KHÔI PHỤC ĐƠN ĐÃ HỦY
+async function restoreCancelledNxOrder() {
+    if (!selectedNxOrderId || !currentDraftOrder || currentDraftOrder.trang_thai !== 'Đã hủy') {
+        if (typeof showToast === 'function') {
+            showToast('warning', 'Không Hợp Lệ', 'Chỉ có thể khôi phục đơn đang ở trạng thái "Đã hủy".');
+        }
+        return;
+    }
+
+    const maDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || '';
+    const loaiDon = document.getElementById('nx-input-loai')?.value || currentDraftOrder.loai_don || 'Nhập';
+
+    // Build custom modal HTML
+    const modalHtml = `
+    <div id="custom-restore-modal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 99999;">
+        <div style="background: var(--app-bg, white); padding: 24px; border-radius: 12px; width: 450px; max-width: 90vw; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border: 1px solid var(--sidebar-border, #e5e7eb);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                <span style="background: rgba(16,185,129,0.2); color: #10b981; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;">XÁC NHẬN KHÔI PHỤC</span>
+            </div>
+            <h3 style="margin: 0 0 16px 0; font-size: 18px; color: var(--text-primary, #1f2937);">Khôi Phục Đơn Kho ${maDon}</h3>
+            <p style="margin: 0 0 20px 0; color: var(--text-muted, #4b5563); font-size: 14px; line-height: 1.5;">
+                Bạn muốn khôi phục đơn này như thế nào?<br><br>
+                <strong style="color: var(--text-primary, #1f2937);">1. Khôi phục tất cả:</strong> Khôi phục cả sản phẩm và <strong>số lượng đã quét trước đó</strong>.<br>
+                <strong style="color: var(--text-primary, #1f2937);">2. Chỉ khôi phục SP:</strong> Giữ lại danh sách sản phẩm, nhưng số lượng = 0 (quét lại từ đầu).
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button id="btn-restore-all" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Khôi phục Tất cả (Cả Số lượng)</button>
+                <button id="btn-restore-sp" style="padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Chỉ khôi phục Sản phẩm (SL = 0)</button>
+                <button id="btn-restore-cancel" style="padding: 10px; background: var(--input-bg, #f3f4f6); color: var(--text-primary, #4b5563); border: 1px solid var(--input-border, #d1d5db); border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 8px;">Đóng / Hủy bỏ</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    // Append to body
+    const div = document.createElement('div');
+    div.innerHTML = modalHtml;
+    document.body.appendChild(div);
+
+    const closeModal = () => {
+        if (document.body.contains(div)) {
+            document.body.removeChild(div);
+        }
+    };
+
+    document.getElementById('btn-restore-cancel').addEventListener('click', closeModal);
+
+    const executeRestore = async (restoreQuantity) => {
+        closeModal();
+        try {
+            const client = getNhapXuatSupabaseClient();
+            // Xử lý số lượng
+            currentDraftNxItems = (currentDraftNxItems || []).map(item => ({
+                ...item,
+                so_luong: restoreQuantity ? (item.so_luong_truoc_khi_huy || 0) : 0
+            }));
+            const tongSoLuong = currentDraftNxItems.reduce((sum, item) => sum + (Number(item.so_luong) || 0), 0);
+
+            const newStatus = tongSoLuong > 0 ? 'Done' : 'Chờ';
+
+            const updatePayload = {
+                trang_thai: newStatus,
+                chi_tiet_san_pham: currentDraftNxItems,
+                tong_so_luong: tongSoLuong
+            };
+
+            if (client) {
+                const { error: err1 } = await client
+                    .from('nhap_xuat')
+                    .update(updatePayload)
+                    .eq('id', selectedNxOrderId);
+
+                if (err1) {
+                    await client
+                        .from('nhap_xuat')
+                        .update(updatePayload)
+                        .eq('ma_don', maDon);
+                }
+            }
+
+            if (newStatus === 'Done') {
+                const fullOrderPayload = { ...currentDraftOrder, ...updatePayload };
+                await syncNxOrderToTheKhoEntries(fullOrderPayload, true);
+            }
+
+            // Cập nhật bộ nhớ
+            const idx = nhapXuatData.findIndex(x => String(x.id) === String(selectedNxOrderId) || x.ma_don === maDon);
+            if (idx !== -1) {
+                nhapXuatData[idx] = { ...nhapXuatData[idx], ...updatePayload };
+            }
+            currentDraftOrder.trang_thai = newStatus;
+            currentDraftOrder.chi_tiet_san_pham = currentDraftNxItems;
+            currentDraftOrder.tong_so_luong = tongSoLuong;
+
+            // Ghi log lịch sử
+            const modeText = restoreQuantity ? 'toàn bộ (bao gồm số lượng cũ)' : 'chỉ danh sách sản phẩm (số lượng = 0)';
+            await logNxOrderAction(
+                maDon,
+                loaiDon,
+                'KHÔI_PHỤC_ĐƠN',
+                `Đã khôi phục lại đơn kho ${maDon} - ${modeText}. Mở khóa quét.`
+            );
+
+            if (typeof showToast === 'function') {
+                showToast('success', 'Đã Khôi Phục', `Đã khôi phục đơn ${maDon} (${modeText}).`);
+            }
+
+            _doSelectNxOrderForView(currentDraftOrder);
+            applyNhapXuatFilters();
+
+        } catch (err) {
+            console.error("Lỗi khi khôi phục đơn kho:", err);
+            if (typeof showToast === 'function') {
+                showToast('error', 'Lỗi', 'Có lỗi xảy ra khi khôi phục đơn kho!');
+            }
+        }
+    };
+
+    document.getElementById('btn-restore-all').addEventListener('click', () => executeRestore(true));
+    document.getElementById('btn-restore-sp').addEventListener('click', () => executeRestore(false));
+}
+
+// XÓA VĨNH VIỄN ĐƠN PDF BỊ LỖI
+async function hardDeleteNxOrder() {
+    if (!selectedNxOrderId || !currentDraftOrder) return;
+
+    const maDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || '';
+
+    showGenericConfirmModal(
+        '⚠️ XÓA VĨNH VIỄN',
+        `Xóa Vĩnh Viễn Đơn Kho ${maDon}`,
+        `Bạn đang thao tác <strong>Xóa Vĩnh Viễn</strong> đơn [<strong>${escapeHtml(maDon)}</strong>].<br><br>` +
+        `<span style="color:#ef4444;font-weight:bold;">CẢNH BÁO:</span> Thao tác này sẽ xóa sạch dữ liệu của đơn này khỏi hệ thống vĩnh viễn và không thể khôi phục.<br>` +
+        `Bạn có chắc chắn muốn xóa không?`,
+        'Nhấn "Xóa Vĩnh Viễn" để đồng ý xóa bỏ đơn lỗi này.',
+        '#dc2626',
+        'Xóa Vĩnh Viễn',
+        async () => {
+            try {
+                const client = getNhapXuatSupabaseClient();
+                if (client) {
+                    const { error } = await client
+                        .from('nhap_xuat')
+                        .delete()
+                        .eq('id', selectedNxOrderId);
+
+                    if (error) throw error;
+                }
+
+                // Xóa khỏi UI
+                nhapXuatData = nhapXuatData.filter(x => String(x.id) !== String(selectedNxOrderId) && x.ma_don !== maDon);
+                
+                if (typeof showToast === 'function') {
+                    showToast('success', 'Đã Xóa', `Đã xóa vĩnh viễn đơn ${maDon}.`);
+                }
+
+                // Đóng form
+                createNewNhapXuatOrderForm();
+                
+            } catch (err) {
+                console.error("Lỗi khi xóa vĩnh viễn đơn:", err);
+                if (typeof showToast === 'function') {
+                    showToast('error', 'Lỗi', 'Có lỗi xảy ra khi xóa vĩnh viễn đơn kho!');
+                }
+            }
+        }
+    );
+}
+
+window.cancelNxOrder = cancelNxOrder;
+window.restoreCancelledNxOrder = restoreCancelledNxOrder;
+window.hardDeleteNxOrder = hardDeleteNxOrder;
+window.deletePendingNxOrder = cancelNxOrder;
 
 function parseDateToYyyyMmDd(dateStr) {
     if (!dateStr || dateStr === '-' || dateStr === 'null' || dateStr === 'undefined') return null;
@@ -2594,15 +2988,14 @@ window.applyNhapXuatFilters = applyNhapXuatFilters;
 window.handleNxQrScannerAdd = handleNxQrScannerAdd;
 
 // =========================================================================
-// PDF Invoice Import Feature
+// PDF Invoice Batch Processor (Core Logic for Manual Upload & Folder Watcher)
 // =========================================================================
-async function handleNhapXuatPdfUpload(event) {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+async function processPdfFilesBatch(files, isAuto = false) {
+    if (!files || files.length === 0) return { successCount: 0, duplicateCount: 0 };
 
     if (typeof window.pdfjsLib === 'undefined') {
-        alert("Thư viện PDF chưa tải xong hoặc bị chặn, vui lòng tải lại trang.");
-        return;
+        if (!isAuto) alert("Thư viện PDF chưa tải xong hoặc bị chặn, vui lòng tải lại trang.");
+        return { successCount: 0, duplicateCount: 0 };
     }
 
     const pdfjsLib = window.pdfjsLib;
@@ -2611,12 +3004,13 @@ async function handleNhapXuatPdfUpload(event) {
     let successCount = 0;
     let duplicateCount = 0;
     
-    // Show loading
-    showGenericConfirmModal('⏳ ĐANG XỬ LÝ', 'Đang đọc File PDF', `Vui lòng đợi, đang bóc tách dữ liệu từ ${files.length} hóa đơn...`, '', '#3b82f6', null, null);
-    const modalBtn = document.getElementById('generic-confirm-btn');
-    if (modalBtn) modalBtn.style.display = 'none'; // hide confirm button while loading
-    const cancelBtn = document.getElementById('generic-cancel-btn');
-    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (!isAuto) {
+        showGenericConfirmModal('⏳ ĐANG XỬ LÝ', 'Đang đọc File PDF', `Vui lòng đợi, đang bóc tách dữ liệu từ ${files.length} hóa đơn...`, '', '#3b82f6', null, null);
+        const modalBtn = document.getElementById('generic-confirm-btn');
+        if (modalBtn) modalBtn.style.display = 'none';
+        const cancelBtn = document.getElementById('generic-cancel-btn');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+    }
 
     try {
         let userNameFormatted = updateNxUserFieldWithBranch();
@@ -2654,9 +3048,10 @@ async function handleNhapXuatPdfUpload(event) {
         }
 
         const processedInvoiceCodesInBatch = new Set();
+        const fileListArray = Array.from(files);
 
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
+        for (let i = 0; i < fileListArray.length; i++) {
+            const file = fileListArray[i];
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
             
@@ -2725,7 +3120,7 @@ async function handleNhapXuatPdfUpload(event) {
             if (isDuplicateInDb || isDuplicateInBatch) {
                 duplicateCount++;
                 console.log(`Bỏ qua hóa đơn ${maHoaDon} vì đã tồn tại hoặc bị trùng trong danh sách tải.`);
-                if (typeof showToast === 'function') {
+                if (!isAuto && typeof showToast === 'function') {
                     showToast('error', 'Đơn Đã Tồn Tại', `Hóa đơn ${maHoaDon} đã tồn tại trong hệ thống hoặc bị trùng trong đợt tải!`);
                 }
                 continue;
@@ -2750,7 +3145,6 @@ async function handleNhapXuatPdfUpload(event) {
             // 3. Extract items: Đối soát với Tên Hàng Hóa / Tên Mặt Hàng trong View Vật Tư
             const items = [];
 
-            // Helper tìm sản phẩm trong danh mục kho (so sánh với tên hàng hóa trong View Vật Tư)
             function findVatTuInStore(queryName) {
                 if (!queryName || !allProducts || allProducts.length === 0) return null;
                 
@@ -2821,39 +3215,31 @@ async function handleNhapXuatPdfUpload(event) {
                 let line = rawLines[j].trim();
                 if (!line) continue;
 
-                // Dừng lại khi gặp các dòng tổng kết hóa đơn
                 if (/(?:Tổng tiền|Tổng thanh toán|Khách trả|Tiền thừa|Điểm tích lũy|5% VAT|8% VAT|Hình thức thanh toán)/i.test(line)) {
                     break;
                 }
 
-                // Bỏ qua dòng kẻ phân cách
                 if (/^[\-\=\_\.\s]{3,}$/.test(line)) {
                     continue;
                 }
                 
-                // Loại bỏ số thứ tự đứng đầu nếu có (VD: "1. Tên SP" -> "Tên SP")
                 line = line.replace(/^\d+[\.\-]\s+/, '');
-                
                 let currentItemName = line;
                 
-                // Kiểm tra xem dòng tiếp theo CÓ PHẢI LÀ DÒNG CHỨA SỐ KHÔNG (Giá, SL, Thành tiền)
                 if (j + 1 < rawLines.length) {
                     const nextLine = rawLines[j+1].trim();
-                    // Nếu dòng tiếp theo chứa các con số (VD: "400,000 1 400,000")
                     if (/^[\d,\.\s]+$/.test(nextLine)) {
                         const numbers = nextLine.replace(/,/g, '').match(/\d+/g);
                         if (numbers && numbers.length >= 2) {
                             let qty = 1;
                             if (numbers.length >= 3) {
-                                qty = parseInt(numbers[1], 10) || 1; // Giá [Số Lượng] ThànhTien
+                                qty = parseInt(numbers[1], 10) || 1;
                             } else {
-                                qty = parseInt(numbers[0], 10) || 1; // Fallback
+                                qty = parseInt(numbers[0], 10) || 1;
                             }
                             
-                            // 1. Thử tìm với tên ở dòng hiện tại
                             let matchedVatTu = findVatTuInStore(currentItemName);
 
-                            // 2. Nếu tên sản phẩm bị ngắt xuống dòng trước đó (VD: dòng j-1 là "Nội & ngoại...", dòng j là "7,5kg - Tuýp")
                             if (!matchedVatTu && j > 0) {
                                 const prevLine = rawLines[j-1].trim();
                                 if (prevLine && !/^[\d,\.\s]+$/.test(prevLine) && !/^[\-\=\_\.\s]{3,}$/.test(prevLine) && !/(?:Mã HĐ|Ngày|Khách hàng|Thú cưng|Loài|Giống|Tổng|Giá bán|Đơn giá)/i.test(prevLine)) {
@@ -2863,17 +3249,14 @@ async function handleNhapXuatPdfUpload(event) {
                             }
                             
                             if (matchedVatTu) {
-                                console.log(`PDF Item matched: "${currentItemName}" -> "${matchedVatTu.ten_mat_hang || matchedVatTu.ten_hoa_don}" (SL: ${qty})`);
                                 items.push({
                                     ma_qr: matchedVatTu.ma_vach || '',
                                     ma_vach: matchedVatTu.ma_vach || '',
                                     lot: '-',
                                     ten_hang_hoa: matchedVatTu.ten_mat_hang || matchedVatTu.ten_hoa_don,
                                     so_luong_yeu_cau: qty,
-                                    so_luong: 0 // Đã quét = 0
+                                    so_luong: 0
                                 });
-                            } else {
-                                console.log(`PDF Item ignored / not found in store: "${currentItemName}"`);
                             }
                         }
                     }
@@ -2881,7 +3264,6 @@ async function handleNhapXuatPdfUpload(event) {
             }
 
             if (items.length > 0) {
-                // Upload file to Supabase Storage bucket 'invoice_pdfs'
                 let file_url = null;
                 const fileName = `HD-${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
                 const { data: uploadData, error: uploadError } = await supabaseClient.storage
@@ -2897,7 +3279,6 @@ async function handleNhapXuatPdfUpload(event) {
                     }
                 }
 
-                // Generate standard Order ID (e.g. XK-20260902-CN1-XYZ)
                 const now = new Date();
                 const yyyy = now.getFullYear();
                 const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -2911,6 +3292,7 @@ async function handleNhapXuatPdfUpload(event) {
                     loai_don: 'Xuất',
                     muc_dich: finalMucDich,
                     trang_thai: 'Chờ',
+                    nguon_don: isAuto ? 'auto_folder' : 'pdf_import',
                     file_url: file_url,
                     user_name: userNameFormatted,
                     chi_tiet_san_pham: items,
@@ -2925,12 +3307,11 @@ async function handleNhapXuatPdfUpload(event) {
                     if (typeof nhapXuatData !== 'undefined') {
                         nhapXuatData.unshift(payload);
                     }
-                    // Create Log
                     await supabaseClient.from('nhap_xuat_log').insert([{
                         ma_don: maDon,
                         loai_don: 'Xuất',
                         hanh_dong: 'TẠO_ĐƠN',
-                        noi_dung: `Tạo đơn tự động từ Hóa Đơn PDF (${finalMucDich}) gồm ${items.length} mã sản phẩm.`,
+                        noi_dung: `${isAuto ? '[Tự Động Theo Dõi] ' : ''}Tạo đơn từ Hóa Đơn PDF (${finalMucDich}) gồm ${items.length} mã sản phẩm.`,
                         user_name: userNameFormatted
                     }]);
                     successCount++;
@@ -2938,44 +3319,497 @@ async function handleNhapXuatPdfUpload(event) {
             }
         }
         
-        closeGenericConfirmModal();
-        if (successCount > 0) {
-            setTimeout(() => {
+        if (!isAuto) {
+            closeGenericConfirmModal();
+            if (successCount > 0) {
+                setTimeout(() => {
+                    if (typeof showToast === 'function') {
+                        showToast('success', 'Tạo Đơn Thành Công', `Đã tạo thành công ${successCount} đơn xuất kho (Trạng thái: Chờ) từ File PDF.`);
+                    } else {
+                        alert(`Đã tạo thành công ${successCount} đơn xuất kho (Trạng thái: Chờ) từ File PDF.`);
+                    }
+                    if (duplicateCount > 0) {
+                        setTimeout(() => {
+                            if (typeof showToast === 'function') {
+                                showToast('warning', 'Bỏ Qua Đơn Trùng', `Bỏ qua ${duplicateCount} file do mã hóa đơn đã tồn tại hoặc trùng nhau trong đợt tải.`);
+                            }
+                        }, 800);
+                    }
+                    fetchNhapXuatData();
+                }, 300);
+            } else if (duplicateCount === 0) {
+                setTimeout(() => {
+                    if (typeof showToast === 'function') {
+                        showToast('error', 'Lỗi Dữ Liệu', 'Không tìm thấy sản phẩm hợp lệ nào trong File PDF (Có thể là Dịch vụ hoặc Tên SP không khớp kho).');
+                    } else {
+                        alert(`Không tìm thấy sản phẩm hợp lệ nào trong File PDF (Có thể là Dịch vụ hoặc Tên SP không khớp kho).`);
+                    }
+                }, 300);
+            }
+        } else {
+            // Automated Mode
+            if (successCount > 0) {
+                playNxAutoImportSound();
                 if (typeof showToast === 'function') {
-                    showToast('success', 'Tạo Đơn Thành Công', `Đã tạo thành công ${successCount} đơn xuất kho (Trạng thái: Chờ) từ File PDF.`);
-                } else {
-                    alert(`Đã tạo thành công ${successCount} đơn xuất kho (Trạng thái: Chờ) từ File PDF.`);
-                }
-                if (duplicateCount > 0) {
-                    setTimeout(() => {
-                        if (typeof showToast === 'function') {
-                            showToast('warning', 'Bỏ Qua Đơn Trùng', `Bỏ qua ${duplicateCount} file do mã hóa đơn đã tồn tại hoặc trùng nhau trong đợt tải.`);
-                        }
-                    }, 800);
+                    showToast('success', '🔔 Tự Động Nạp Đơn', `Đã tự động tạo ${successCount} đơn xuất kho mới từ thư mục theo dõi!`);
                 }
                 fetchNhapXuatData();
-            }, 300);
-        } else if (duplicateCount === 0) {
-            setTimeout(() => {
-                if (typeof showToast === 'function') {
-                    showToast('error', 'Lỗi Dữ Liệu', 'Không tìm thấy sản phẩm hợp lệ nào trong File PDF (Có thể là Dịch vụ hoặc Tên SP không khớp kho).');
-                } else {
-                    alert(`Không tìm thấy sản phẩm hợp lệ nào trong File PDF (Có thể là Dịch vụ hoặc Tên SP không khớp kho).`);
-                }
-            }, 300);
+            }
         }
+
+        return { successCount, duplicateCount };
 
     } catch (error) {
         console.error("PDF Parse error", error);
-        closeGenericConfirmModal();
-        if (typeof showToast === 'function') {
-            showToast('error', 'Lỗi', 'Có lỗi xảy ra khi đọc file PDF.');
-        } else {
-            alert("Có lỗi xảy ra khi đọc file PDF.");
+        if (!isAuto) {
+            closeGenericConfirmModal();
+            if (typeof showToast === 'function') {
+                showToast('error', 'Lỗi', 'Có lỗi xảy ra khi đọc file PDF.');
+            } else {
+                alert("Có lỗi xảy ra khi đọc file PDF.");
+            }
         }
+        return { successCount: 0, duplicateCount: 0 };
+    }
+}
+
+async function handleNhapXuatPdfUpload(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    await processPdfFilesBatch(files, false);
+    event.target.value = ''; // reset input
+}
+
+// =========================================================================
+// Automated Local Folder Watcher for PDF Invoices (Per-Account Persistence)
+// =========================================================================
+let nxWatchedDirHandle = null;
+let nxWatchedFolderName = '';
+let nxWatchIntervalId = null;
+let nxIsWatchingPaused = false;
+let nxIsScanningFolder = false;
+let nxWatchedAutoCount = 0;
+
+function openGaiaIdb() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open('GaiaAppDB', 1);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('FolderHandles')) {
+                db.createObjectStore('FolderHandles', { keyPath: 'accountKey' });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function saveFolderHandleToIdb(accountKey, handle, folderName) {
+    try {
+        const db = await openGaiaIdb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('FolderHandles', 'readwrite');
+            const store = tx.objectStore('FolderHandles');
+            store.put({ accountKey, handle, folderName, updatedAt: Date.now() });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (e) {
+        console.warn("Could not save directory handle to IndexedDB:", e);
+    }
+}
+
+async function getFolderHandleFromIdb(accountKey) {
+    try {
+        const db = await openGaiaIdb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('FolderHandles', 'readonly');
+            const store = tx.objectStore('FolderHandles');
+            const req = store.get(accountKey);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    } catch (e) {
+        console.warn("Could not get directory handle from IndexedDB:", e);
+        return null;
+    }
+}
+
+async function removeFolderHandleFromIdb(accountKey) {
+    try {
+        const db = await openGaiaIdb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('FolderHandles', 'readwrite');
+            const store = tx.objectStore('FolderHandles');
+            store.delete(accountKey);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (e) {
+        console.warn("Could not delete directory handle from IndexedDB:", e);
+    }
+}
+
+function getNxWatcherAccountKey() {
+    let userObj = null;
+    if (typeof currentUser !== 'undefined' && currentUser) {
+        userObj = currentUser;
+    } else {
+        try {
+            userObj = JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
+        } catch (e) {}
+    }
+    if (userObj && (userObj.id || userObj.email)) {
+        return 'user_' + String(userObj.id || userObj.email).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    }
+    return 'user_default';
+}
+
+function getNxWatchedSignatures(accountKey) {
+    try {
+        const raw = localStorage.getItem('gaia_watched_sigs_' + accountKey);
+        if (raw) return new Set(JSON.parse(raw));
+    } catch (e) {}
+    return new Set();
+}
+
+function saveNxWatchedSignatures(accountKey, setObj) {
+    try {
+        const arr = Array.from(setObj);
+        const trimmed = arr.length > 1000 ? arr.slice(arr.length - 1000) : arr;
+        localStorage.setItem('gaia_watched_sigs_' + accountKey, JSON.stringify(trimmed));
+    } catch (e) {}
+}
+
+function playNxAutoImportSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const now = ctx.currentTime;
+        
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(659.25, now);
+        gain1.gain.setValueAtTime(0.12, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.2);
+        
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(830.61, now + 0.1);
+        gain2.gain.setValueAtTime(0.15, now + 0.1);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.1);
+        osc2.stop(now + 0.35);
+        
+        const osc3 = ctx.createOscillator();
+        const gain3 = ctx.createGain();
+        osc3.type = 'sine';
+        osc3.frequency.setValueAtTime(987.77, now + 0.2);
+        gain3.gain.setValueAtTime(0.18, now + 0.2);
+        gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc3.connect(gain3);
+        gain3.connect(ctx.destination);
+        osc3.start(now + 0.2);
+        osc3.stop(now + 0.5);
+    } catch (e) {}
+}
+
+async function initNxFolderWatcher() {
+    const bar = document.getElementById('nx-folder-watcher-bar');
+    if (!bar) return;
+
+    if (!window.showDirectoryPicker) {
+        bar.innerHTML = `
+            <div class="nx-folder-watcher-content" style="background: rgba(255,255,255,0.02); opacity: 0.7;">
+                <span style="font-size: 11px; color: var(--text-muted);">Trình duyệt không hỗ trợ quét thư mục tự động (Dùng Chrome/Edge để bật).</span>
+            </div>
+        `;
+        return;
     }
 
-    event.target.value = ''; // reset input
+    const accountKey = getNxWatcherAccountKey();
+    const countVal = localStorage.getItem('gaia_watched_count_' + accountKey);
+    nxWatchedAutoCount = countVal ? parseInt(countVal, 10) : 0;
+
+    const record = await getFolderHandleFromIdb(accountKey);
+    if (!record || !record.handle) {
+        nxWatchedDirHandle = null;
+        nxWatchedFolderName = '';
+        renderNxFolderWatcherUI('none');
+        return;
+    }
+
+    nxWatchedDirHandle = record.handle;
+    nxWatchedFolderName = record.folderName || record.handle.name || 'Thư mục đã gán';
+
+    try {
+        const perm = await nxWatchedDirHandle.queryPermission({ mode: 'read' });
+        if (perm === 'granted') {
+            nxIsWatchingPaused = false;
+            renderNxFolderWatcherUI('active');
+            startNxWatchInterval();
+        } else {
+            renderNxFolderWatcherUI('prompt');
+        }
+    } catch (e) {
+        renderNxFolderWatcherUI('prompt');
+    }
+}
+
+function renderNxFolderWatcherUI(state) {
+    const bar = document.getElementById('nx-folder-watcher-bar');
+    if (!bar) return;
+
+    if (state === 'none' || !nxWatchedDirHandle) {
+        bar.innerHTML = `
+            <button type="button" class="btn-nx-watch-folder" onclick="setupNxWatchFolder()" title="Gán thư mục (ví dụ Downloads) để tự động nạp đơn khi có file PDF mới">
+                📁 Gán Thư Mục
+            </button>
+        `;
+    } else if (state === 'prompt') {
+        bar.innerHTML = `
+            <button type="button" class="btn-nx-watch-folder warning" onclick="resumeNxWatchFolder()" title="Nhấn để kích hoạt lại quyền đọc thư mục: ${escapeHtml(nxWatchedFolderName)}">
+                ⚡ Tiếp tục (${escapeHtml(nxWatchedFolderName)})
+            </button>
+        `;
+    } else if (state === 'paused') {
+        bar.innerHTML = `
+            <div class="nx-folder-watcher-badge paused" title="Đã tạm dừng theo dõi thư mục: ${escapeHtml(nxWatchedFolderName)}">
+                <span class="nx-watcher-indicator inactive"></span>
+                <span class="nx-folder-name-tag">${escapeHtml(nxWatchedFolderName)}</span>
+                <button type="button" class="btn-nx-icon" onclick="toggleNxWatchFolder()" title="Tiếp tục quét">▶</button>
+                <button type="button" class="btn-nx-icon danger" onclick="removeNxWatchFolder()" title="Hủy gán thư mục">✕</button>
+            </div>
+        `;
+    } else {
+        // Active
+        bar.innerHTML = `
+            <div class="nx-folder-watcher-badge active" title="Đang tự động theo dõi thư mục: ${escapeHtml(nxWatchedFolderName)} (Đã nạp tự động: ${nxWatchedAutoCount} đơn)">
+                <span class="nx-watcher-indicator active"></span>
+                <span class="nx-folder-name-tag">📁 ${escapeHtml(nxWatchedFolderName)}</span>
+                <span class="nx-folder-count-pill" title="Số đơn đã nạp tự động">${nxWatchedAutoCount}</span>
+                <button type="button" class="btn-nx-icon" onclick="forceSyncNxWatchFolder()" title="Đồng bộ lại (tìm và nạp các file PDF chưa có trên hệ thống hoặc đã bị xóa vĩnh viễn)">🔄</button>
+                <button type="button" class="btn-nx-icon" onclick="setupNxWatchFolder()" title="Đổi thư mục khác">✏️</button>
+                <button type="button" class="btn-nx-icon danger" onclick="removeNxWatchFolder()" title="Hủy gán thư mục">✕</button>
+            </div>
+        `;
+    }
+}
+
+function startNxWatchInterval() {
+    if (nxWatchIntervalId) clearInterval(nxWatchIntervalId);
+    nxWatchIntervalId = setInterval(() => {
+        scanNxWatchedFolder();
+    }, 4000);
+}
+
+function stopNxWatchInterval() {
+    if (nxWatchIntervalId) {
+        clearInterval(nxWatchIntervalId);
+        nxWatchIntervalId = null;
+    }
+}
+
+async function setupNxWatchFolder() {
+    if (!window.showDirectoryPicker) {
+        alert("Trình duyệt của bạn không hỗ trợ File System Access API. Vui lòng sử dụng Google Chrome, Edge hoặc Cốc Cốc trên máy tính.");
+        return;
+    }
+
+    try {
+        const handle = await window.showDirectoryPicker({
+            id: 'gaia_invoice_folder',
+            mode: 'read'
+        });
+
+        if (!handle) return;
+
+        const folderName = handle.name || 'Thư mục đã chọn';
+        const accountKey = getNxWatcherAccountKey();
+
+        await saveFolderHandleToIdb(accountKey, handle, folderName);
+        
+        nxWatchedDirHandle = handle;
+        nxWatchedFolderName = folderName;
+        nxIsWatchingPaused = false;
+        
+        const processedSigs = getNxWatchedSignatures(accountKey);
+        const existingPdfFiles = [];
+        for await (const entry of handle.values()) {
+            if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.pdf')) {
+                try {
+                    const f = await entry.getFile();
+                    const sig = `${entry.name}_${f.size}_${f.lastModified}`;
+                    if (!processedSigs.has(sig)) {
+                        existingPdfFiles.push(f);
+                    }
+                } catch (fe) {}
+            }
+        }
+
+        renderNxFolderWatcherUI('active');
+        startNxWatchInterval();
+
+        if (existingPdfFiles.length > 0) {
+            if (typeof showToast === 'function') {
+                showToast('info', 'Thư Mục Đã Gán', `Đã gán thư mục "${folderName}". Phát hiện ${existingPdfFiles.length} file PDF sẵn có, đang tự động nạp...`);
+            }
+            await scanNxWatchedFolder();
+        } else {
+            if (typeof showToast === 'function') {
+                showToast('success', 'Thư Mục Đã Gán', `Đang tự động theo dõi thư mục "${folderName}" cho tài khoản hiện tại.`);
+            }
+        }
+
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            console.error("Error setting up watched folder:", err);
+            alert("Không thể gán thư mục: " + err.message);
+        }
+    }
+}
+
+async function resumeNxWatchFolder() {
+    if (!nxWatchedDirHandle) return;
+    try {
+        const perm = await nxWatchedDirHandle.requestPermission({ mode: 'read' });
+        if (perm === 'granted') {
+            nxIsWatchingPaused = false;
+            renderNxFolderWatcherUI('active');
+            startNxWatchInterval();
+            await scanNxWatchedFolder();
+            if (typeof showToast === 'function') {
+                showToast('success', 'Đã Kích Hoạt', `Đang tiếp tục theo dõi thư mục "${nxWatchedFolderName}".`);
+            }
+        } else {
+            if (typeof showToast === 'function') {
+                showToast('warning', 'Chưa Cấp Quyền', 'Bạn chưa cấp quyền đọc thư mục.');
+            }
+        }
+    } catch (e) {
+        console.error("Error requesting directory permission:", e);
+        setupNxWatchFolder();
+    }
+}
+
+function toggleNxWatchFolder() {
+    if (nxIsWatchingPaused) {
+        nxIsWatchingPaused = false;
+        renderNxFolderWatcherUI('active');
+        startNxWatchInterval();
+        scanNxWatchedFolder();
+        if (typeof showToast === 'function') {
+            showToast('info', 'Đã Tiếp Tục', 'Đang tiếp tục quét thư mục tự động.');
+        }
+    } else {
+        nxIsWatchingPaused = true;
+        renderNxFolderWatcherUI('paused');
+        stopNxWatchInterval();
+        if (typeof showToast === 'function') {
+            showToast('info', 'Đã Tạm Dừng', 'Đã tạm dừng tự động quét thư mục.');
+        }
+    }
+}
+
+async function removeNxWatchFolder() {
+    const cf = confirm(`Bạn có chắc chắn muốn hủy gán thư mục theo dõi "${nxWatchedFolderName}" cho tài khoản này?`);
+    if (!cf) return;
+
+    const accountKey = getNxWatcherAccountKey();
+    await removeFolderHandleFromIdb(accountKey);
+    stopNxWatchInterval();
+    nxWatchedDirHandle = null;
+    nxWatchedFolderName = '';
+    nxIsWatchingPaused = false;
+    renderNxFolderWatcherUI('none');
+
+    if (typeof showToast === 'function') {
+        showToast('info', 'Đã Hủy Gán Thư Mục', 'Đã hủy theo dõi thư mục.');
+    }
+}
+
+async function forceSyncNxWatchFolder() {
+    if (!nxWatchedDirHandle || nxIsWatchingPaused || nxIsScanningFolder) return;
+    
+    // Clear tracked signatures to force re-evaluation of all files
+    const accountKey = getNxWatcherAccountKey();
+    saveNxWatchedSignatures(accountKey, new Set());
+
+    // Đặt lại bộ đếm về 0 trước khi quét lại
+    nxWatchedAutoCount = 0;
+    localStorage.setItem('gaia_watched_count_' + accountKey, '0');
+    renderNxFolderWatcherUI('active');
+
+    if (typeof showToast === 'function') {
+        showToast('info', 'Đồng Bộ', 'Đang quét lại toàn bộ thư mục...');
+    }
+
+    // Run scan
+    await scanNxWatchedFolder();
+}
+
+async function scanNxWatchedFolder() {
+    if (!nxWatchedDirHandle || nxIsWatchingPaused || nxIsScanningFolder) return;
+    
+    try {
+        const perm = await nxWatchedDirHandle.queryPermission({ mode: 'read' });
+        if (perm !== 'granted') {
+            renderNxFolderWatcherUI('prompt');
+            return;
+        }
+    } catch (e) {
+        return;
+    }
+
+    nxIsScanningFolder = true;
+    const accountKey = getNxWatcherAccountKey();
+    const processedSigs = getNxWatchedSignatures(accountKey);
+    const newFilesToProcess = [];
+    const newSigsToAdd = [];
+
+    try {
+        for await (const entry of nxWatchedDirHandle.values()) {
+            if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.pdf')) {
+                try {
+                    const file = await entry.getFile();
+                    const sig = `${entry.name}_${file.size}_${file.lastModified}`;
+                    if (!processedSigs.has(sig)) {
+                        newFilesToProcess.push(file);
+                        newSigsToAdd.push(sig);
+                    }
+                } catch (fileErr) {
+                    console.warn("Could not read file in watched directory:", entry.name, fileErr);
+                }
+            }
+        }
+
+        if (newFilesToProcess.length > 0) {
+            console.log(`GAIA Folder Watcher: Phát hiện ${newFilesToProcess.length} file PDF mới trong [${nxWatchedFolderName}]. Đang xử lý...`);
+            const res = await processPdfFilesBatch(newFilesToProcess, true);
+            
+            newSigsToAdd.forEach(s => processedSigs.add(s));
+            saveNxWatchedSignatures(accountKey, processedSigs);
+
+            if (res.successCount > 0) {
+                nxWatchedAutoCount += res.successCount;
+                localStorage.setItem('gaia_watched_count_' + accountKey, String(nxWatchedAutoCount));
+                renderNxFolderWatcherUI('active');
+            }
+        }
+    } catch (scanErr) {
+        console.warn("GAIA Folder Watcher scan error:", scanErr);
+    } finally {
+        nxIsScanningFolder = false;
+    }
 }
 
 async function markNxOrderAsDone() {
@@ -3225,4 +4059,11 @@ window.removeNxDraftItem = removeNxDraftItem;
 window.resetNxOrderForm = resetNxOrderForm;
 window.saveNxOrderToSystem = saveNxOrderToSystem;
 window.handleNhapXuatPdfUpload = handleNhapXuatPdfUpload;
+window.processPdfFilesBatch = processPdfFilesBatch;
 window.markNxOrderAsDone = markNxOrderAsDone;
+
+window.initNxFolderWatcher = initNxFolderWatcher;
+window.setupNxWatchFolder = setupNxWatchFolder;
+window.resumeNxWatchFolder = resumeNxWatchFolder;
+window.toggleNxWatchFolder = toggleNxWatchFolder;
+window.removeNxWatchFolder = removeNxWatchFolder;

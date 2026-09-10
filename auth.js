@@ -97,6 +97,9 @@ function showAppInterface() {
 
     updateHeaderProfileWidget();
     applyRolePermissions();
+    if (typeof window.initNxFolderWatcher === 'function') {
+        window.initNxFolderWatcher();
+    }
 }
 
 // Bind Event Listeners

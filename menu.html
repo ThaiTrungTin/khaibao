@@ -17,7 +17,7 @@
 
     <!-- CSS Style sheets -->
     <link rel="stylesheet" href="admin-style.css?v=9">
-    <link rel="stylesheet" href="menu-style.css?v=18">
+    <link rel="stylesheet" href="menu-style.css?v=29">
     
     <!-- PDF.js for automated Invoice parsing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -941,9 +941,11 @@
                         <!-- LEFT PANE (1 Part): Order List -->
                         <div class="nhapxuat-left-pane">
                             <div class="nhapxuat-pane-header">
-                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;">
-                                    <h3 class="pane-title" style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0;">📋 Danh Sách Đơn</h3>
-                                    <div style="display: flex; gap: 8px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                                    <!-- Folder Watcher Inline Control -->
+                                    <div id="nx-folder-watcher-bar" class="nx-folder-watcher-bar"></div>
+
+                                    <div style="display: flex; gap: 8px; align-items: center;">
                                         <div 
                                             id="pdf-dropzone"
                                             class="btn-secondary-sm" 
@@ -965,10 +967,11 @@
                                         
                                         <button type="button" class="btn-primary-sm" onclick="createNewNhapXuatOrderForm()" style="background: #10b981; color: #fff; border: none; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                            <span>+ Tạo Đơn Mới</span>
+                                            <span>Tạo Đơn Mới</span>
                                         </button>
                                     </div>
                                 </div>
+                            </div>
 
                                 <!-- Search & Filter Controls -->
                                 <div class="nhapxuat-search-box" style="margin-top: 10px;">
@@ -989,6 +992,7 @@
                                         <option value="all">📋 Tất cả trạng thái</option>
                                         <option value="Chờ">⏳ Đơn chờ (Chờ quét)</option>
                                         <option value="Done">✅ Hoàn tất</option>
+                                        <option value="Đã hủy">❌ Đã hủy</option>
                                     </select>
                                     <select id="nhapxuat-filter-branch" class="vattu-select-sm branch-filter-select" style="flex: 1; display: none;" onchange="applyNhapXuatFilters()">
                                         <option value="all">🏢 Tất cả chi nhánh</option>
@@ -1001,7 +1005,6 @@
                                         </svg>
                                     </button>
                                 </div>
-                            </div>
 
                             <!-- Scrollable Order Cards List -->
                             <div id="nhapxuat-order-list" class="nhapxuat-order-list">
@@ -1015,6 +1018,7 @@
                                 <div style="display: flex; align-items: center; justify-content: space-between;">
                                     <h3 id="nhapxuat-form-title" class="pane-title" style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0;">📝 Thông Tin Đơn Nhập / Xuất Kho</h3>
                                     <div style="display: flex; gap: 8px; align-items: center;">
+                                        <span id="nhapxuat-source-badge" style="display: none; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700;"></span>
                                         <a id="nhapxuat-file-link" href="#" target="_blank" style="display: none; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: #3b82f6; text-decoration: none;" title="Xem File Hóa Đơn Đính Kèm">📄 Xem Hóa Đơn</a>
                                         <span id="nhapxuat-status-badge" style="display: none; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;" title="Nhấn để hoàn tất đơn (nếu đã đủ hàng)" onclick="markNxOrderAsDone()"></span>
                                         <span id="nhapxuat-mode-badge" class="badge-mode-new" style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700;">+ Đơn Mới</span>
@@ -1080,7 +1084,7 @@
                                 </div>
 
                                 <!-- Items Table in Order -->
-                                <div class="vattu-table-wrapper" style="max-height: 480px; min-height: 380px; margin-top: 12px; border: 1px solid var(--card-border); border-radius: 10px;">
+                                <div class="vattu-table-wrapper" style="flex: 1; min-height: 80px; margin-top: 8px; border: 1px solid var(--card-border); border-radius: 10px; overflow-y: auto;">
                                     <table class="vattu-table nx-items-table" style="table-layout: fixed; width: 100%;">
                                         <thead>
                                             <tr>
@@ -1141,8 +1145,14 @@
                                             </div>
                                         </div>
 
-                                        <button type="button" id="btn-delete-nx-order" class="btn-cancel" onclick="deletePendingNxOrder()" style="display: none; align-items: center; gap: 6px; background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 600;">
-                                            🗑️ Xóa Đơn
+                                        <button type="button" id="btn-cancel-nx-order" class="btn-cancel" onclick="cancelNxOrder()" style="display: none; align-items: center; gap: 6px; background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 600;" title="Hủy đơn và đưa số lượng quét về 0">
+                                            🗑️ Hủy Đơn
+                                        </button>
+                                        <button type="button" id="btn-hard-delete-nx-order" class="btn-cancel" onclick="hardDeleteNxOrder()" style="display: none; align-items: center; gap: 6px; background: rgba(0, 0, 0, 0.05); color: #dc2626; border: 1px solid rgba(220, 38, 38, 0.5); font-weight: 600;" title="Xóa vĩnh viễn đơn nhập từ PDF bị lỗi">
+                                            ⚠️ Xóa Vĩnh Viễn
+                                        </button>
+                                        <button type="button" id="btn-restore-nx-order" class="btn-cancel" onclick="restoreCancelledNxOrder()" style="display: none; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 600;" title="Khôi phục lại đơn đã xóa/hủy">
+                                            ↩️ Khôi Phục
                                         </button>
                                         <button type="button" class="btn-cancel" onclick="openNxHistoryLogModal()" style="display: flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.12); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 600;">
                                             📜 Xem Lịch Sử
@@ -3013,10 +3023,10 @@
     <script src="menu.js?v=4"></script>
     <script src="staff.js?v=1"></script>
     <script src="vattu.js?v=56"></script>
-    <script src="nhap_xuat.js?v=43"></script>
+    <script src="nhap_xuat.js?v=64"></script>
     <script src="the_kho.js?v=17"></script>
-    <script src="kiem_kho.js?v=51"></script>
-    <script src="auth.js?v=3"></script>
+    <script src="kiem_kho.js?v=52"></script>
+    <script src="auth.js?v=4"></script>
 </body>
 
 </html>

@@ -2189,7 +2189,10 @@ function renderKiemKhoTable() {
         `;
     });
 
-    tbody.innerHTML = html;
+    if (tbody.dataset.currentHtml !== html) {
+        tbody.innerHTML = html;
+        tbody.dataset.currentHtml = html;
+    }
 }
 
 // Render Pagination Bar
