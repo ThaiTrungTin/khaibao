@@ -105,6 +105,7 @@ async function fetchStaffData() {
         if (loadingSpinner) loadingSpinner.style.display = "none";
         updateBranchDropdowns();
         filterStaffList();
+        window.staffData = staffData; // expose for global search
     }
 }
 

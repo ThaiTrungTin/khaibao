@@ -386,6 +386,7 @@ async function fetchNhapXuatData() {
     } finally {
         await initNhapXuatBranchFilterForManager();
         applyNhapXuatFilters();
+        window.nhapXuatData = nhapXuatData; // expose for global search
     }
 }
 

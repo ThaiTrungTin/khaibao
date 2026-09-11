@@ -201,6 +201,7 @@ async function fetchTheKhoData() {
         showTheKhoLoading(false);
         await initTheKhoBranchFilterForManager();
         applyTheKhoFilters();
+        window.theKhoData = theKhoData; // expose for global search
     }
 }
 
