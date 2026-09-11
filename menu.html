@@ -266,88 +266,330 @@
                 </div>
             </header>
 
-            <!-- View 1: Tổng quan (Dashboard Overview Placeholder) -->
+            <!-- View 1: Tổng quan (Comprehensive Realtime Overview Dashboard) -->
             <section id="view-tong-quan" class="view-panel">
-                <div class="placeholder-container">
-                    <div class="placeholder-header">
-                        <div class="placeholder-header-title">
-                            <h2>
-                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
+                <div class="tq-dashboard-container">
+                    
+                    <!-- 1. Dashboard Top Header Bar -->
+                    <div class="tq-header-bar">
+                        <div class="tq-header-left">
+                            <div class="tq-brand-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                                     <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
                                     <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
                                     <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
                                     <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
                                 </svg>
-                                Bảng Điều Khiển Tổng Quan
-                            </h2>
-                            <p>Tổng hợp chỉ số hoạt động real-time của bệnh viện thú cưng GAIA</p>
+                            </div>
+                            <div>
+                                <div class="tq-greeting" id="tq-user-greeting">Chào mừng bạn trở lại! 👋</div>
+                                <h1 class="tq-title">Bảng Điều Khiển Tổng Quan GAIA</h1>
+                            </div>
+                        </div>
+
+                        <div class="tq-header-right">
+                            <div class="tq-live-widget">
+                                <span class="tq-live-dot"></span>
+                                <div class="tq-time-block">
+                                    <span id="tq-live-clock" class="tq-clock-text">--:--:--</span>
+                                    <span id="tq-live-date" class="tq-date-text">--, --/--/----</span>
+                                </div>
+                            </div>
+
+                            <div class="tq-filter-group">
+                                <label for="tq-branch-filter" class="tq-filter-label">Chi nhánh:</label>
+                                <select id="tq-branch-filter" class="tq-select-branch">
+                                    <option value="all">🌐 Toàn Hệ Thống</option>
+                                    <option value="CN1">📍 CN1 - An Dương Vương</option>
+                                    <option value="CN2">📍 CN2 - Huỳnh Tấn Phát</option>
+                                </select>
+                            </div>
+
+                            <button id="tq-btn-refresh" class="tq-btn-refresh" title="Làm mới dữ liệu tổng quan">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                                <span>Làm Mới</span>
+                            </button>
                         </div>
                     </div>
 
-                    <div class="placeholder-grid">
-                        <div class="placeholder-card">
-                            <div class="card-icon-wrap bg-emerald-subtle">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-                                </svg>
+                    <!-- 2. KPI Cards Grid (4 Top Metric Highlights) -->
+                    <div class="tq-kpi-grid">
+                        
+                        <!-- Card 1: Ca Khám Hôm Nay -->
+                        <div class="tq-kpi-card card-kpi-intakes" onclick="jumpToView('lich-kham')">
+                            <div class="tq-kpi-header">
+                                <div class="tq-kpi-icon icon-emerald">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                                    </svg>
+                                </div>
+                                <span id="tq-kpi-intakes-badge" class="tq-card-badge badge-warning">--</span>
                             </div>
-                            <span class="card-stat-title">Ca Khám Hôm Nay</span>
-                            <span class="card-stat-val">-- ca</span>
-                            <span class="card-stat-desc">Đang được đồng bộ từ Lịch Khám</span>
+                            <div class="tq-kpi-body">
+                                <span class="tq-kpi-title">Ca Khám Tiếp Nhận Hôm Nay</span>
+                                <div class="tq-kpi-val-row">
+                                    <span id="tq-kpi-intakes-val" class="tq-kpi-val">0 ca</span>
+                                    <span class="tq-kpi-arrow">→</span>
+                                </div>
+                                <span id="tq-kpi-intakes-desc" class="tq-kpi-desc">0 đã khám xong • 0 đang tiếp nhận</span>
+                            </div>
                         </div>
 
-                        <div class="placeholder-card">
-                            <div class="card-icon-wrap bg-amber-subtle">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <polyline points="12 6 12 12 16 14"></polyline>
-                                </svg>
+                        <!-- Card 2: Tồn Kho Cảnh Báo -->
+                        <div class="tq-kpi-card card-kpi-stock" onclick="jumpToView('vat-tu')">
+                            <div class="tq-kpi-header">
+                                <div class="tq-kpi-icon icon-amber">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                </div>
+                                <span id="tq-kpi-stock-badge" class="tq-card-badge badge-danger">--</span>
                             </div>
-                            <span class="card-stat-title">Ca Chưa Xử Lý</span>
-                            <span class="card-stat-val">-- ca</span>
-                            <span class="card-stat-desc">Cần bác sĩ tiếp nhận khẩn cấp</span>
+                            <div class="tq-kpi-body">
+                                <span class="tq-kpi-title">Vật Tư & Thuốc Cảnh Báo Tồn</span>
+                                <div class="tq-kpi-val-row">
+                                    <span id="tq-kpi-stock-val" class="tq-kpi-val">0 loại</span>
+                                    <span class="tq-kpi-arrow">→</span>
+                                </div>
+                                <span id="tq-kpi-stock-desc" class="tq-kpi-desc">0 hết hàng • 0 dưới mức an toàn</span>
+                            </div>
                         </div>
 
-                        <div class="placeholder-card">
-                            <div class="card-icon-wrap bg-indigo-subtle">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path
-                                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
-                                    </path>
-                                </svg>
+                        <!-- Card 3: Cận Hạn Dùng / Quá Hạn -->
+                        <div class="tq-kpi-card card-kpi-expiry" onclick="jumpToView('vat-tu')">
+                            <div class="tq-kpi-header">
+                                <div class="tq-kpi-icon icon-rose">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                </div>
+                                <span id="tq-kpi-expiry-badge" class="tq-card-badge badge-warning">--</span>
                             </div>
-                            <span class="card-stat-title">Thuốc & Vật Tư Cảnh Báo</span>
-                            <span class="card-stat-val">3 loại</span>
-                            <span class="card-stat-desc">Đang dưới ngưỡng tồn kho an toàn</span>
+                            <div class="tq-kpi-body">
+                                <span class="tq-kpi-title">Dược Phẩm Cận Hạn Dùng (≤60d)</span>
+                                <div class="tq-kpi-val-row">
+                                    <span id="tq-kpi-expiry-val" class="tq-kpi-val">0 loại</span>
+                                    <span class="tq-kpi-arrow">→</span>
+                                </div>
+                                <span id="tq-kpi-expiry-desc" class="tq-kpi-desc">Cần ưu tiên luân chuyển hoặc xuất kho</span>
+                            </div>
                         </div>
 
-                        <div class="placeholder-card">
-                            <div class="card-icon-wrap bg-blue-subtle">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                    <circle cx="9" cy="7" r="4"></circle>
-                                </svg>
+                        <!-- Card 4: Hoạt Động Kho & Nhập Xuất -->
+                        <div class="tq-kpi-card card-kpi-orders" onclick="jumpToView('nhap-xuat')">
+                            <div class="tq-kpi-header">
+                                <div class="tq-kpi-icon icon-indigo">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                    </svg>
+                                </div>
+                                <span class="tq-card-badge badge-info">Realtime</span>
                             </div>
-                            <span class="card-stat-title">Bác Sĩ Ca Trực</span>
-                            <span class="card-stat-val">4 Bác sĩ</span>
-                            <span class="card-stat-desc">Đang trong ca trực chính</span>
+                            <div class="tq-kpi-body">
+                                <span class="tq-kpi-title">Đơn Nhập / Xuất Kho Gần Đây</span>
+                                <div class="tq-kpi-val-row">
+                                    <span id="tq-kpi-orders-val" class="tq-kpi-val">0 đơn</span>
+                                    <span class="tq-kpi-arrow">→</span>
+                                </div>
+                                <span id="tq-kpi-orders-desc" class="tq-kpi-desc">Tổng số đơn nhập, xuất & luân chuyển</span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- 3. Quick Action Ribbon (Phím Tắt Nhanh) -->
+                    <div class="tq-quick-actions-bar">
+                        <div class="tq-qa-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                            <span>Thao Tác Nhanh:</span>
+                        </div>
+                        <div class="tq-qa-buttons">
+                            <button class="tq-qa-btn" onclick="jumpToView('lich-kham')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+                                <span>Tiếp Nhận Ca Mới</span>
+                            </button>
+                            <button class="tq-qa-btn" onclick="jumpToView('vat-tu')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                                <span>Thêm Vật Tư</span>
+                            </button>
+                            <button class="tq-qa-btn" onclick="jumpToView('nhap-xuat')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                                <span>Tạo Đơn Nhập / Xuất</span>
+                            </button>
+                            <button class="tq-qa-btn" onclick="jumpToView('kiem-kho')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="7" y1="12" x2="17" y2="12"></line></svg>
+                                <span>Quét Kiểm Kho QR</span>
+                            </button>
+                            <button class="tq-qa-btn" onclick="jumpToView('can-bang-kho')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                                <span>Cân Bằng GPET</span>
+                            </button>
+                            <button class="tq-qa-btn" onclick="jumpToView('the-kho')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                                <span>Sổ Thẻ Kho</span>
+                            </button>
                         </div>
                     </div>
 
-                    <div class="empty-placeholder-box">
-                        <svg class="empty-placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="1.5">
-                            <path d="M18 20V10M12 20V4M6 20v-6"></path>
-                        </svg>
-                        <h3>Tính Năng Phân Tích Đang Được Phát Triển</h3>
-                        <p>Biểu đồ doanh thu, thống kê ca bệnh theo chủng loại chó/mèo và báo cáo hiệu suất bác sĩ sẽ
-                            sớm được bổ sung.</p>
+                    <!-- 4. Main 2-Column Split Content -->
+                    <div class="tq-main-layout">
+                        
+                        <!-- Left Column (60%): Ca Khám & Cảnh Báo Tồn Kho -->
+                        <div class="tq-main-col-left">
+                            
+                            <!-- Widget 1: Ca Khám Tiếp Nhận Mới Nhất -->
+                            <div class="tq-widget-card">
+                                <div class="tq-widget-header">
+                                    <div class="tq-widget-title-wrap">
+                                        <div class="tq-widget-icon icon-emerald">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                                        </div>
+                                        <div>
+                                            <h3 class="tq-widget-title">Ca Khám Tiếp Nhận Gần Đây</h3>
+                                            <p class="tq-widget-subtitle">Danh sách ca khai báo mới nhất trong ngày</p>
+                                        </div>
+                                    </div>
+                                    <button class="tq-btn-view-all" onclick="jumpToView('lich-kham')">Xem Tất Cả →</button>
+                                </div>
+                                <div class="tq-widget-body" id="tq-recent-intakes-list">
+                                    <div class="tq-loading-state">
+                                        <div class="tq-spinner"></div>
+                                        <span>Đang tải danh sách ca khám...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Widget 2: Danh Sách Vật Tư Sắp Hết / Cần Nhập Thêm -->
+                            <div class="tq-widget-card">
+                                <div class="tq-widget-header">
+                                    <div class="tq-widget-title-wrap">
+                                        <div class="tq-widget-icon icon-amber">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+                                        </div>
+                                        <div>
+                                            <h3 class="tq-widget-title">Vật Tư & Thuốc Cần Nhập Hàng</h3>
+                                            <p class="tq-widget-subtitle">Mặt hàng hết hàng hoặc đang dưới mức tồn kho an toàn</p>
+                                        </div>
+                                    </div>
+                                    <button class="tq-btn-view-all" onclick="jumpToView('vat-tu')">Xem Kho Vật Tư →</button>
+                                </div>
+                                <div class="tq-widget-body" id="tq-low-stock-list">
+                                    <div class="tq-loading-state">
+                                        <div class="tq-spinner"></div>
+                                        <span>Đang phân tích tồn kho an toàn...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Right Column (40%): Cận Hạn Dùng, Nhật Ký Đơn Kho, & So Sánh CN1 vs CN2 -->
+                        <div class="tq-main-col-right">
+                            
+                            <!-- Widget 3: Cảnh Báo Cận Hạn Dùng -->
+                            <div class="tq-widget-card">
+                                <div class="tq-widget-header">
+                                    <div class="tq-widget-title-wrap">
+                                        <div class="tq-widget-icon icon-rose">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                        </div>
+                                        <div>
+                                            <h3 class="tq-widget-title">Dược Phẩm Cận Hạn Dùng</h3>
+                                            <p class="tq-widget-subtitle">Hạn sử dụng còn ≤ 60 ngày hoặc đã quá hạn</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="tq-widget-body" id="tq-expiry-watchlist">
+                                    <div class="tq-loading-state">
+                                        <div class="tq-spinner"></div>
+                                        <span>Đang kiểm tra hạn sử dụng...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Widget 4: Nhật Ký Nhập / Xuất Mới Nhất -->
+                            <div class="tq-widget-card">
+                                <div class="tq-widget-header">
+                                    <div class="tq-widget-title-wrap">
+                                        <div class="tq-widget-icon icon-indigo">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                                        </div>
+                                        <div>
+                                            <h3 class="tq-widget-title">Hoạt Động Xuất Nhập Kho</h3>
+                                            <p class="tq-widget-subtitle">5 phiếu xuất nhập kho gần nhất</p>
+                                        </div>
+                                    </div>
+                                    <button class="tq-btn-view-all" onclick="jumpToView('nhap-xuat')">Nhập Xuất →</button>
+                                </div>
+                                <div class="tq-widget-body" id="tq-recent-orders-timeline">
+                                    <div class="tq-loading-state">
+                                        <div class="tq-spinner"></div>
+                                        <span>Đang tải hoạt động kho...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Widget 5: So Sánh Hoạt Động Giữa 2 Chi Nhánh -->
+                            <div class="tq-widget-card">
+                                <div class="tq-widget-header">
+                                    <div class="tq-widget-title-wrap">
+                                        <div class="tq-widget-icon icon-blue">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                                        </div>
+                                        <div>
+                                            <h3 class="tq-widget-title">Tương Quan CN1 vs CN2</h3>
+                                            <p class="tq-widget-subtitle">Tỷ lệ ca khám & tồn kho thực tế</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="tq-widget-body">
+                                    <div class="tq-branch-comparison-wrap">
+                                        
+                                        <div class="tq-comp-item">
+                                            <div class="tq-comp-label-row">
+                                                <span>Ca Khám Hôm Nay</span>
+                                                <div class="tq-comp-values">
+                                                    <span id="tq-txt-intake-cn1" style="color: #10b981; font-weight: 700;">CN1: 0 ca</span> • 
+                                                    <span id="tq-txt-intake-cn2" style="color: #6366f1; font-weight: 700;">CN2: 0 ca</span>
+                                                </div>
+                                            </div>
+                                            <div class="tq-comp-bar-container">
+                                                <div id="tq-bar-intake-cn1" class="tq-bar-segment is-cn1" style="width: 50%;"></div>
+                                                <div id="tq-bar-intake-cn2" class="tq-bar-segment is-cn2" style="width: 50%;"></div>
+                                            </div>
+                                        </div>
+
+                                        <div class="tq-comp-item" style="margin-top: 16px;">
+                                            <div class="tq-comp-label-row">
+                                                <span>Tổng Số Lượng Tồn Kho</span>
+                                                <div class="tq-comp-values">
+                                                    <span id="tq-txt-stock-cn1" style="color: #10b981; font-weight: 700;">CN1: 0 đv</span> • 
+                                                    <span id="tq-txt-stock-cn2" style="color: #6366f1; font-weight: 700;">CN2: 0 đv</span>
+                                                </div>
+                                            </div>
+                                            <div class="tq-comp-bar-container">
+                                                <div id="tq-bar-stock-cn1" class="tq-bar-segment is-cn1" style="width: 50%;"></div>
+                                                <div id="tq-bar-stock-cn2" class="tq-bar-segment is-cn2" style="width: 50%;"></div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
                     </div>
+
                 </div>
             </section>
 
@@ -3481,6 +3723,7 @@
     <script src="nhap_xuat.js?v=69"></script>
     <script src="the_kho.js?v=20"></script>
     <script src="kiem_kho.js?v=67"></script>
+    <script src="tong_quan.js?v=1"></script>
     <script src="auth.js?v=4"></script>
 </body>
 
