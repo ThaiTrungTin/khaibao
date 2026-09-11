@@ -1062,30 +1062,69 @@ function changeTheKhoPage(newPage) {
     renderCurrentTheKhoPageData();
 }
 
+// Function to dynamically sync sticky column left offsets across headers and rows during/after resize
+function syncTheKhoStickyColumnPositions() {
+    const visibleCols = currentTheKhoCols.filter(c => c.visible);
+    let leftOffset = 0;
+
+    visibleCols.forEach((col, visIdx) => {
+        const colWidth = parseInt(col.width, 10) || 120;
+        const th = document.querySelector(`.thekho-table th[data-sort-col="${col.key}"]`);
+        if (th) {
+            th.style.width = `${colWidth}px`;
+            th.style.minWidth = `${col.minWidth || '60px'}`;
+            if (visIdx < thekhoFixedColsCount) {
+                th.style.left = `${leftOffset}px`;
+            }
+        }
+
+        const rows = document.querySelectorAll('#thekho-table-body tr');
+        rows.forEach(tr => {
+            const td = tr.children[visIdx];
+            if (td) {
+                td.style.width = `${colWidth}px`;
+                td.style.minWidth = `${col.minWidth || '60px'}`;
+                if (visIdx < thekhoFixedColsCount) {
+                    td.style.left = `${leftOffset}px`;
+                }
+            }
+        });
+
+        if (visIdx < thekhoFixedColsCount) {
+            leftOffset += colWidth;
+        }
+    });
+}
+
 // Column Resizing Dragging Handler
 function initTheKhoColumnResizing() {
     const resizers = document.querySelectorAll('.thekho-table .col-resizer');
     resizers.forEach(resizer => {
         const th = resizer.parentElement;
+        if (!th) return;
         let startX, startWidth;
 
         const onMouseMove = (e) => {
             if (!startX) return;
             const diffX = e.pageX - startX;
-            const newWidth = Math.max(60, startWidth + diffX);
-            th.style.width = `${newWidth}px`;
-            th.style.minWidth = `${newWidth}px`;
             const colKey = th.getAttribute('data-sort-col');
             const colObj = currentTheKhoCols.find(c => c.key === colKey);
+            const minW = parseInt(colObj?.minWidth, 10) || 60;
+            const newWidth = Math.max(minW, startWidth + diffX);
             if (colObj) colObj.width = `${newWidth}px`;
+            th.style.width = `${newWidth}px`;
+            th.style.minWidth = `${minW}px`;
+            syncTheKhoStickyColumnPositions();
         };
 
         const onMouseUp = () => {
+            if (!startX) return;
             startX = null;
             resizer.classList.remove('resizing');
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
             localStorage.setItem('gaia_thekho_columns_v1', JSON.stringify(currentTheKhoCols));
+            renderCurrentTheKhoPageData();
         };
 
         resizer.addEventListener('mousedown', (e) => {
@@ -1377,7 +1416,9 @@ function formatDate(dateStr) {
 
 function formatQrStringWithStandardDate(qrStr, dateExpiry) {
     if (!qrStr) return '';
-    const str = String(qrStr).trim();
+    let str = String(qrStr).trim();
+    // Clean legacy trailing empty delimiters like `;-;` or `;-`
+    str = str.replace(/;-;?$/g, '').replace(/;-$/g, '');
     if (!str.includes(';')) return str;
     const parts = str.split(';');
     if (parts.length >= 3) {
@@ -1442,6 +1483,37 @@ function showTheKhoLoading(show) {
     if (spinner) spinner.style.display = show ? 'flex' : 'none';
 }
 
+// Quick filter handler invoked from other modules (Vật Tư quick view)
+function filterTheKhoByBarcodeAndLot(maVach, lot = '', branch = '') {
+    clearAllTheKhoFilters();
+
+    const searchInput = document.getElementById('thekho-search-input');
+    if (searchInput) {
+        searchInput.value = (maVach || '').trim();
+    }
+
+    if (lot && lot !== '-' && lot !== 'null') {
+        theKhoColumnFilters['lot'] = new Set([lot.trim()]);
+    }
+
+    if (branch && branch !== 'all' && branch !== '-') {
+        const branchSelect = document.getElementById('thekho-filter-branch');
+        if (branchSelect) {
+            let matchedOpt = Array.from(branchSelect.options).find(o => 
+                o.value.toUpperCase() === branch.toUpperCase() || 
+                o.text.toUpperCase().includes(branch.toUpperCase())
+            );
+            if (matchedOpt) {
+                branchSelect.value = matchedOpt.value;
+            }
+        }
+    }
+
+    theKhoCurrentPage = 1;
+    updateTheKhoColumnFilterBadgesUI();
+    applyTheKhoFilters();
+}
+
 // Global Window Exports
 window.fetchTheKhoData = fetchTheKhoData;
 window.handleTheKhoHeaderSortClick = handleTheKhoHeaderSortClick;
@@ -1449,6 +1521,9 @@ window.openTheKhoColumnConfigModal = openTheKhoColumnConfigModal;
 window.closeTheKhoColumnConfigModal = closeTheKhoColumnConfigModal;
 window.saveTheKhoColumnConfig = saveTheKhoColumnConfig;
 window.clearAllTheKhoFilters = clearAllTheKhoFilters;
+window.filterTheKhoByBarcodeAndLot = filterTheKhoByBarcodeAndLot;
+window.applyTheKhoFilters = applyTheKhoFilters;
+window.updateTheKhoColumnFilterBadgesUI = updateTheKhoColumnFilterBadgesUI;
 window.toggleTheKhoColumnFilterDropdown = toggleTheKhoColumnFilterDropdown;
 window.renderTheKhoFilterPopoverListOptions = renderTheKhoFilterPopoverListOptions;
 window.toggleSelectAllTheKhoPopoverOptions = toggleSelectAllTheKhoPopoverOptions;

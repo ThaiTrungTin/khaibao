@@ -81,7 +81,7 @@ function initNavigationManager() {
         }
 
         // Allowed views
-        const validViews = ['lich-kham', 'vat-tu', 'nhan-su', 'nhap-xuat', 'the-kho', 'kiem-kho'];
+        const validViews = ['lich-kham', 'vat-tu', 'nhan-su', 'nhap-xuat', 'the-kho', 'kiem-kho', 'can-bang-kho'];
         if (!validViews.includes(currentHash)) {
             currentHash = 'lich-kham'; // Default to Lịch Khám (Quản lý ca)
         }
@@ -115,6 +115,10 @@ function initNavigationManager() {
 
         if (currentHash === 'kiem-kho' && typeof window.initKiemKhoView === 'function') {
             window.initKiemKhoView();
+        }
+
+        if (currentHash === 'can-bang-kho' && typeof window.initCanBangKhoView === 'function') {
+            window.initCanBangKhoView();
         }
 
         // Scroll to top of main content on view switch

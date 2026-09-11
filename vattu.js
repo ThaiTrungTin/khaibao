@@ -52,21 +52,21 @@ const vattuColTitles = {
 
 // Dynamic Column Configuration State
 const defaultVatTuCols = [
-    { key: 'ma_vach', title: 'Mã Vạch', visible: true, width: '165px', align: 'left', minWidth: '135px' },
-    { key: 'ten_mat_hang', title: 'Tên Mặt Hàng', visible: true, width: '210px', align: 'left', minWidth: '130px' },
-    { key: 'ten_hoa_don', title: 'Tên Hóa Đơn', visible: true, width: '190px', align: 'left', minWidth: '110px' },
-    { key: 'ton_dau', title: 'Đầu', visible: true, width: '110px', align: 'right', minWidth: '80px' },
-    { key: 'nhap', title: 'Nhập', visible: true, width: '110px', align: 'right', minWidth: '80px' },
-    { key: 'xuat', title: 'Xuất', visible: true, width: '110px', align: 'right', minWidth: '80px' },
-    { key: 'ton_cuoi', title: 'Cuối', visible: true, width: '110px', align: 'right', minWidth: '80px' },
-    { key: 'nha_san_xuat', title: 'Nhà Sản Xuất', visible: true, width: '170px', align: 'left', minWidth: '100px' },
-    { key: 'danh_muc', title: 'Danh Mục', visible: true, width: '140px', align: 'left', minWidth: '100px' },
-    { key: 'nhom_hang', title: 'Nhóm Hàng', visible: true, width: '140px', align: 'left', minWidth: '100px' },
-    { key: 'phan_loai', title: 'Phân Loại', visible: true, width: '140px', align: 'left', minWidth: '100px' },
-    { key: 'phong_ban', title: 'Phòng Ban', visible: true, width: '140px', align: 'left', minWidth: '100px' },
-    { key: 'don_vi', title: 'Đơn Vị', visible: true, width: '100px', align: 'left', minWidth: '80px' },
-    { key: 'cach_dung', title: 'Cách Dùng', visible: true, width: '160px', align: 'left', minWidth: '100px' },
-    { key: 'gia_von_ton_kho_trung_binh', title: 'Giá Vốn TB (đ)', visible: true, width: '160px', align: 'right', minWidth: '100px' }
+    { key: 'ma_vach', title: 'Mã Vạch', visible: true, width: '165px', align: 'left', minWidth: '70px' },
+    { key: 'ten_mat_hang', title: 'Tên Mặt Hàng', visible: true, width: '210px', align: 'left', minWidth: '80px' },
+    { key: 'ten_hoa_don', title: 'Tên Hóa Đơn', visible: true, width: '190px', align: 'left', minWidth: '80px' },
+    { key: 'ton_dau', title: 'Đầu', visible: true, width: '110px', align: 'right', minWidth: '70px' },
+    { key: 'nhap', title: 'Nhập', visible: true, width: '110px', align: 'right', minWidth: '70px' },
+    { key: 'xuat', title: 'Xuất', visible: true, width: '110px', align: 'right', minWidth: '70px' },
+    { key: 'ton_cuoi', title: 'Cuối', visible: true, width: '110px', align: 'right', minWidth: '70px' },
+    { key: 'nha_san_xuat', title: 'Nhà Sản Xuất', visible: true, width: '170px', align: 'left', minWidth: '80px' },
+    { key: 'danh_muc', title: 'Danh Mục', visible: true, width: '140px', align: 'left', minWidth: '80px' },
+    { key: 'nhom_hang', title: 'Nhóm Hàng', visible: true, width: '140px', align: 'left', minWidth: '80px' },
+    { key: 'phan_loai', title: 'Phân Loại', visible: true, width: '140px', align: 'left', minWidth: '80px' },
+    { key: 'phong_ban', title: 'Phòng Ban', visible: true, width: '140px', align: 'left', minWidth: '80px' },
+    { key: 'don_vi', title: 'Đơn Vị', visible: true, width: '100px', align: 'left', minWidth: '60px' },
+    { key: 'cach_dung', title: 'Cách Dùng', visible: true, width: '160px', align: 'left', minWidth: '80px' },
+    { key: 'gia_von_ton_kho_trung_binh', title: 'Giá Vốn TB (đ)', visible: true, width: '160px', align: 'right', minWidth: '80px' }
 ];
 
 let currentVatTuCols = [];
@@ -264,6 +264,27 @@ function initVatTuModule() {
                 showVatTuFieldError('err-vattu-ma-vach', 'Mã vạch này trùng, vui lòng kiểm tra lại!');
             } else {
                 showVatTuFieldError('err-vattu-ma-vach', '');
+            }
+        });
+    }
+
+    // Realtime Item Name Duplicate Validation (Unique)
+    const inputTenMatHang = document.getElementById('input-vattu-ten-mat-hang');
+    if (inputTenMatHang) {
+        inputTenMatHang.addEventListener('input', () => {
+            const val = inputTenMatHang.value.trim();
+            if (!val) {
+                showVatTuFieldError('err-vattu-ten-mat-hang', '');
+                return;
+            }
+            const isDup = vatTuData.some(item => 
+                item.ten_mat_hang && String(item.ten_mat_hang).trim().toLowerCase() === val.toLowerCase() && 
+                String(item.id) !== String(editingVatTuId)
+            );
+            if (isDup) {
+                showVatTuFieldError('err-vattu-ten-mat-hang', 'Tên mặt hàng này đã tồn tại, vui lòng kiểm tra lại!');
+            } else {
+                showVatTuFieldError('err-vattu-ten-mat-hang', '');
             }
         });
     }
@@ -1134,10 +1155,21 @@ function renderVatTuTable(items) {
                             </svg>
                         </button>`;
                 } else {
-                    toggleBtn = `<span style="display: inline-block; width: 22px;"></span>`;
+                    toggleBtn = `<span style="display: inline-block; width: 22px; flex-shrink: 0;"></span>`;
                 }
 
-                cellContent = `<div style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">${toggleBtn}<code class="vattu-barcode-code" style="flex-shrink: 0;">${escapeHtml(item.ma_vach || '-')}</code></div>`;
+                const gotoTheKhoBtn = item.ma_vach ? `
+                    <button type="button" class="btn-goto-thekho" title="Xem Thẻ Kho của mã ${escapeHtml(item.ma_vach)}" onclick="event.stopPropagation(); navigateToTheKhoFilter('${escapeHtml(item.ma_vach)}', '', '')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                    </button>
+                ` : '';
+
+                cellContent = `<div style="display: flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; white-space: nowrap;">${toggleBtn}<code class="vattu-barcode-code" style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1;">${escapeHtml(item.ma_vach || '-')}</code>${gotoTheKhoBtn}</div>`;
             } else if (col.key === 'ten_mat_hang') {
                 cellContent = `<strong>${formatTruncateCell(item.ten_mat_hang, '-')}</strong>`;
             } else if (col.key === 'danh_muc') {
@@ -1223,10 +1255,33 @@ function renderVatTuTable(items) {
 
                     let cellContent = '';
 
+                    const cBarcode = (d.ma_vach || item.ma_vach || '').trim();
+                    const cLot = (d.lot && d.lot !== '-') ? d.lot.trim() : '';
+
                     if (col.key === 'ma_vach') {
-                        cellContent = `<div style="padding-left: 20px; display: inline-flex; align-items: center; gap: 6px;"><span style="color: #3b82f6; font-weight: bold; font-family: monospace; font-size: 14px;">${branchTreeIcon}</span> <span class="subrow-branch-badge">📍 ${escapeHtml(d.chi_nhanh || '-')}</span></div>`;
+                        const gotoTheKhoSubrowBtn = cBarcode ? `
+                            <button type="button" class="btn-goto-thekho" title="Xem Thẻ Kho LOT ${escapeHtml(cLot || '-')} (${escapeHtml(d.chi_nhanh || '')})" onclick="event.stopPropagation(); navigateToTheKhoFilter('${escapeHtml(cBarcode)}', '${escapeHtml(cLot)}', '${escapeHtml(d.chi_nhanh || '')}')">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                            </button>
+                        ` : '';
+                        cellContent = `<div style="padding-left: 12px; display: flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; white-space: nowrap;"><span style="color: #3b82f6; font-weight: bold; font-family: monospace; font-size: 14px; flex-shrink: 0;">${branchTreeIcon}</span> <span class="subrow-branch-badge" style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1;">📍 ${escapeHtml(d.chi_nhanh || '-')}</span>${gotoTheKhoSubrowBtn}</div>`;
                     } else if (col.key === 'ten_mat_hang') {
-                        cellContent = `<span class="subrow-label">LOT: <strong class="subrow-value">${escapeHtml(d.lot || '-')}</strong></span>`;
+                        const gotoTheKhoLotBtn = cBarcode ? `
+                            <button type="button" class="btn-goto-thekho" title="Xem Thẻ Kho LOT ${escapeHtml(cLot || '-')}" onclick="event.stopPropagation(); navigateToTheKhoFilter('${escapeHtml(cBarcode)}', '${escapeHtml(cLot)}', '${escapeHtml(d.chi_nhanh || '')}')">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                            </button>
+                        ` : '';
+                        cellContent = `<div style="display: flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; white-space: nowrap;"><span class="subrow-label" style="flex-shrink: 0;">LOT: </span><strong class="subrow-value" style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1;">${escapeHtml(d.lot || '-')}</strong>${gotoTheKhoLotBtn}</div>`;
                     } else if (col.key === 'ten_hoa_don') {
                         cellContent = `<span class="subrow-label">Hạn SD: <strong class="subrow-value">${escapeHtml(formatDate(d.date_expiry))}</strong></span>`;
                     } else if (col.key === 'ton_dau') {
@@ -1362,7 +1417,42 @@ function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx)
     btnsContainer.appendChild(btnNext);
 }
 
-// Requirement 5: Resizable Columns Dragging Handler (AppSheet Style - Fixed persistence)
+// Function to dynamically sync sticky column left offsets across headers and rows during/after resize
+function syncVatTuStickyColumnPositions() {
+    const visibleCols = currentVatTuCols.filter(c => c.visible);
+    let leftOffset = 0;
+
+    visibleCols.forEach((col, visIdx) => {
+        const colWidth = parseInt(col.width, 10) || 120;
+        const th = document.querySelector(`.vattu-table th[data-sort-col="${col.key}"]`);
+        if (th) {
+            th.style.width = `${colWidth}px`;
+            th.style.minWidth = `${col.minWidth || '60px'}`;
+            if (visIdx < vattuFixedColsCount) {
+                th.style.left = `${leftOffset}px`;
+            }
+        }
+
+        // Update all td cells in this column across all rows
+        const rows = document.querySelectorAll('#vattu-table-body tr');
+        rows.forEach(tr => {
+            const td = tr.children[visIdx];
+            if (td && !td.classList.contains('sticky-action-td')) {
+                td.style.width = `${colWidth}px`;
+                td.style.minWidth = `${col.minWidth || '60px'}`;
+                if (visIdx < vattuFixedColsCount) {
+                    td.style.left = `${leftOffset}px`;
+                }
+            }
+        });
+
+        if (visIdx < vattuFixedColsCount) {
+            leftOffset += colWidth;
+        }
+    });
+}
+
+// Requirement 5: Resizable Columns Dragging Handler (AppSheet Style - Fixed persistence & Realtime Sticky Sync)
 function initColumnResizing() {
     const resizers = document.querySelectorAll('.vattu-table .col-resizer, #vattu-table .col-resizer, .col-resizer');
     resizers.forEach(resizer => {
@@ -1374,18 +1464,19 @@ function initColumnResizing() {
             if (!startX) return;
             isResizingColumn = true;
             const diffX = e.pageX - startX;
-            const newWidth = Math.max(50, startWidth + diffX);
-            th.style.width = `${newWidth}px`;
-            th.style.minWidth = `${newWidth}px`;
-
             const colKey = th.getAttribute('data-sort-col');
-            if (colKey && typeof currentVatTuCols !== 'undefined' && Array.isArray(currentVatTuCols)) {
-                const colObj = currentVatTuCols.find(c => c.key === colKey);
-                if (colObj) {
-                    colObj.width = `${newWidth}px`;
-                    colObj.minWidth = `${newWidth}px`;
-                }
+            const colObj = (currentVatTuCols || []).find(c => c.key === colKey);
+            const minW = parseInt(colObj?.minWidth, 10) || 70;
+            const newWidth = Math.max(minW, startWidth + diffX);
+
+            if (colObj) {
+                colObj.width = `${newWidth}px`;
             }
+
+            th.style.width = `${newWidth}px`;
+            th.style.minWidth = `${minW}px`;
+
+            syncVatTuStickyColumnPositions();
         };
 
         const onMouseUp = (e) => {
@@ -1404,6 +1495,9 @@ function initColumnResizing() {
                     localStorage.setItem('gaia_vattu_columns_v7', JSON.stringify(currentVatTuCols));
                 } catch (err) {}
             }
+
+            // Clean re-render ensures 100% synchronization of all subrows, sticky cells and dividers
+            renderCurrentPageData();
 
             // Keep flag active briefly so mouseup click event does not trigger A-Z sorting
             setTimeout(() => {
@@ -1607,6 +1701,16 @@ async function handleSaveVatTuForm(e) {
     if (!tenMatHang) {
         showVatTuFieldError('err-vattu-ten-mat-hang', 'Vui lòng nhập tên mặt hàng!');
         isValid = false;
+    } else {
+        const isDuplicateName = vatTuData.some(item => 
+            item.ten_mat_hang && String(item.ten_mat_hang).trim().toLowerCase() === tenMatHang.toLowerCase() && 
+            String(item.id) !== String(editingVatTuId)
+        );
+        if (isDuplicateName) {
+            showVatTuFieldError('err-vattu-ten-mat-hang', 'Tên mặt hàng này đã tồn tại, vui lòng kiểm tra lại!');
+            showVatTuNoticeModal('error', 'Trùng Tên Mặt Hàng', `Tên mặt hàng "${escapeHtml(tenMatHang)}" đã tồn tại trong hệ thống. Vui lòng đặt tên khác hoặc kiểm tra lại!`);
+            isValid = false;
+        }
     }
     if (!donVi) {
         showVatTuFieldError('err-vattu-don-vi', 'Vui lòng nhập đơn vị tính!');
@@ -2310,7 +2414,9 @@ function formatDate(dateStr) {
 
 function formatQrStringWithStandardDate(qrStr, dateExpiry) {
     if (!qrStr) return '';
-    const str = String(qrStr).trim();
+    let str = String(qrStr).trim();
+    // Clean legacy trailing empty delimiters like `;-;` or `;-`
+    str = str.replace(/;-;?$/g, '').replace(/;-$/g, '');
     if (!str.includes(';')) return str;
     const parts = str.split(';');
     if (parts.length >= 3) {
@@ -2517,6 +2623,26 @@ window.toggleSelectAllPopoverOptions = toggleSelectAllPopoverOptions;
 window.renderFilterPopoverListOptions = renderFilterPopoverListOptions;
 window.handleSaveVatTuForm = handleSaveVatTuForm;
 window.handleHeaderSortClick = handleHeaderSortClick;
+window.navigateToTheKhoFilter = navigateToTheKhoFilter;
+
+// Function to smoothly navigate to Thẻ Kho and apply quick filter
+function navigateToTheKhoFilter(maVach, lot = '', branch = '') {
+    window.location.hash = 'the-kho';
+    const theKhoNav = document.querySelector('[data-view="the-kho"]');
+    if (theKhoNav) theKhoNav.click();
+
+    setTimeout(() => {
+        if (typeof window.filterTheKhoByBarcodeAndLot === 'function') {
+            window.filterTheKhoByBarcodeAndLot(maVach, lot, branch);
+        } else {
+            const searchInput = document.getElementById('thekho-search-input');
+            if (searchInput) {
+                searchInput.value = maVach || '';
+                searchInput.dispatchEvent(new Event('input'));
+            }
+        }
+    }, 60);
+}
 
 // ====== Column Configuration UI Logic ======
 // Define as local functions first so they can call each other

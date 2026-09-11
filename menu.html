@@ -17,7 +17,7 @@
 
     <!-- CSS Style sheets -->
     <link rel="stylesheet" href="admin-style.css?v=9">
-    <link rel="stylesheet" href="menu-style.css?v=29">
+    <link rel="stylesheet" href="menu-style.css?v=33">
     
     <!-- PDF.js for automated Invoice parsing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -137,6 +137,13 @@
                                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
                             </svg>
                             <span>Kiểm Kho</span>
+                        </a>
+                        <a class="sidebar-sub-item" data-view="can-bang-kho" id="sidebar-sub-can-bang-kho" style="display: none;">
+                            <svg class="sub-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3v18M3 9l9-6 9 6M6 15l6 6 6-6"></path>
+                                <circle cx="12" cy="12" r="2"></circle>
+                            </svg>
+                            <span>Cân Bằng Kho</span>
                         </a>
                     </div>
                 </div>
@@ -1078,7 +1085,21 @@
                                             <rect x="3" y="14" width="7" height="7"></rect>
                                         </svg>
                                         <input type="text" id="nx-qr-scanner-input" placeholder="Quét QR / Mã vạch hoặc tìm tên vật tư..." autocomplete="off" onkeypress="if(event.key === 'Enter') handleNxQrScannerAdd()">
-                                        <button type="button" class="btn-scan-trigger" onclick="handleNxQrScannerAdd()">Thêm / Quét</button>
+                                        <input type="file" id="nx-excel-file-input" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleNxExcelFileImport(event)">
+                                        <button type="button" id="btn-nx-excel-import" class="btn-toolbar-excel btn-excel-import" onclick="document.getElementById('nx-excel-file-input').click()" title="Nhập danh mục từ file Excel (.xlsx / .csv)">
+                                            <svg class="excel-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm4.8-5.7l1.7 2.7h1.6l-2.4-3.6 2.3-3.4h-1.6l-1.6 2.5-1.6-2.5H7.6l2.3 3.4-2.4 3.6h1.6l1.7-2.7z"/>
+                                            </svg>
+                                            <span>Nhập Excel</span>
+                                        </button>
+                                        <button type="button" id="btn-nx-excel-template" class="btn-toolbar-secondary" onclick="downloadNhapXuatExcelTemplate()" title="Tải file Excel mẫu (.xlsx)">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                <polyline points="7 10 12 15 17 10"></polyline>
+                                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                                            </svg>
+                                            <span>Template</span>
+                                        </button>
                                         <div id="nx-scanner-dropdown" class="nx-scanner-dropdown" style="display: none;"></div>
                                     </div>
                                 </div>
@@ -1271,7 +1292,7 @@
 
             <!-- View 6: Kiểm Kho (Inventory Audit View) -->
             <section id="view-kiem-kho" class="view-panel">
-                <div class="view-content-wrapper">
+                <div class="vattu-module-container">
                     <!-- Top Toolbar for Kiểm Kho (compact) -->
                     <div class="vattu-header-toolbar" style="margin-bottom: 10px;">
                         <div class="vattu-actions-group" style="width: 100%; display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap;">
@@ -1375,31 +1396,155 @@
                                     style="flex:1;background:transparent;border:none;outline:none;color:var(--text-color,#e2e8f0);font-size:13px;" />
                                 <button type="button" onclick="document.getElementById('kiemkho-search-input').value='';kiemKhoSearchFilter('');" title="Xóa" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:13px;padding:0;">✕</button>
                             </div>
+                            <!-- Nút Xóa Lọc đặt ở phía sau ô tìm kiếm -->
+                            <button type="button" id="btn-clear-all-filters-kiemkho" class="btn-toolbar-secondary btn-clear-filter" onclick="clearAllKiemKhoFilters()" title="Xóa toàn bộ bộ lọc cột & ô tìm kiếm" style="gap:6px;padding:7px 14px;font-size:12.5px;height:38px;white-space:nowrap;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                </svg>
+                                <span>Xóa Lọc</span>
+                            </button>
                         </div>
                     </div>
 
                     <!-- Live Audit Table Container -->
                     <div class="vattu-table-card" style="display:flex;flex-direction:column;min-height:0;flex:1;">
-                        <!-- Pagination top + info (always visible) -->
-                        <div id="kiemkho-pagination-bar" style="padding:8px 14px 6px;border-bottom:1px solid rgba(255,255,255,0.07);"></div>
-
                         <!-- Fixed-height scrollable table with sticky header -->
-                        <div class="vattu-table-wrapper" id="kiemkho-table-scroll-container" style="overflow:auto;flex:1;max-height:calc(100vh - 400px);min-height:200px;">
+                        <div class="vattu-table-wrapper" id="kiemkho-table-scroll-container" style="overflow:auto; flex:1 1 auto; min-height:0;">
                             <table class="vattu-table" id="kiemkho-table" style="border-collapse:collapse;width:100%;">
                                 <thead style="position:sticky;top:0;z-index:10;">
                                     <tr>
-                                        <th style="width: 44px;">STT</th>
-                                        <th style="width: 140px;">Mã Vạch</th>
-                                        <th style="min-width: 200px;">Tên Hàng Hóa</th>
-                                        <th style="width: 90px;">LOT</th>
-                                        <th style="width: 90px;">Date</th>
-                                        <th style="width: 80px; text-align: center;">Thực Tế</th>
-                                        <th style="width: 100px; text-align: center;">Tồn HT</th>
-                                        <th style="width: 80px; text-align: center;">CL</th>
-                                        <th style="width: 85px; text-align: center;">Trạng Thái</th>
-                                        <th style="width: 150px;">Người Quét - CN</th>
-                                        <th style="width: 145px; white-space: nowrap;">Thời Gian</th>
-                                        <th style="width: 50px; text-align: center;">🗑️</th>
+                                        <th data-col="stt" style="width: 44px; min-width: 44px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">STT</span>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="ma_vach" style="width: 140px; min-width: 100px; position: relative;">
+                                            <div class="th-content">
+                                                <span class="th-title-text">Mã Vạch</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="ma_vach" data-table="kiemkho" title="Lọc Mã Vạch" onclick="toggleKiemKhoColumnFilter(event, 'ma_vach', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-ma_vach" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="ten_hang_hoa" style="min-width: 180px; width: 220px; position: relative;">
+                                            <div class="th-content">
+                                                <span class="th-title-text">Tên Hàng Hóa</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="ten_hang_hoa" data-table="kiemkho" title="Lọc Tên Hàng Hóa" onclick="toggleKiemKhoColumnFilter(event, 'ten_hang_hoa', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-ten_hang_hoa" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="lot" style="width: 95px; min-width: 70px; position: relative;">
+                                            <div class="th-content">
+                                                <span class="th-title-text">LOT</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="lot" data-table="kiemkho" title="Lọc LOT" onclick="toggleKiemKhoColumnFilter(event, 'lot', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-lot" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="date_expiry" style="width: 95px; min-width: 75px; position: relative;">
+                                            <div class="th-content">
+                                                <span class="th-title-text">Date</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="date_expiry" data-table="kiemkho" title="Lọc Hạn Dùng" onclick="toggleKiemKhoColumnFilter(event, 'date_expiry', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-date_expiry" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="so_luong_thuc_te" style="width: 85px; min-width: 75px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">Thực Tế</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="so_luong_thuc_te" data-table="kiemkho" title="Lọc Số Lượng Thực Tế" onclick="toggleKiemKhoColumnFilter(event, 'so_luong_thuc_te', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-so_luong_thuc_te" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="so_luong_he_thong" style="width: 100px; min-width: 80px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">Tồn HT</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="so_luong_he_thong" data-table="kiemkho" title="Lọc Tồn Hệ Thống" onclick="toggleKiemKhoColumnFilter(event, 'so_luong_he_thong', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-so_luong_he_thong" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="chenh_lech" style="width: 80px; min-width: 70px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">CL</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="chenh_lech" data-table="kiemkho" title="Lọc Chênh Lệch" onclick="toggleKiemKhoColumnFilter(event, 'chenh_lech', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-chenh_lech" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="trang_thai" style="width: 95px; min-width: 85px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">Trạng Thái</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="trang_thai" data-table="kiemkho" title="Lọc Trạng Thái" onclick="toggleKiemKhoColumnFilter(event, 'trang_thai', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-trang_thai" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="user_name" style="width: 155px; min-width: 110px; position: relative;">
+                                            <div class="th-content">
+                                                <span class="th-title-text">Người Quét - CN</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="user_name" data-table="kiemkho" title="Lọc Người Quét" onclick="toggleKiemKhoColumnFilter(event, 'user_name', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-user_name" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="time_scanned" style="width: 145px; min-width: 100px; white-space: nowrap; position: relative;">
+                                            <div class="th-content">
+                                                <span class="th-title-text">Thời Gian</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="time_scanned" data-table="kiemkho" title="Lọc Thời Gian" onclick="toggleKiemKhoColumnFilter(event, 'time_scanned', 'kiemkho')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="kiemkho-filter-badge-time_scanned" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th style="width: 50px; min-width: 45px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">🗑️</span>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody id="kiemkho-tbody">
@@ -1419,6 +1564,290 @@
                             </div>
                             <h3>Chưa có mã hàng nào được quét</h3>
                             <p>Vui lòng quét mã QR hoặc nhập mã vạch ở ô quét phía trên để tiến hành kiểm kê.</p>
+                        </div>
+
+                        <!-- Pagination Controls Bar for Kiểm Kho -->
+                        <div id="kiemkho-pagination-bar" class="vattu-pagination-bar" style="display: none;">
+                            <div class="vattu-pagination-info">
+                                <span>Hiển thị <strong id="kiemkho-page-range-text">0 - 0</strong> trong tổng số <strong id="kiemkho-page-total-text">0</strong> mặt hàng</span>
+                            </div>
+                            <div class="vattu-pagination-controls">
+                                <div class="vattu-page-size-wrap">
+                                    <label>Hiển thị:</label>
+                                    <select id="kiemkho-page-size-select" class="vattu-select-sm" onchange="changeKiemKhoPageSize(this.value)">
+                                        <option value="10">10 hàng</option>
+                                        <option value="20">20 hàng</option>
+                                        <option value="25" selected>25 hàng</option>
+                                        <option value="50">50 hàng</option>
+                                        <option value="100">100 hàng</option>
+                                        <option value="all">Tất cả</option>
+                                    </select>
+                                </div>
+                                <div class="vattu-page-btns" id="kiemkho-page-btns-container">
+                                    <!-- Page buttons generated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View 7: Cân Bằng Kho (GPET Stock Reconciliation View) -->
+            <section id="view-can-bang-kho" class="view-panel">
+                <div class="vattu-module-container">
+                    <!-- File Input for Excel Import -->
+                    <input type="file" id="input-canbang-excel-file" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleCanBangExcelImportFile(event)">
+
+                    <!-- Top Header Toolbar -->
+                    <div class="vattu-header-toolbar" style="margin-bottom: 10px;">
+                        <div class="vattu-actions-group" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                            
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <select id="canbang-filter-branch" class="vattu-select-branch" style="display: none;">
+                                    <option value="all">🏢 Tất cả chi nhánh</option>
+                                </select>
+
+                                <!-- Mã Phiếu Kiểm Đối Chiếu (Tự động theo Kiểm Kho) -->
+                                <div style="display: flex; align-items: center; gap: 8px; background: rgba(56,189,248,0.10); border: 1.5px solid rgba(56,189,248,0.4); padding: 5px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; color: #38bdf8;">
+                                    <span>⚖️ Phiếu Kiểm:</span>
+                                    <span id="canbang-phieu-display" style="color:#10b981;font-family:monospace;font-size:14px;font-weight:800;letter-spacing:0.5px;">-- Chưa có phiếu --</span>
+                                </div>
+                            </div>
+
+                            <!-- Nhóm nút hành động -->
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <!-- Nút Xóa Lọc Cân Bằng Kho (Cái phễu trước Nhập Excel) -->
+                                <button type="button" id="btn-clear-all-filters-canbang" class="btn-toolbar-secondary btn-clear-filter" onclick="clearAllCanBangFilters()" title="Xóa toàn bộ bộ lọc cột" style="gap: 6px; padding: 6px 12px; font-size: 12px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                    <span>Xóa Lọc</span>
+                                </button>
+
+                                <!-- Nút Nhập Excel GPET -->
+                                <button type="button" id="btn-import-excel-canbang" class="btn-toolbar-excel btn-excel-import" onclick="document.getElementById('input-canbang-excel-file').click()" title="Nhập danh sách tồn GPET từ file Excel" style="gap: 6px; padding: 6px 12px; font-size: 12px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    <span>Nhập Excel GPET</span>
+                                </button>
+
+                                <!-- Nút Tải Template Mẫu -->
+                                <button type="button" id="btn-download-canbang-template" class="btn-toolbar-secondary" onclick="downloadCanBangExcelTemplate()" title="Tải file mẫu Excel chuẩn để nạp tồn GPET" style="gap: 6px; padding: 6px 10px; font-size: 12px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                    <span>Template</span>
+                                </button>
+
+                                <!-- Nút Tính Lại / Đồng Bộ -->
+                                <button type="button" id="btn-recalc-canbang" class="btn-toolbar-secondary" onclick="recalculateCanBangKhoData(true)" title="Tính toán và đồng bộ lại Tồn Kho & Thực Tế" style="gap: 6px; padding: 6px 10px; font-size: 12px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                    <span>Tính Lại</span>
+                                </button>
+
+                                <!-- Nút Lưu Bảng Cân Bằng -->
+                                <button type="button" id="btn-save-canbang" class="btn-toolbar-primary" onclick="saveCanBangKhoDataToDB()" title="Lưu bảng Cân Bằng Kho vào CSDL" style="gap: 6px; padding: 6px 12px; font-size: 12px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                    <span>Lưu Dữ Liệu</span>
+                                </button>
+
+                                <!-- Nút Xuất Excel Cân Bằng -->
+                                <button type="button" id="btn-export-excel-canbang" class="btn-toolbar-excel btn-excel-export" onclick="exportCanBangKhoToExcel()" title="Xuất kết quả đối chiếu Cân Bằng Kho ra file Excel" style="gap: 6px; padding: 6px 10px; font-size: 12px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                    <span>Xuất Excel</span>
+                                </button>
+
+                                <!-- Nút Xóa Bảng Cân Bằng -->
+                                <button type="button" id="btn-clear-canbang" class="btn-action-icon" onclick="clearCanBangKhoTable()" title="Xóa toàn bộ danh sách cân bằng kho" style="width: 32px; height: 32px; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Thống Kê & Thanh Tìm Kiếm Cân Bằng Kho -->
+                    <div class="kiemkho-scanner-dashboard" style="margin-bottom: 8px;">
+                        <div class="kiemkho-stats-cards">
+                            <div class="kiemkho-stat-card card-total" style="background: rgba(56, 189, 248, 0.08); border-color: rgba(56, 189, 248, 0.25);">
+                                <div class="stat-icon">⚖️</div>
+                                <div class="stat-info">
+                                    <div class="stat-label" style="color: #38bdf8;">Tổng Mã GPET</div>
+                                    <div class="stat-value" id="canbang-stat-total" style="color: #38bdf8;">0</div>
+                                </div>
+                            </div>
+                            <div class="kiemkho-stat-card card-match">
+                                <div class="stat-icon">✅</div>
+                                <div class="stat-info">
+                                    <div class="stat-label">Khớp (Đủ)</div>
+                                    <div class="stat-value" id="canbang-stat-match">0</div>
+                                </div>
+                            </div>
+                            <div class="kiemkho-stat-card card-excess">
+                                <div class="stat-icon">🔺</div>
+                                <div class="stat-info">
+                                    <div class="stat-label">Dư Thực Tế</div>
+                                    <div class="stat-value" id="canbang-stat-excess">0</div>
+                                </div>
+                            </div>
+                            <div class="kiemkho-stat-card card-missing">
+                                <div class="stat-icon">🔻</div>
+                                <div class="stat-info">
+                                    <div class="stat-label">Thiếu Thực Tế</div>
+                                    <div class="stat-value" id="canbang-stat-missing">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bảng Dữ Liệu Cân Bằng Kho -->
+                    <div class="vattu-table-card" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+                        <div class="vattu-table-wrapper" id="canbang-table-scroll-container" style="overflow:auto; flex:1 1 auto; min-height:0;">
+                            <table class="vattu-table" id="canbang-table" style="border-collapse:collapse; width:100%; table-layout: fixed;">
+                                <thead style="position:sticky; top:0; z-index:10;">
+                                    <tr>
+                                        <th data-col="stt" style="width: 48px; min-width: 44px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">STT</span>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="ma_vach" style="width: 155px; min-width: 110px; position: relative;">
+                                            <div class="th-content">
+                                                <span class="th-title-text">Mã Vạch</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="ma_vach" data-table="canbang" title="Lọc Mã Vạch" onclick="toggleKiemKhoColumnFilter(event, 'ma_vach', 'canbang')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="canbang-filter-badge-ma_vach" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="ten_hang_hoa" style="min-width: 200px; width: 240px; position: relative;">
+                                            <div class="th-content">
+                                                <span class="th-title-text">Tên Hàng Hóa</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="ten_hang_hoa" data-table="canbang" title="Lọc Tên Hàng Hóa" onclick="toggleKiemKhoColumnFilter(event, 'ten_hang_hoa', 'canbang')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="canbang-filter-badge-ten_hang_hoa" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="ton_gpet" style="width: 115px; min-width: 85px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">Tồn GPET</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="ton_gpet" data-table="canbang" title="Lọc Tồn GPET" onclick="toggleKiemKhoColumnFilter(event, 'ton_gpet', 'canbang')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="canbang-filter-badge-ton_gpet" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="ton_kho" style="width: 115px; min-width: 85px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">Tồn Kho</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="ton_kho" data-table="canbang" title="Lọc Tồn Kho" onclick="toggleKiemKhoColumnFilter(event, 'ton_kho', 'canbang')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="canbang-filter-badge-ton_kho" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="thuc_te" style="width: 115px; min-width: 85px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">Thực Tế</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="thuc_te" data-table="canbang" title="Lọc Thực Tế" onclick="toggleKiemKhoColumnFilter(event, 'thuc_te', 'canbang')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="canbang-filter-badge-thuc_te" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="chenh_lech" style="width: 115px; min-width: 85px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">Chênh Lệch</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="chenh_lech" data-table="canbang" title="Lọc Chênh Lệch" onclick="toggleKiemKhoColumnFilter(event, 'chenh_lech', 'canbang')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="canbang-filter-badge-chenh_lech" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th data-col="trang_thai" style="width: 120px; min-width: 90px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">Trạng Thái</span>
+                                                <div class="th-actions">
+                                                    <button type="button" class="col-filter-btn" data-col="trang_thai" data-table="canbang" title="Lọc Trạng Thái" onclick="toggleKiemKhoColumnFilter(event, 'trang_thai', 'canbang')">
+                                                        <svg class="funnel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                                        <span class="filter-badge" id="canbang-filter-badge-trang_thai" style="display:none;">0</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                        <th style="width: 50px; min-width: 45px; text-align: center; position: relative;">
+                                            <div class="th-content" style="justify-content: center;">
+                                                <span class="th-title-text">🗑️</span>
+                                            </div>
+                                            <div class="col-resizer"></div>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="canbang-tbody">
+                                    <!-- Dynamic Rows rendered by kiem_kho.js -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Empty State Cân Bằng Kho -->
+                        <div id="canbang-empty-state" class="vattu-empty-state" style="padding: 40px 20px;">
+                            <div class="vattu-empty-icon" style="margin-bottom: 10px;">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"></path>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                            </div>
+                            <h3 style="margin: 0 0 6px; font-size: 15px; color: var(--text-color);">Chưa có dữ liệu Cân Bằng Kho</h3>
+                            <p style="margin: 0 0 16px; font-size: 13px; color: var(--text-muted); max-width: 460px; line-height: 1.5;">Nhập file Excel tồn GPET hoặc tải template mẫu để tiến hành đối chiếu số lượng thực tế với phần mềm GPET.</p>
+                            <div style="display: flex; gap: 10px; justify-content: center;">
+                                <button type="button" class="btn-toolbar-excel btn-excel-import" onclick="document.getElementById('input-canbang-excel-file').click()" style="padding: 7px 14px; font-size: 13px;">
+                                    <span>📥 Nhập Excel GPET</span>
+                                </button>
+                                <button type="button" class="btn-toolbar-secondary" onclick="downloadCanBangExcelTemplate()" style="padding: 7px 14px; font-size: 13px;">
+                                    <span>📄 Tải Template Mẫu</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Pagination Controls Bar for Cân Bằng Kho -->
+                        <div id="canbang-pagination-bar" class="vattu-pagination-bar" style="display: none;">
+                            <div class="vattu-pagination-info">
+                                <span>Hiển thị <strong id="canbang-page-range-text">0 - 0</strong> trong tổng số <strong id="canbang-page-total-text">0</strong> mặt hàng đối chiếu</span>
+                            </div>
+                            <div class="vattu-pagination-controls">
+                                <div class="vattu-page-size-wrap">
+                                    <label>Hiển thị:</label>
+                                    <select id="canbang-page-size-select" class="vattu-select-sm" onchange="changeCanBangPageSize(this.value)">
+                                        <option value="10">10 hàng</option>
+                                        <option value="20">20 hàng</option>
+                                        <option value="25" selected>25 hàng</option>
+                                        <option value="50">50 hàng</option>
+                                        <option value="100">100 hàng</option>
+                                        <option value="all">Tất cả</option>
+                                    </select>
+                                </div>
+                                <div class="vattu-page-btns" id="canbang-page-btns-container">
+                                    <!-- Page buttons generated dynamically -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2465,7 +2894,7 @@
                     </div>
                 </div>
 
-                <div class="form-row-4">
+                <div class="form-row-5">
                     <div class="form-group">
                         <label>Danh Mục <span class="required">*</span></label>
                         <input type="text" id="input-vattu-danh-muc" class="vattu-combobox">
@@ -2482,9 +2911,6 @@
                         <label>Phòng Ban</label>
                         <input type="text" id="input-vattu-phong-ban" class="vattu-combobox">
                     </div>
-                </div>
-
-                <div class="form-row-2">
                     <div class="form-group">
                         <label>Đơn Vị <span class="required">*</span></label>
                         <input type="text" id="input-vattu-don-vi" class="vattu-combobox">
@@ -2720,6 +3146,35 @@
         <div class="filter-popover-footer">
             <button type="button" class="btn-popover-clear" onclick="clearCurrentColumnFilter()">Xóa Lọc</button>
             <button type="button" class="btn-popover-apply" onclick="applyCurrentColumnFilter()">Áp Dụng</button>
+        </div>
+    </div>
+
+    <!-- Per-Column Filter Dropdown Popover for Kiểm Kho & Cân Bằng Kho -->
+    <div id="kiemkho-col-filter-popover" class="col-filter-popover" style="display: none; position: fixed; z-index: 10002;">
+        <div class="filter-popover-header">
+            <div class="popover-header-title-wrap">
+                <svg class="funnel-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                <span id="kiemkho-filter-popover-title" class="filter-popover-title">Lọc Cột</span>
+            </div>
+            <button type="button" class="popover-close-btn" onclick="closeKiemKhoColumnFilterDropdown()">&times;</button>
+        </div>
+        <div class="filter-popover-search">
+            <input type="text" id="kiemkho-filter-popover-search-input" placeholder="Tìm giá trị trong cột..." oninput="renderKiemKhoFilterPopoverListOptions()">
+        </div>
+        <div class="filter-popover-controls">
+            <label class="popover-checkbox-label select-all-label">
+                <input type="checkbox" id="kiemkho-popover-select-all" onchange="toggleSelectAllKiemKhoPopoverOptions(this.checked)">
+                <span>(Chọn Tất Cả)</span>
+            </label>
+        </div>
+        <div class="filter-popover-list" id="kiemkho-filter-popover-list">
+            <!-- Dynamic checkboxes populated by JS -->
+        </div>
+        <div class="filter-popover-footer">
+            <button type="button" class="btn-popover-clear" onclick="clearCurrentKiemKhoColumnFilter()">Xóa Lọc</button>
+            <button type="button" class="btn-popover-apply" onclick="applyCurrentKiemKhoColumnFilter()">Áp Dụng</button>
         </div>
     </div>
 
@@ -3020,12 +3475,12 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="env.js"></script>
     <script src="admin.js?v=3"></script>
-    <script src="menu.js?v=4"></script>
+    <script src="menu.js?v=5"></script>
     <script src="staff.js?v=1"></script>
-    <script src="vattu.js?v=56"></script>
-    <script src="nhap_xuat.js?v=64"></script>
-    <script src="the_kho.js?v=17"></script>
-    <script src="kiem_kho.js?v=52"></script>
+    <script src="vattu.js?v=59"></script>
+    <script src="nhap_xuat.js?v=69"></script>
+    <script src="the_kho.js?v=20"></script>
+    <script src="kiem_kho.js?v=67"></script>
     <script src="auth.js?v=4"></script>
 </body>
 

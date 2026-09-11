@@ -11,9 +11,47 @@ let currentKiemKhoPhieuId = null;
 let currentKiemKhoMaPhieu = null;
 const kiemKhoClientSessionId = 'cli_' + Math.random().toString(36).substring(2, 11);
 
+// Cân Bằng Kho (GPET Audit) State
+let canBangKhoMap = new Map();
+let canBangSearchQuery = '';
+
+// Column Filters & Resizing State
+let kiemKhoColumnFilters = {};
+let canBangColumnFilters = {};
+let activeKiemKhoFilterCol = null;
+let activeKiemKhoFilterTable = 'kiemkho'; // 'kiemkho' or 'canbang'
+let kiemKhoPopoverTempSelectedValues = new Set();
+
+const kiemKhoColTitles = {
+    stt: 'STT',
+    ma_vach: 'Mã Vạch',
+    ten_hang_hoa: 'Tên Hàng Hóa',
+    lot: 'LOT',
+    date_expiry: 'Date',
+    so_luong_thuc_te: 'Thực Tế',
+    so_luong_he_thong: 'Tồn HT',
+    chenh_lech: 'Chênh Lệch',
+    trang_thai: 'Trạng Thái',
+    user_name: 'Người Quét - CN',
+    time_scanned: 'Thời Gian'
+};
+
+const canBangColTitles = {
+    stt: 'STT',
+    ma_vach: 'Mã Vạch',
+    ten_hang_hoa: 'Tên Hàng Hóa',
+    ton_gpet: 'Tồn GPET',
+    ton_kho: 'Tồn Kho',
+    thuc_te: 'Thực Tế',
+    chenh_lech: 'Chênh Lệch',
+    trang_thai: 'Trạng Thái'
+};
+
 // Pagination state
 let kiemKhoCurrentPage = 1;
-const KIEMKHO_PAGE_SIZE = 20;
+let kiemKhoPageSize = 25;
+let canBangCurrentPage = 1;
+let canBangPageSize = 25;
 let kiemKhoSearchQuery = '';
 
 // Debounced DOM Render for 500+ items to prevent UI stutter/lag
@@ -33,7 +71,11 @@ async function generateKiemKhoMaPhieu(branch) {
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const yyyy = now.getFullYear();
     const dateStr = `${dd}/${mm}/${yyyy}`;
-    const branchCode = (!branch || branch === 'all') ? 'ALL' : branch.toUpperCase();
+    let targetBranch = branch;
+    if (!targetBranch) {
+        targetBranch = getKiemKhoLoggedBranch();
+    }
+    const branchCode = (!targetBranch || targetBranch === 'all') ? 'ALL' : targetBranch.toUpperCase();
     const prefix = `PKK-${branchCode}-${dateStr}_`;
 
     // Count today's existing phieus to get sequence
@@ -135,38 +177,64 @@ function getKiemKhoLoggedUserName() {
     return u.full_name || u.name || u.ten_nhan_vien || u.user_name || u.username || u.email || 'Nhân viên';
 }
 
+function extractKiemKhoCNCode(branchStr) {
+    if (!branchStr) return '';
+    const str = String(branchStr).trim();
+    if (str === 'Toàn hệ thống' || str === 'all' || str === 'ALL') return 'ALL';
+    const match = str.match(/CN\d+/i);
+    if (match) return match[0].toUpperCase();
+    const matchNum = str.match(/Chi\s*Nhánh\s*(\d+)/i) || str.match(/CN\s*(\d+)/i);
+    if (matchNum) return `CN${matchNum[1]}`;
+    if (str.toLowerCase().includes('hà nội')) return 'CN2';
+    if (str.toLowerCase().includes('tp.hcm') || str.toLowerCase().includes('hcm')) return 'CN1';
+    if (str.toLowerCase().includes('hiệp bình')) return 'CN3';
+    return str.toUpperCase();
+}
+
 function getKiemKhoLoggedBranch() {
-    if (kiemKhoSelectedBranch && kiemKhoSelectedBranch !== 'all') {
-        return kiemKhoSelectedBranch;
-    }
-    let u = null;
-    if (typeof window.getCurrentLoggedUser === 'function') {
-        u = window.getCurrentLoggedUser();
-    }
-    if (!u) {
-        try {
-            const saved = localStorage.getItem("gaia_logged_user");
-            if (saved) u = JSON.parse(saved);
-        } catch (e) {}
-    }
-    let b = u ? (u.branch || u.chi_nhanh || 'CN1') : 'CN1';
-    if (typeof window.extractCNCodeFromBranchString === 'function') {
-        b = window.extractCNCodeFromBranchString(b);
-    } else if (typeof window.extractCNCode === 'function') {
-        b = window.extractCNCode(b);
-    }
-    return b || 'CN1';
+    const userObj = getKiemKhoUserBranchCode();
+    return userObj.code || 'CN1';
 }
 
 // Helper to normalize scanner object
 function normalizeScanner(user_name, branch) {
-    const name = (user_name && user_name.trim()) ? user_name.trim() : 'Nhân viên';
-    const br = (branch && branch.trim()) ? branch.trim() : 'CN1';
+    let name = user_name;
+    let br = branch;
+
+    if (name && typeof name === 'object') {
+        br = name.branch || br;
+        name = name.user_name || name.name || name.user;
+    }
+
+    name = (name && String(name).trim()) ? String(name).trim() : 'Nhân viên';
+    br = (br && String(br).trim()) ? String(br).trim() : 'CN1';
+
+    // Safety: If name is a JSON string like '[{"user_name":"Thái Trung Tín","branch":"CN2"}]'
+    if (name.includes('{') || name.includes('[')) {
+        try {
+            const parsed = JSON.parse(name);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const first = parsed[0];
+                name = (first && (first.user_name || first.name || first.user)) || name;
+                br = (first && first.branch) || br;
+            } else if (parsed && typeof parsed === 'object') {
+                name = parsed.user_name || parsed.name || parsed.user || name;
+                br = parsed.branch || br;
+            }
+        } catch (e) {}
+    }
+
     return { user_name: name, branch: br };
 }
 
 // Helper to parse user_name string into array of scanner objects
 function parseKiemKhoScanners(userNameStr, defaultBranch = 'CN1', phieuUserName = '') {
+    if (Array.isArray(userNameStr)) {
+        return userNameStr.map(s => normalizeScanner(s && (s.user_name || s.name || s.user || s), s && (s.branch || defaultBranch)));
+    }
+    if (userNameStr && typeof userNameStr === 'object') {
+        return [normalizeScanner(userNameStr.user_name || userNameStr.name || userNameStr.user, userNameStr.branch || defaultBranch)];
+    }
     if (!userNameStr && phieuUserName) {
         userNameStr = phieuUserName;
     }
@@ -181,7 +249,7 @@ function parseKiemKhoScanners(userNameStr, defaultBranch = 'CN1', phieuUserName 
         try {
             const arr = JSON.parse(str);
             if (Array.isArray(arr) && arr.length > 0) {
-                return arr.map(s => normalizeScanner(s.user_name || s.name || s.user, s.branch || defaultBranch));
+                return arr.map(s => normalizeScanner(s.user_name || s.name || s.user || s, s.branch || defaultBranch));
             } else if (arr && typeof arr === 'object') {
                 return [normalizeScanner(arr.user_name || arr.name || arr.user, arr.branch || defaultBranch)];
             }
@@ -367,6 +435,10 @@ async function initKiemKhoView() {
 
     // ALWAYS ACTIVATE REALTIME SUBSCRIPTION FOR MULTI-USER LIVE SYNC!
     setupKiemKhoRealtimeSubscription();
+
+    // Initialize Column Resizing & Filter Badges
+    initKiemKhoColumnResizing();
+    updateKiemKhoColumnFilterBadgesUI('kiemkho');
 
     // Fetch vatTuData from Supabase if empty
     if (!window.vatTuData || !Array.isArray(window.vatTuData) || window.vatTuData.length === 0) {
@@ -554,8 +626,21 @@ function setupKiemKhoPhieuInput() {
 // Update phiếu input and display
 function updateKiemKhoPhieuDisplay() {
     const input = document.getElementById('kiemkho-phieu-input');
-    if (input && currentKiemKhoMaPhieu) {
-        input.value = currentKiemKhoMaPhieu;
+    if (input) {
+        input.value = currentKiemKhoMaPhieu || '';
+    }
+    const canBangDisplay = document.getElementById('canbang-phieu-display');
+    if (canBangDisplay) {
+        canBangDisplay.textContent = currentKiemKhoMaPhieu || '-- Chưa có phiếu --';
+    }
+    showOrHideCanBangKhoSection();
+}
+
+// Show/Hide Sub-view Cân Bằng Kho (Only visible when an audit ticket exists)
+function showOrHideCanBangKhoSection() {
+    const subNavItem = document.getElementById('sidebar-sub-can-bang-kho') || document.querySelector('[data-view="can-bang-kho"]');
+    if (subNavItem) {
+        subNavItem.style.display = currentKiemKhoMaPhieu ? 'flex' : 'none';
     }
 }
 
@@ -628,12 +713,12 @@ function setKiemKhoPhieuError(errorMsg) {
 // Create a brand-new phiếu (select branch first, then click + to generate code & lock branch select)
 async function createNewKiemKhoPhieu() {
     const branchSelect = document.getElementById('kiemkho-filter-branch');
-    if (branchSelect && branchSelect.style.display !== 'none') {
-        if (!branchSelect.value) {
-            showKiemKhoToast('warning', 'Chưa Chọn Chi Nhánh', '⚠️ Vui lòng chọn chi nhánh trước khi tạo phiếu mới!');
-            return;
-        }
+    if (branchSelect && branchSelect.style.display !== 'none' && branchSelect.value) {
         kiemKhoSelectedBranch = branchSelect.value;
+    }
+    if (!kiemKhoSelectedBranch || kiemKhoSelectedBranch === '') {
+        kiemKhoSelectedBranch = getKiemKhoLoggedBranch() || 'CN1';
+        if (branchSelect) branchSelect.value = kiemKhoSelectedBranch;
     }
 
     if (kiemKhoItemsMap.size > 0) {
@@ -694,6 +779,10 @@ async function createNewKiemKhoPhieu() {
 
     kiemKhoItemsMap.clear();
     kiemKhoTotalScans = 0;
+    canBangKhoMap.clear();
+    kiemKhoColumnFilters = {};
+    canBangColumnFilters = {};
+    updateKiemKhoColumnFilterBadgesUI('all');
     currentKiemKhoPhieuId = newPhieuId;
     currentKiemKhoMaPhieu = newCode;
     kiemKhoCurrentPage = 1;
@@ -704,6 +793,7 @@ async function createNewKiemKhoPhieu() {
 
     updateKiemKhoPhieuDisplay();
     renderKiemKhoTable();
+    renderCanBangKhoTable();
     showKiemKhoToast('success', 'Đã Tạo Mã Phiếu Mới', `🎉 Đã tạo phiếu kiểm kho mới: <b>${currentKiemKhoMaPhieu}</b> (Realtime kết nối)`);
 }
 
@@ -719,13 +809,11 @@ function getKiemKhoUserBranchCode() {
             if (saved) u = JSON.parse(saved);
         } catch (e) {}
     }
-    const rawB = u ? (u.branch || u.chi_nhanh || '') : '';
-    let code = rawB;
-    if (typeof window.extractCNCodeFromBranchString === 'function') {
-        code = window.extractCNCodeFromBranchString(rawB);
-    } else if (typeof window.extractCNCode === 'function') {
-        code = window.extractCNCode(rawB);
+    if (!u && typeof currentUser !== 'undefined' && currentUser) {
+        u = currentUser;
     }
+    const rawB = u ? (u.branch || u.chi_nhanh || '') : '';
+    let code = extractKiemKhoCNCode(rawB);
     
     // MANAGERS (quản lý) HAVE ALL-BRANCH PERMISSION EVERYWHERE!
     const isManager = (typeof window.isManagerRole === 'function') ? window.isManagerRole(u) : false;
@@ -734,7 +822,7 @@ function getKiemKhoUserBranchCode() {
 
     return {
         raw: rawB,
-        code: String(code || rawB || '').trim().toUpperCase(),
+        code: String(code || 'CN1').trim().toUpperCase(),
         isAllPermission: isAllPermission
     };
 }
@@ -785,9 +873,17 @@ async function loadKiemKhoPhieuByCode(maPhieu) {
         // Clear error text if loading old phiếu successfully
         setKiemKhoPhieuError(null);
 
-        // Load into map
+        // Load into map & reset all filters/pagination
         kiemKhoItemsMap.clear();
         kiemKhoTotalScans = 0;
+        canBangKhoMap.clear();
+        kiemKhoCurrentPage = 1;
+        kiemKhoSearchQuery = '';
+        const searchInput = document.getElementById('kiemkho-search-input');
+        if (searchInput) searchInput.value = '';
+        kiemKhoColumnFilters = {};
+        canBangColumnFilters = {};
+        updateKiemKhoColumnFilterBadgesUI('all');
         currentKiemKhoPhieuId = phieuData.id;
         currentKiemKhoMaPhieu = maPhieu;
         kiemKhoSelectedBranch = phieuData.branch || 'all';
@@ -798,7 +894,7 @@ async function loadKiemKhoPhieuByCode(maPhieu) {
             const { data: viewData, error: viewErr } = await client
                 .from('view_kiem_kho_tong_hop_chi_tiet')
                 .select('*')
-                .eq('phieu_id', phieuData.id);
+                .or(`phieu_id.eq.${phieuData.id},ma_phieu.eq.${maPhieu}`);
 
             if (!viewErr && viewData && viewData.length > 0) {
                 viewData.forEach(row => {
@@ -842,7 +938,7 @@ async function loadKiemKhoPhieuByCode(maPhieu) {
             const { data: chiTietData } = await client
                 .from('kiem_kho_chi_tiet')
                 .select('*')
-                .eq('phieu_id', phieuData.id);
+                .or(`phieu_id.eq.${phieuData.id},ma_phieu.eq.${maPhieu}`);
 
             (chiTietData || []).forEach(row => {
                 const key = `${row.ma_vach}_${row.lot || '-'}`;
@@ -952,8 +1048,38 @@ async function loadKiemKhoPhieuByCode(maPhieu) {
         }
         setKiemKhoBranchSelectDisabled(true);
 
+        // Load Cân Bằng Kho (GPET Audit) data from DB
+        canBangKhoMap.clear();
+        try {
+            const { data: canBangData } = await client
+                .from('kiem_kho_can_bang')
+                .select('*')
+                .or(`phieu_id.eq.${phieuData.id},ma_phieu.eq.${maPhieu}`);
+
+            if (canBangData && canBangData.length > 0) {
+                canBangData.forEach(row => {
+                    const key = (row.ma_vach || '').trim().toLowerCase();
+                    if (key) {
+                        canBangKhoMap.set(key, {
+                            id: row.id,
+                            ma_vach: row.ma_vach,
+                            ten_hang_hoa: row.ten_hang_hoa || getProductNameByBarcode(row.ma_vach) || 'Mặt hàng chưa tên',
+                            ton_gpet: Number(row.ton_gpet) || 0,
+                            ton_kho: Number(row.ton_kho) || 0,
+                            thuc_te: Number(row.thuc_te) || 0,
+                            chenh_lech: Number(row.chenh_lech) || 0,
+                            trang_thai: row.trang_thai || 'KHOP'
+                        });
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("Load kiem_kho_can_bang error:", e);
+        }
+
         updateKiemKhoPhieuDisplay();
         renderKiemKhoTable();
+        recalculateCanBangKhoData(false);
         showVatTuLoading(false);
         showKiemKhoToast('success', 'Đã Tải Phiếu Cũ Sửa', `✅ Đã tải thành công phiếu kiểm kho <b>${maPhieu}</b> (${phieuBranch}) với ${kiemKhoItemsMap.size} mã hàng để chỉnh sửa!`);
     } catch (err) {
@@ -966,7 +1092,7 @@ async function loadKiemKhoPhieuByCode(maPhieu) {
 // Local Storage Session Persistence Helpers
 function saveKiemKhoLocalSession() {
     try {
-        if (kiemKhoItemsMap.size === 0) {
+        if (kiemKhoItemsMap.size === 0 && canBangKhoMap.size === 0 && !currentKiemKhoMaPhieu) {
             localStorage.removeItem("gaia_active_kiemkho_session");
             return;
         }
@@ -976,6 +1102,7 @@ function saveKiemKhoLocalSession() {
             branch: kiemKhoSelectedBranch,
             totalScans: kiemKhoTotalScans,
             items: Array.from(kiemKhoItemsMap.entries()),
+            canBangItems: Array.from(canBangKhoMap.entries()),
             updatedAt: new Date().toISOString()
         };
         localStorage.setItem("gaia_active_kiemkho_session", JSON.stringify(sessionData));
@@ -989,14 +1116,24 @@ function restoreKiemKhoLocalSession() {
         const saved = localStorage.getItem("gaia_active_kiemkho_session");
         if (!saved) return false;
         const sessionData = JSON.parse(saved);
-        if (!sessionData || !sessionData.items || !Array.isArray(sessionData.items)) return false;
+        if (!sessionData) return false;
 
         currentKiemKhoPhieuId = sessionData.phieuId || null;
         currentKiemKhoMaPhieu = sessionData.maPhieu || null;
         kiemKhoSelectedBranch = sessionData.branch || 'all';
         kiemKhoTotalScans = sessionData.totalScans || 0;
 
-        kiemKhoItemsMap = new Map(sessionData.items);
+        if (sessionData.items && Array.isArray(sessionData.items)) {
+            kiemKhoItemsMap = new Map(sessionData.items);
+        } else {
+            kiemKhoItemsMap.clear();
+        }
+
+        if (sessionData.canBangItems && Array.isArray(sessionData.canBangItems)) {
+            canBangKhoMap = new Map(sessionData.canBangItems);
+        } else {
+            canBangKhoMap.clear();
+        }
 
         // Update branch select value if element exists
         const branchSelect = document.getElementById('kiemkho-filter-branch');
@@ -1004,7 +1141,7 @@ function restoreKiemKhoLocalSession() {
             branchSelect.value = kiemKhoSelectedBranch;
         }
 
-        return kiemKhoItemsMap.size > 0;
+        return kiemKhoItemsMap.size > 0 || canBangKhoMap.size > 0 || !!currentKiemKhoMaPhieu;
     } catch (e) {
         console.warn("Restore local kiemkho session error:", e);
         return false;
@@ -1018,6 +1155,7 @@ async function initKiemKhoBranchSelect() {
 
     const loggedUser = window.getCurrentLoggedUser ? window.getCurrentLoggedUser() : null;
     const isManager = window.isManagerRole ? window.isManagerRole(loggedUser) : false;
+    const defaultBranch = getKiemKhoLoggedBranch() || 'CN1';
 
     if (!isManager && loggedUser && loggedUser.branch) {
         let userCN = loggedUser.branch;
@@ -1026,10 +1164,14 @@ async function initKiemKhoBranchSelect() {
         } else if (typeof window.extractCNCode === 'function') {
             userCN = window.extractCNCode(loggedUser.branch);
         }
-        kiemKhoSelectedBranch = userCN || 'all';
+        kiemKhoSelectedBranch = userCN || defaultBranch;
+        branchSelect.value = kiemKhoSelectedBranch;
         branchSelect.style.display = 'none';
     } else {
         // Manager Account: Always populate and show Branch Selector
+        if (!kiemKhoSelectedBranch) {
+            kiemKhoSelectedBranch = defaultBranch;
+        }
         await populateKiemKhoBranchFilter(branchSelect);
         branchSelect.style.display = 'inline-block';
         branchSelect.removeEventListener('change', handleKiemKhoBranchChange);
@@ -1060,8 +1202,10 @@ async function populateKiemKhoBranchFilter(branchSelect) {
     }
 
     const uniqueBranches = Array.from(new Set(branches));
-    let html = `<option value="" disabled ${!kiemKhoSelectedBranch ? 'selected' : ''}>📍 -- Chọn Chi Nhánh --</option>`;
-    html += `<option value="all">🏢 Tất cả chi nhánh</option>`;
+    const currentBranch = kiemKhoSelectedBranch || getKiemKhoLoggedBranch() || 'CN1';
+
+    let html = `<option value="" disabled ${!currentBranch ? 'selected' : ''}>📍 -- Chọn Chi Nhánh --</option>`;
+    html += `<option value="all" ${currentBranch === 'all' ? 'selected' : ''}>🏢 Tất cả chi nhánh</option>`;
 
     uniqueBranches.forEach(bStr => {
         let code = bStr;
@@ -1080,12 +1224,14 @@ async function populateKiemKhoBranchFilter(branchSelect) {
             }
         }
 
-        html += `<option value="${code}">📍 ${escapeHtml(labelText)}</option>`;
+        const isSelected = String(code).toUpperCase() === String(currentBranch).toUpperCase() ? 'selected' : '';
+        html += `<option value="${code}" ${isSelected}>📍 ${escapeHtml(labelText)}</option>`;
     });
 
     branchSelect.innerHTML = html;
-    if (kiemKhoSelectedBranch) {
-        branchSelect.value = kiemKhoSelectedBranch;
+    if (currentBranch) {
+        branchSelect.value = currentBranch;
+        kiemKhoSelectedBranch = currentBranch;
     }
 }
 
@@ -1502,12 +1648,22 @@ async function loadAllBranchItemsToKiemKho() {
     }
 
     const branchSelect = document.getElementById('kiemkho-filter-branch');
-    if (branchSelect && branchSelect.style.display !== 'none') {
-        if (!branchSelect.value) {
-            showKiemKhoToast('warning', 'Chưa Chọn Chi Nhánh', '⚠️ Vui lòng chọn chi nhánh trước khi nạp dữ liệu!');
-            return;
-        }
+    if (branchSelect && branchSelect.style.display !== 'none' && branchSelect.value) {
         kiemKhoSelectedBranch = branchSelect.value;
+    }
+    if (!kiemKhoSelectedBranch) {
+        if (currentKiemKhoMaPhieu) {
+            const match = currentKiemKhoMaPhieu.match(/^PKK-([A-Z0-9]+)-/i);
+            if (match && match[1] && match[1].toUpperCase() !== 'ALL') {
+                kiemKhoSelectedBranch = match[1].toUpperCase();
+            }
+        }
+    }
+    if (!kiemKhoSelectedBranch) {
+        kiemKhoSelectedBranch = getKiemKhoLoggedBranch() || 'CN1';
+    }
+    if (branchSelect && kiemKhoSelectedBranch) {
+        branchSelect.value = kiemKhoSelectedBranch;
     }
 
     // Branch Permission Check
@@ -2070,6 +2226,13 @@ function renderKiemKhoTable() {
     // Persist active session state to localStorage
     saveKiemKhoLocalSession();
 
+    // Auto-update Cân Bằng Kho (GPET Audit) table
+    if (canBangKhoMap.size > 0) {
+        recalculateCanBangKhoData(false);
+    } else {
+        renderCanBangKhoTable();
+    }
+
     if (allItems.length === 0) {
         tbody.innerHTML = '';
         if (emptyState) emptyState.style.display = 'flex';
@@ -2091,9 +2254,9 @@ function renderKiemKhoTable() {
         }
     }
 
-    // Apply search filter
+    // Apply search filter and active column filters
     const q = (kiemKhoSearchQuery || '').trim().toLowerCase();
-    const filtered = q
+    let filtered = q
         ? allItems.filter(item =>
             (item.ma_vach || '').toLowerCase().includes(q) ||
             (item.ten_hang_hoa || '').toLowerCase().includes(q) ||
@@ -2101,13 +2264,26 @@ function renderKiemKhoTable() {
           )
         : allItems;
 
-    // Pagination
-    const totalPages = Math.max(1, Math.ceil(filtered.length / KIEMKHO_PAGE_SIZE));
-    if (kiemKhoCurrentPage > totalPages) kiemKhoCurrentPage = totalPages;
-    const startIdx = (kiemKhoCurrentPage - 1) * KIEMKHO_PAGE_SIZE;
-    const pageItems = filtered.slice(startIdx, startIdx + KIEMKHO_PAGE_SIZE);
+    if (Object.keys(kiemKhoColumnFilters).length > 0) {
+        filtered = filtered.filter(item => {
+            for (const [colKey, selectedSet] of Object.entries(kiemKhoColumnFilters)) {
+                if (!selectedSet || selectedSet.size === 0) continue;
+                const valStr = getKiemKhoItemColValueStr(item, colKey);
+                if (!selectedSet.has(valStr)) return false;
+            }
+            return true;
+        });
+    }
 
-    renderKiemKhoPagination(filtered.length, totalPages);
+    // Pagination
+    const pageSize = kiemKhoPageSize === Infinity ? (filtered.length || 1) : (kiemKhoPageSize || 25);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    if (kiemKhoCurrentPage > totalPages) kiemKhoCurrentPage = totalPages;
+    const startIdx = (kiemKhoCurrentPage - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, filtered.length);
+    const pageItems = filtered.slice(startIdx, endIdx);
+
+    renderKiemKhoPaginationControls(filtered.length, totalPages, startIdx, endIdx);
 
     let html = '';
     pageItems.forEach((item, idx) => {
@@ -2141,9 +2317,9 @@ function renderKiemKhoTable() {
             `;
         }
 
-        const scanners = (item.scanners && item.scanners.length > 0) ? 
-            item.scanners : 
-            parseKiemKhoScanners(item.user_name, item.branch);
+        const scanners = (item.scanners && Array.isArray(item.scanners) && item.scanners.length > 0) ? 
+            item.scanners.map(s => normalizeScanner(s && (s.user_name || s.name || s), s && (s.branch || item.branch))) : 
+            parseKiemKhoScanners(item.user_name || item.scanners, item.branch);
 
         let scannerTdHtml = '';
         if (scanners.length > 1) {
@@ -2159,7 +2335,7 @@ function renderKiemKhoTable() {
                 </td>
             `;
         } else {
-            const single = scanners[0] || { user_name: item.user_name || 'Nhân viên', branch: item.branch || 'CN1' };
+            const single = (scanners && scanners[0]) ? scanners[0] : normalizeScanner(item.user_name, item.branch);
             scannerTdHtml = `<td><span class="subrow-branch-badge">${escapeHtml(single.user_name)} - ${escapeHtml(single.branch)}</span></td>`;
         }
 
@@ -2193,41 +2369,88 @@ function renderKiemKhoTable() {
         tbody.innerHTML = html;
         tbody.dataset.currentHtml = html;
     }
+    updateKiemKhoColumnFilterBadgesUI('kiemkho');
 }
 
-// Render Pagination Bar
-function renderKiemKhoPagination(totalFiltered, totalPages) {
-    // Container
-    let container = document.getElementById('kiemkho-pagination-bar');
-    if (!container) return;
+// Change Page Size for Kiểm Kho
+function changeKiemKhoPageSize(val) {
+    kiemKhoPageSize = val === 'all' ? Infinity : (parseInt(val, 10) || 25);
+    kiemKhoCurrentPage = 1;
+    renderKiemKhoTable();
+}
 
-    // Always show pagination info bar
-    const start = totalFiltered === 0 ? 0 : (kiemKhoCurrentPage - 1) * KIEMKHO_PAGE_SIZE + 1;
-    const end = Math.min(kiemKhoCurrentPage * KIEMKHO_PAGE_SIZE, totalFiltered);
+// Render Pagination Bar for Kiểm Kho (Matches View Vật Tư UX)
+function renderKiemKhoPaginationControls(totalFiltered, totalPages, startIdx, endIdx) {
+    const rangeTextEl = document.getElementById('kiemkho-page-range-text');
+    const totalTextEl = document.getElementById('kiemkho-page-total-text');
+    const btnsContainer = document.getElementById('kiemkho-page-btns-container');
+    const paginationBar = document.getElementById('kiemkho-pagination-bar');
 
-    let btns = '';
-    if (totalPages > 1) {
-        for (let p = 1; p <= totalPages; p++) {
-            if (totalPages > 7 && Math.abs(p - kiemKhoCurrentPage) > 2 && p !== 1 && p !== totalPages) {
-                if (p === 2 || p === totalPages - 1) btns += `<span style="color:#94a3b8;padding:0 4px;">…</span>`;
-                continue;
-            }
-            const active = p === kiemKhoCurrentPage;
-            btns += `<button type="button" onclick="kiemKhoGoPage(${p})" style="min-width:28px;height:28px;border-radius:6px;border:1px solid ${active ? '#38bdf8' : 'rgba(255,255,255,0.15)'};background:${active ? 'rgba(56,189,248,0.25)' : 'rgba(255,255,255,0.07)'};color:${active ? '#38bdf8' : '#94a3b8'};font-weight:${active ? '800' : '600'};font-size:12px;cursor:pointer;transition:all 0.15s;">${p}</button>`;
-        }
+    if (!paginationBar) return;
+
+    if (totalFiltered === 0) {
+        paginationBar.style.display = 'none';
+        if (rangeTextEl) rangeTextEl.textContent = '0 - 0';
+        if (totalTextEl) totalTextEl.textContent = '0';
+        if (btnsContainer) btnsContainer.innerHTML = '';
+        return;
     }
 
-    container.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;">
-            <span style="font-size:12px;color:#94a3b8;">Hiển thị <b style="color:#e2e8f0;">${start > 0 ? start + '–' + end : '0'}</b> / <b style="color:#38bdf8;">${totalFiltered}</b> mặt hàng (${KIEMKHO_PAGE_SIZE}/trang)</span>
-            ${totalPages > 1 ? `
-            <div style="display:flex;align-items:center;gap:4px;">
-                <button type="button" onclick="kiemKhoGoPage(${kiemKhoCurrentPage - 1})" ${kiemKhoCurrentPage <= 1 ? 'disabled' : ''} style="min-width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#94a3b8;cursor:pointer;font-size:12px;opacity:${kiemKhoCurrentPage <= 1 ? '0.4' : '1'};">◀</button>
-                ${btns}
-                <button type="button" onclick="kiemKhoGoPage(${kiemKhoCurrentPage + 1})" ${kiemKhoCurrentPage >= totalPages ? 'disabled' : ''} style="min-width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#94a3b8;cursor:pointer;font-size:12px;opacity:${kiemKhoCurrentPage >= totalPages ? '0.4' : '1'};">▶</button>
-            </div>` : ''}
-        </div>
-    `;
+    paginationBar.style.display = 'flex';
+    if (rangeTextEl) rangeTextEl.textContent = `${startIdx + 1} - ${endIdx}`;
+    if (totalTextEl) totalTextEl.textContent = totalFiltered.toLocaleString('vi-VN');
+
+    if (!btnsContainer) return;
+    btnsContainer.innerHTML = '';
+
+    if (totalPages <= 1 && kiemKhoPageSize === Infinity) return;
+
+    // Prev Button
+    const btnPrev = document.createElement('button');
+    btnPrev.type = 'button';
+    btnPrev.className = `vattu-page-btn ${kiemKhoCurrentPage <= 1 ? 'disabled' : ''}`;
+    btnPrev.innerHTML = `&laquo; Trước`;
+    btnPrev.disabled = kiemKhoCurrentPage <= 1;
+    btnPrev.onclick = () => {
+        if (kiemKhoCurrentPage > 1) {
+            kiemKhoCurrentPage--;
+            renderKiemKhoTable();
+        }
+    };
+    btnsContainer.appendChild(btnPrev);
+
+    // Page Number Buttons (Limit to max 5 page numbers around current)
+    let startPage = Math.max(1, kiemKhoCurrentPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) {
+        startPage = Math.max(1, endPage - 4);
+    }
+
+    for (let p = startPage; p <= endPage; p++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.type = 'button';
+        pageBtn.className = `vattu-page-btn ${p === kiemKhoCurrentPage ? 'active' : ''}`;
+        pageBtn.textContent = p;
+        pageBtn.onclick = () => {
+            kiemKhoCurrentPage = p;
+            renderKiemKhoTable();
+        };
+        btnsContainer.appendChild(pageBtn);
+    }
+
+    // Next Button
+    const btnNext = document.createElement('button');
+    btnNext.type = 'button';
+    btnNext.className = `vattu-page-btn ${kiemKhoCurrentPage >= totalPages ? 'disabled' : ''}`;
+    btnNext.innerHTML = `Sau &raquo;`;
+    btnNext.disabled = kiemKhoCurrentPage >= totalPages;
+    btnNext.onclick = () => {
+        if (kiemKhoCurrentPage < totalPages) {
+            kiemKhoCurrentPage++;
+            renderKiemKhoTable();
+        }
+    };
+    btnsContainer.appendChild(btnNext);
 }
 
 function kiemKhoGoPage(page) {
@@ -2371,7 +2594,7 @@ async function deleteKiemKhoItem(rawKey) {
 
 // Reset Audit Session & Clear Data
 async function resetKiemKhoSession() {
-    if (kiemKhoItemsMap.size === 0) return;
+    if (kiemKhoItemsMap.size === 0 && canBangKhoMap.size === 0 && !currentKiemKhoMaPhieu) return;
 
     const confirmed = await showKiemKhoConfirmModal(
         'Xác Nhận Làm Mới',
@@ -2380,133 +2603,67 @@ async function resetKiemKhoSession() {
     if (!confirmed) return;
 
     kiemKhoItemsMap.clear();
+    canBangKhoMap.clear();
+    kiemKhoColumnFilters = {};
+    canBangColumnFilters = {};
+    updateKiemKhoColumnFilterBadgesUI('all');
     kiemKhoTotalScans = 0;
     currentKiemKhoPhieuId = null;
     currentKiemKhoMaPhieu = null;
 
     localStorage.removeItem("gaia_active_kiemkho_session");
 
-    // Unlock branch selector & reset value if manager
+    // Unlock branch selector & reset value
     setKiemKhoBranchSelectDisabled(false);
-    const loggedUser = window.getCurrentLoggedUser ? window.getCurrentLoggedUser() : null;
-    const isManager = window.isManagerRole ? window.isManagerRole(loggedUser) : false;
-    if (isManager) {
-        kiemKhoSelectedBranch = '';
-        const branchSelect = document.getElementById('kiemkho-filter-branch');
-        if (branchSelect) branchSelect.value = '';
-    }
+    const defaultBranch = getKiemKhoLoggedBranch() || 'CN1';
+    kiemKhoSelectedBranch = defaultBranch;
+    const branchSelect = document.getElementById('kiemkho-filter-branch');
+    if (branchSelect) branchSelect.value = defaultBranch;
 
     const inputPhieu = document.getElementById('kiemkho-phieu-input');
     if (inputPhieu) inputPhieu.value = '';
 
+    updateKiemKhoPhieuDisplay();
     renderKiemKhoTable();
+    renderCanBangKhoTable();
 
     if (typeof showKiemKhoToast === 'function') {
         showKiemKhoToast('info', 'Đã Làm Mới', '✅ Đã làm mới giao diện phiếu kiểm kho.');
     }
 }
 
-// Background Live Monitoring for System Stock Changes & Auto-Detecting New Products
+// Background Live Monitoring for System Stock Changes (Only updates existing items in the audit session)
 async function checkKiemKhoLiveSystemQtyChanges() {
     const viewKiemKho = document.getElementById('view-kiem-kho');
-    if (!viewKiemKho || viewKiemKho.style.display === 'none' || !viewKiemKho.classList.contains('active')) {
-        return;
-    }
+    if (!viewKiemKho || (!viewKiemKho.classList.contains('active') && viewKiemKho.style.display === 'none')) return;
+    if (kiemKhoItemsMap.size === 0) return;
 
-    if (typeof window.fetchVatTuData === 'function') {
-        await window.fetchVatTuData();
-    }
-
+    const allItems = Array.from(kiemKhoItemsMap.values());
     let hasStockChange = false;
 
-    // 1. Re-evaluate system stock for existing items in audit list
-    kiemKhoItemsMap.forEach(item => {
+    // Check existing items in audit session for live stock differences
+    allItems.forEach(item => {
         const freshSystemQty = getSystemQtyForBranch(item.ma_vach, item.ma_vach, kiemKhoSelectedBranch, item.lot);
-        if (freshSystemQty !== item.so_luong_he_thong) {
-            item.old_so_luong_he_thong = item.so_luong_he_thong;
+        if (item.so_luong_he_thong !== freshSystemQty) {
             item.so_luong_he_thong = freshSystemQty;
-            item.chenh_lech = item.so_luong_thuc_te - item.so_luong_he_thong;
-            item.trang_thai = getKiemKhoStatus(item.so_luong_thuc_te, item.so_luong_he_thong);
+            item.chenh_lech = item.so_luong_thuc_te - freshSystemQty;
+            item.trang_thai = getKiemKhoStatus(item.so_luong_thuc_te, freshSystemQty);
             item.is_system_qty_changed = true;
             hasStockChange = true;
-
             syncKiemKhoItemToDB(item);
         }
     });
 
-    // 2. Auto-detect any newly added products/LOTs in system stock for active branch
-    if (kiemKhoItemsMap.size > 0) {
-        const selectedBranch = kiemKhoSelectedBranch || 'all';
-        let targetCN = selectedBranch;
-        if (typeof window.extractCNCodeFromBranchString === 'function') {
-            targetCN = window.extractCNCodeFromBranchString(selectedBranch);
-        } else if (typeof window.extractCNCode === 'function') {
-            targetCN = window.extractCNCode(selectedBranch);
-        }
-
-        const userName = getKiemKhoLoggedUserName();
-        const userBranch = getKiemKhoLoggedBranch();
-        const sourceData = (window.tonKhoDetailData && window.tonKhoDetailData.length > 0) ? window.tonKhoDetailData : (window.vatTuData || []);
-
-        sourceData.forEach(item => {
-            const maVach = item.ma_vach || item.ma_qr || '';
-            if (!maVach) return;
-
-            if (selectedBranch && selectedBranch !== 'all' && selectedBranch.toLowerCase() !== 'toàn hệ thống' && selectedBranch.toLowerCase() !== 'tất cả chi nhánh') {
-                let itemCN = item.chi_nhanh || item.branch || '';
-                let itemCode = itemCN;
-                if (typeof window.extractCNCodeFromBranchString === 'function') {
-                    itemCode = window.extractCNCodeFromBranchString(itemCN);
-                } else if (typeof window.extractCNCode === 'function') {
-                    itemCode = window.extractCNCode(itemCN);
-                }
-                const isBranchMatch = String(itemCode).trim().toUpperCase() === String(targetCN).trim().toUpperCase() ||
-                                      String(itemCN).trim().toUpperCase() === String(selectedBranch).trim().toUpperCase();
-                if (!isBranchMatch) return;
-            }
-
-            const lot = item.lot || '-';
-            const dateExpiry = item.date_expiry || item.han_su_dung || '-';
-            const tenHangHoa = item.ten_mat_hang || item.ten_hang_hoa || item.ten_hoa_don || 'Mặt hàng chưa tên';
-
-            const systemQty = getSystemQtyForBranch(maVach, maVach, selectedBranch, lot);
-            if (systemQty <= 0) return;
-
-            const itemKey = `${maVach}_${lot}`;
-            if (!kiemKhoItemsMap.has(itemKey)) {
-                const newItem = {
-                    key: itemKey,
-                    ma_vach: maVach,
-                    ten_hang_hoa: tenHangHoa,
-                    lot: lot,
-                    date_expiry: dateExpiry,
-                    so_luong_thuc_te: 0,
-                    so_luong_he_thong: systemQty,
-                    chenh_lech: 0 - systemQty,
-                    trang_thai: getKiemKhoStatus(0, systemQty),
-                    user_name: userName,
-                    branch: userBranch,
-                    is_system_qty_changed: true,
-                    time_scanned: new Date().toISOString()
-                };
-                kiemKhoItemsMap.set(itemKey, newItem);
-                hasStockChange = true;
-                syncKiemKhoItemToDB(newItem);
-            }
-        });
-    }
-
     if (hasStockChange) {
         renderKiemKhoTable();
-        playKiemKhoAudio('excess');
     }
 }
 
 // Save Audit Session to Supabase Database (`kiem_kho` and `kiem_kho_chi_tiet`)
 async function saveKiemKhoSession() {
     const items = Array.from(kiemKhoItemsMap.values());
-    if (items.length === 0) {
-        showKiemKhoToast('warning', 'Phiếu Kiểm Trống', '⚠️ Chưa có mã hàng nào được quét để lưu phiếu kiểm!');
+    if (items.length === 0 && canBangKhoMap.size === 0) {
+        showKiemKhoToast('warning', 'Phiếu Kiểm Trống', '⚠️ Chưa có mã hàng nào được quét hoặc nhập để lưu phiếu kiểm!');
         return;
     }
 
@@ -2594,27 +2751,34 @@ async function saveKiemKhoSession() {
         if (phieuId) {
             await client.from('kiem_kho_chi_tiet').delete().eq('phieu_id', phieuId);
 
-            const detailsPayload = items.map(item => ({
-                phieu_id: phieuId,
-                ma_phieu: maPhieu,
-                ma_qr: item.ma_qr || item.ma_vach || null,
-                ma_vach: item.ma_vach || null,
-                ten_hang_hoa: item.ten_hang_hoa,
-                lot: (item.lot && item.lot !== '-') ? item.lot : null,
-                date_expiry: (item.date_expiry && item.date_expiry !== '-') ? item.date_expiry : null,
-                so_luong_thuc_te: item.so_luong_thuc_te,
-                so_luong_he_thong: item.so_luong_he_thong,
-                chenh_lech: item.chenh_lech,
-                trang_thai: item.trang_thai,
-                branch: userBranch,
-                user_name: item.user_name || JSON.stringify(item.scanners || [normalizeScanner(userName, userBranch)])
-            }));
+            if (items.length > 0) {
+                const detailsPayload = items.map(item => ({
+                    phieu_id: phieuId,
+                    ma_phieu: maPhieu,
+                    ma_qr: item.ma_qr || item.ma_vach || null,
+                    ma_vach: item.ma_vach || null,
+                    ten_hang_hoa: item.ten_hang_hoa,
+                    lot: (item.lot && item.lot !== '-') ? item.lot : null,
+                    date_expiry: (item.date_expiry && item.date_expiry !== '-') ? item.date_expiry : null,
+                    so_luong_thuc_te: item.so_luong_thuc_te,
+                    so_luong_he_thong: item.so_luong_he_thong,
+                    chenh_lech: item.chenh_lech,
+                    trang_thai: item.trang_thai,
+                    branch: userBranch,
+                    user_name: item.user_name || JSON.stringify(item.scanners || [normalizeScanner(userName, userBranch)])
+                }));
 
-            const { error: detailErr } = await client
-                .from('kiem_kho_chi_tiet')
-                .insert(detailsPayload);
+                const { error: detailErr } = await client
+                    .from('kiem_kho_chi_tiet')
+                    .insert(detailsPayload);
 
-            if (detailErr) throw detailErr;
+                if (detailErr) throw detailErr;
+            }
+
+            // Sync Cân Bằng Kho records
+            if (canBangKhoMap.size > 0) {
+                await syncCanBangKhoToDB();
+            }
         }
 
         showVatTuLoading(false);
@@ -2622,13 +2786,19 @@ async function saveKiemKhoSession() {
         showKiemKhoToast(
             'success',
             'Lưu Phiếu Kiểm Thành Công',
-            `🎉 Đã lưu phiếu kiểm kho <b>${maPhieu}</b> (${items.length} mã, ${totalScannedQty} sản phẩm) tại chi nhánh <b>${userBranch}</b> thành công!`
+            `🎉 Đã lưu phiếu kiểm kho <b>${maPhieu}</b> (${items.length} mã quét, ${canBangKhoMap.size} mã cân bằng) tại chi nhánh <b>${userBranch}</b> thành công!`
         );
 
         // Reset session after successful save
         kiemKhoItemsMap.clear();
+        canBangKhoMap.clear();
         kiemKhoTotalScans = 0;
+        currentKiemKhoPhieuId = null;
+        currentKiemKhoMaPhieu = null;
+        localStorage.removeItem("gaia_active_kiemkho_session");
+        updateKiemKhoPhieuDisplay();
         renderKiemKhoTable();
+        renderCanBangKhoTable();
 
     } catch (err) {
         showVatTuLoading(false);
@@ -2719,6 +2889,9 @@ window.toggleKiemKhoScannersPopover = toggleKiemKhoScannersPopover;
 window.showKiemKhoItemScanLogsModal = showKiemKhoItemScanLogsModal;
 window.closeKiemKhoItemLogsModal = closeKiemKhoItemLogsModal;
 window.deleteSingleQuetChiTietLog = deleteSingleQuetChiTietLog;
+window.changeKiemKhoPageSize = changeKiemKhoPageSize;
+window.renderKiemKhoPaginationControls = renderKiemKhoPaginationControls;
+window.clearAllKiemKhoFilters = clearAllKiemKhoFilters;
 
 // Open AppSheet-Style Scan Logs Detail Modal
 async function showKiemKhoItemScanLogsModal(rawKey) {
@@ -2823,3 +2996,1267 @@ async function deleteSingleQuetChiTietLog(logId, itemKey) {
         console.error("deleteSingleQuetChiTietLog error:", e);
     }
 }
+
+/* ==========================================================================
+   CÂN BẰNG KHO (GPET STOCK RECONCILIATION) MODULE
+   ========================================================================== */
+
+// Helper to look up master product name by barcode
+function getProductNameByBarcode(barcode) {
+    if (!barcode) return '';
+    const rawCode = String(barcode).trim().toLowerCase();
+    if (window.vatTuData && Array.isArray(window.vatTuData)) {
+        const found = window.vatTuData.find(item => {
+            const vCode = item.ma_vach ? String(item.ma_vach).trim().toLowerCase() : '';
+            const qCode = item.ma_qr ? String(item.ma_qr).trim().toLowerCase() : '';
+            return vCode === rawCode || qCode === rawCode;
+        });
+        if (found) {
+            return found.ten_mat_hang || found.ten_hang_hoa || found.ten_hoa_don || '';
+        }
+    }
+    return '';
+}
+
+// Calculate total system stock for a barcode across ALL LOTs for the specified branch
+function getCanBangTotalSystemQty(barcode, branch) {
+    if (!barcode) return 0;
+    const rawBarcode = String(barcode).trim().toLowerCase();
+    const isAll = !branch || branch === 'all' || branch.toLowerCase() === 'toàn hệ thống' || branch.toLowerCase() === 'tất cả chi nhánh';
+    let targetCN = (typeof window.extractCNCodeFromBranchString === 'function') ? 
+        window.extractCNCodeFromBranchString(branch) : 
+        ((typeof window.extractCNCode === 'function') ? window.extractCNCode(branch) : branch);
+    targetCN = targetCN ? String(targetCN).trim().toUpperCase() : '';
+
+    let total = 0;
+    let foundInDetail = false;
+
+    if (window.tonKhoDetailData && Array.isArray(window.tonKhoDetailData) && window.tonKhoDetailData.length > 0) {
+        const matching = window.tonKhoDetailData.filter(d => {
+            const dVach = d.ma_vach ? String(d.ma_vach).trim().toLowerCase() : '';
+            const dQr = d.ma_qr ? String(d.ma_qr).trim().toLowerCase() : '';
+            return dVach === rawBarcode || dQr === rawBarcode;
+        });
+
+        if (matching.length > 0) {
+            foundInDetail = true;
+            if (isAll) {
+                total = matching.reduce((sum, r) => sum + (Number(r.ton_kho) || Number(r.ton_cuoi) || 0), 0);
+            } else {
+                const branchMatching = matching.filter(d => {
+                    let dCN = d.chi_nhanh || d.branch || '';
+                    let dCode = dCN;
+                    if (typeof window.extractCNCodeFromBranchString === 'function') {
+                        dCode = window.extractCNCodeFromBranchString(dCN);
+                    } else if (typeof window.extractCNCode === 'function') {
+                        dCode = window.extractCNCode(dCN);
+                    }
+                    return String(dCode).trim().toUpperCase() === targetCN || String(dCN).trim().toUpperCase() === String(branch).trim().toUpperCase();
+                });
+                total = branchMatching.reduce((sum, r) => sum + (Number(r.ton_kho) || Number(r.ton_cuoi) || 0), 0);
+            }
+            return total;
+        }
+    }
+
+    if (!foundInDetail && window.vatTuData && Array.isArray(window.vatTuData)) {
+        const matchingVatTu = window.vatTuData.filter(v => {
+            const vVach = v.ma_vach ? String(v.ma_vach).trim().toLowerCase() : '';
+            const vQr = v.ma_qr ? String(v.ma_qr).trim().toLowerCase() : '';
+            return vVach === rawBarcode || vQr === rawBarcode;
+        });
+
+        if (matchingVatTu.length > 0) {
+            if (isAll) {
+                total = matchingVatTu.reduce((sum, v) => sum + (Number(v.ton_cuoi ?? v.ton_kho ?? v.cuoi ?? 0)), 0);
+            } else {
+                const branchMatch = matchingVatTu.filter(item => {
+                    let itemCN = item.chi_nhanh || item.branch || '';
+                    let itemCode = itemCN;
+                    if (typeof window.extractCNCodeFromBranchString === 'function') {
+                        itemCode = window.extractCNCodeFromBranchString(itemCN);
+                    } else if (typeof window.extractCNCode === 'function') {
+                        itemCode = window.extractCNCode(itemCN);
+                    }
+                    return String(itemCode).trim().toUpperCase() === targetCN || String(itemCN).trim().toUpperCase() === String(branch).trim().toUpperCase();
+                });
+                if (branchMatch.length > 0) {
+                    total = branchMatch.reduce((sum, v) => sum + (Number(v.ton_cuoi ?? v.ton_kho ?? v.cuoi ?? 0)), 0);
+                } else if (typeof window.computeProductBranchStats === 'function') {
+                    const stats = window.computeProductBranchStats(matchingVatTu[0]);
+                    if (targetCN === 'CN1') total = Number(stats.cn1_ton || 0);
+                    else if (targetCN === 'CN2') total = Number(stats.cn2_ton || 0);
+                    else total = Number(stats.ton_cuoi || 0);
+                }
+            }
+        }
+    }
+
+    return total;
+}
+
+// Calculate total actual scanned quantity across ALL LOTs in the current audit ticket
+function getCanBangTotalActualScannedQty(barcode) {
+    if (!barcode) return 0;
+    const rawBarcode = String(barcode).trim().toLowerCase();
+    let total = 0;
+    kiemKhoItemsMap.forEach(item => {
+        const itemVach = item.ma_vach ? String(item.ma_vach).trim().toLowerCase() : '';
+        const itemQr = item.ma_qr ? String(item.ma_qr).trim().toLowerCase() : '';
+        if (itemVach === rawBarcode || itemQr === rawBarcode) {
+            total += Number(item.so_luong_thuc_te || 0);
+        }
+    });
+    return total;
+}
+
+// Recalculate Cân Bằng Kho Data (aggregates ton_kho and thuc_te for all barcodes in map)
+function recalculateCanBangKhoData(manualNotify = false) {
+    const branch = kiemKhoSelectedBranch || 'CN1';
+
+    canBangKhoMap.forEach(item => {
+        item.ton_kho = getCanBangTotalSystemQty(item.ma_vach, branch);
+        item.thuc_te = getCanBangTotalActualScannedQty(item.ma_vach);
+        item.chenh_lech = item.thuc_te - (Number(item.ton_gpet) || 0);
+        if (item.chenh_lech === 0) item.trang_thai = 'KHOP';
+        else if (item.chenh_lech > 0) item.trang_thai = 'DU';
+        else item.trang_thai = 'THIEU';
+    });
+
+    renderCanBangKhoTable();
+
+    if (manualNotify) {
+        showKiemKhoToast('info', 'Đã Tính Lại', `Đã đồng bộ lại dữ liệu Cân Bằng Kho (${canBangKhoMap.size} mặt hàng).`);
+    }
+}
+
+// Render Cân Bằng Kho Table Rows & Stats Dashboard
+function renderCanBangKhoTable() {
+    const tbody = document.getElementById('canbang-tbody');
+    const emptyState = document.getElementById('canbang-empty-state');
+    const statTotal = document.getElementById('canbang-stat-total');
+    const statMatch = document.getElementById('canbang-stat-match');
+    const statExcess = document.getElementById('canbang-stat-excess');
+    const statMissing = document.getElementById('canbang-stat-missing');
+    const phieuInput = document.getElementById('canbang-phieu-input');
+
+    if (phieuInput && currentKiemKhoMaPhieu && !phieuInput.value) {
+        phieuInput.value = currentKiemKhoMaPhieu;
+    }
+
+    let matchCount = 0;
+    let excessCount = 0;
+    let missingCount = 0;
+
+    canBangKhoMap.forEach(item => {
+        if (item.trang_thai === 'KHOP') matchCount++;
+        else if (item.trang_thai === 'DU') excessCount++;
+        else if (item.trang_thai === 'THIEU') missingCount++;
+    });
+
+    if (statTotal) statTotal.textContent = canBangKhoMap.size;
+    if (statMatch) statMatch.textContent = matchCount;
+    if (statExcess) statExcess.textContent = excessCount;
+    if (statMissing) statMissing.textContent = missingCount;
+
+    if (!tbody) return;
+
+    if (canBangKhoMap.size === 0) {
+        tbody.innerHTML = '';
+        if (emptyState) emptyState.style.display = 'flex';
+        renderCanBangPaginationControls(0, 0, 0, 0);
+        return;
+    }
+
+    if (emptyState) emptyState.style.display = 'none';
+
+    let items = Array.from(canBangKhoMap.values());
+    if (canBangSearchQuery) {
+        const q = canBangSearchQuery.toLowerCase().trim();
+        items = items.filter(it => 
+            (it.ma_vach || '').toLowerCase().includes(q) ||
+            (it.ten_hang_hoa || '').toLowerCase().includes(q)
+        );
+    }
+    if (Object.keys(canBangColumnFilters).length > 0) {
+        items = items.filter(item => {
+            for (const [colKey, selectedSet] of Object.entries(canBangColumnFilters)) {
+                if (!selectedSet || selectedSet.size === 0) continue;
+                const valStr = getCanBangItemColValueStr(item, colKey);
+                if (!selectedSet.has(valStr)) return false;
+            }
+            return true;
+        });
+    }
+
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 24px; color: #94a3b8;">Không tìm thấy mặt hàng nào khớp với bộ lọc</td></tr>`;
+        renderCanBangPaginationControls(0, 0, 0, 0);
+        return;
+    }
+
+    // Pagination for Cân Bằng Kho
+    const pageSize = canBangPageSize === Infinity ? (items.length || 1) : (canBangPageSize || 25);
+    const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+    if (canBangCurrentPage > totalPages) canBangCurrentPage = totalPages;
+    const startIdx = (canBangCurrentPage - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, items.length);
+    const pageItems = items.slice(startIdx, endIdx);
+
+    renderCanBangPaginationControls(items.length, totalPages, startIdx, endIdx);
+
+    let html = '';
+    pageItems.forEach((item, idx) => {
+        const globalIdx = startIdx + idx;
+        const key = item.ma_vach.trim().toLowerCase();
+        let badgeHtml = '';
+        if (item.trang_thai === 'KHOP') {
+            badgeHtml = '<span class="canbang-badge badge-canbang-match">✅ Khớp</span>';
+        } else if (item.trang_thai === 'DU') {
+            badgeHtml = `<span class="canbang-badge badge-canbang-excess">🔺 Dư (+${item.chenh_lech})</span>`;
+        } else {
+            badgeHtml = `<span class="canbang-badge badge-canbang-missing">🔻 Thiếu (${item.chenh_lech})</span>`;
+        }
+
+        let diffColor = '#94a3b8';
+        if (item.chenh_lech > 0) diffColor = '#10b981';
+        else if (item.chenh_lech < 0) diffColor = '#ef4444';
+
+        html += `
+            <tr>
+                <td style="text-align: center; color: #94a3b8; font-size: 12px;">${globalIdx + 1}</td>
+                <td><strong style="color: var(--text-color); font-family: monospace; font-size: 13px;">${escapeHtml(item.ma_vach)}</strong></td>
+                <td><div class="cell-truncate-wrap" title="${escapeHtml(item.ten_hang_hoa)}"><span class="cell-truncate-text" style="font-weight: 600; font-size: 12.5px;">${escapeHtml(item.ten_hang_hoa || 'Chưa có tên')}</span></div></td>
+                <td style="text-align: center;">
+                    <input type="number" min="0" class="canbang-input-gpet" value="${item.ton_gpet !== undefined ? item.ton_gpet : 0}" onchange="handleCanBangGpetQtyChange('${encodeURIComponent(key)}', this.value)" style="width: 70px; text-align: center; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #38bdf8; font-weight: 700; padding: 2px 4px;" />
+                </td>
+                <td style="text-align: center; font-weight: 700; color: #60a5fa;">${item.ton_kho}</td>
+                <td style="text-align: center; font-weight: 700; color: #f59e0b;">${item.thuc_te}</td>
+                <td style="text-align: center; font-weight: 800; color: ${diffColor};">${item.chenh_lech > 0 ? '+' : ''}${item.chenh_lech}</td>
+                <td style="text-align: center;">${badgeHtml}</td>
+                <td style="text-align: center;">
+                    <button type="button" onclick="deleteCanBangKhoRow('${encodeURIComponent(key)}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 14px; opacity: 0.8;" title="Xóa dòng này">🗑️</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+    updateKiemKhoColumnFilterBadgesUI('canbang');
+}
+
+// Change Page Size for Cân Bằng Kho
+function changeCanBangPageSize(val) {
+    canBangPageSize = val === 'all' ? Infinity : (parseInt(val, 10) || 25);
+    canBangCurrentPage = 1;
+    renderCanBangKhoTable();
+}
+
+// Render Pagination Bar for Cân Bằng Kho (Matches View Vật Tư UX)
+function renderCanBangPaginationControls(totalFiltered, totalPages, startIdx, endIdx) {
+    const rangeTextEl = document.getElementById('canbang-page-range-text');
+    const totalTextEl = document.getElementById('canbang-page-total-text');
+    const btnsContainer = document.getElementById('canbang-page-btns-container');
+    const paginationBar = document.getElementById('canbang-pagination-bar');
+
+    if (!paginationBar) return;
+
+    if (totalFiltered === 0) {
+        paginationBar.style.display = 'none';
+        if (rangeTextEl) rangeTextEl.textContent = '0 - 0';
+        if (totalTextEl) totalTextEl.textContent = '0';
+        if (btnsContainer) btnsContainer.innerHTML = '';
+        return;
+    }
+
+    paginationBar.style.display = 'flex';
+    if (rangeTextEl) rangeTextEl.textContent = `${startIdx + 1} - ${endIdx}`;
+    if (totalTextEl) totalTextEl.textContent = totalFiltered.toLocaleString('vi-VN');
+
+    if (!btnsContainer) return;
+    btnsContainer.innerHTML = '';
+
+    if (totalPages <= 1 && canBangPageSize === Infinity) return;
+
+    // Prev Button
+    const btnPrev = document.createElement('button');
+    btnPrev.type = 'button';
+    btnPrev.className = `vattu-page-btn ${canBangCurrentPage <= 1 ? 'disabled' : ''}`;
+    btnPrev.innerHTML = `&laquo; Trước`;
+    btnPrev.disabled = canBangCurrentPage <= 1;
+    btnPrev.onclick = () => {
+        if (canBangCurrentPage > 1) {
+            canBangCurrentPage--;
+            renderCanBangKhoTable();
+        }
+    };
+    btnsContainer.appendChild(btnPrev);
+
+    // Page Number Buttons (Limit to max 5 page numbers around current)
+    let startPage = Math.max(1, canBangCurrentPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) {
+        startPage = Math.max(1, endPage - 4);
+    }
+
+    for (let p = startPage; p <= endPage; p++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.type = 'button';
+        pageBtn.className = `vattu-page-btn ${p === canBangCurrentPage ? 'active' : ''}`;
+        pageBtn.textContent = p;
+        pageBtn.onclick = () => {
+            canBangCurrentPage = p;
+            renderCanBangKhoTable();
+        };
+        btnsContainer.appendChild(pageBtn);
+    }
+
+    // Next Button
+    const btnNext = document.createElement('button');
+    btnNext.type = 'button';
+    btnNext.className = `vattu-page-btn ${canBangCurrentPage >= totalPages ? 'disabled' : ''}`;
+    btnNext.innerHTML = `Sau &raquo;`;
+    btnNext.disabled = canBangCurrentPage >= totalPages;
+    btnNext.onclick = () => {
+        if (canBangCurrentPage < totalPages) {
+            canBangCurrentPage++;
+            renderCanBangKhoTable();
+        }
+    };
+    btnsContainer.appendChild(btnNext);
+}
+
+// Initialize View "Cân Bằng Kho"
+async function initCanBangKhoView() {
+    if (!currentKiemKhoMaPhieu) {
+        showKiemKhoToast('warning', 'Chưa Có Phiếu Kiểm', '⚠️ Vui lòng tạo hoặc tải một phiếu kiểm kho ở mục Kiểm Kho trước!');
+        const kiemKhoNav = document.querySelector('[data-view="kiem-kho"]');
+        if (kiemKhoNav) kiemKhoNav.click();
+        return;
+    }
+
+    // Ensure vatTuData is available
+    if (!window.vatTuData || !Array.isArray(window.vatTuData) || window.vatTuData.length === 0) {
+        if (typeof window.fetchVatTuData === 'function') {
+            await window.fetchVatTuData();
+        }
+    }
+
+    // Initialize Column Resizing & Filter Badges for Cân Bằng Kho
+    initKiemKhoColumnResizing();
+    updateKiemKhoColumnFilterBadgesUI('canbang');
+
+    const canBangDisplay = document.getElementById('canbang-phieu-display');
+    if (canBangDisplay) {
+        canBangDisplay.textContent = currentKiemKhoMaPhieu;
+    }
+
+    // Auto recalculate and render table
+    recalculateCanBangKhoData(false);
+}
+
+// Save Cân Bằng Kho directly from Cân Bằng Kho view
+async function saveCanBangKhoDataToDB() {
+    if (canBangKhoMap.size === 0) {
+        showKiemKhoToast('warning', 'Bảng Trống', 'Chưa có dữ liệu nào trong bảng Cân Bằng Kho để lưu!');
+        return;
+    }
+    if (!currentKiemKhoMaPhieu) {
+        showKiemKhoToast('warning', 'Chưa Có Mã Phiếu', 'Phiếu kiểm kho chưa có mã. Vui lòng tạo hoặc tải một phiếu kiểm kho trước khi lưu!');
+        return;
+    }
+
+    showVatTuLoading(true);
+    try {
+        await syncCanBangKhoToDB();
+        showVatTuLoading(false);
+        showKiemKhoToast('success', 'Lưu Cân Bằng Kho Thành Công', `🎉 Đã lưu thành công <b>${canBangKhoMap.size}</b> mặt hàng đối chiếu GPET cho phiếu <b>${currentKiemKhoMaPhieu}</b>!`);
+    } catch (e) {
+        showVatTuLoading(false);
+        showKiemKhoToast('error', 'Lỗi Lưu Dữ Liệu', `Không thể lưu bảng cân bằng: ${e.message}`);
+    }
+}
+
+// User changes Tồn GPET directly in the input box
+function handleCanBangGpetQtyChange(encodedKey, newVal) {
+    const key = decodeURIComponent(encodedKey);
+    const item = canBangKhoMap.get(key);
+    if (!item) return;
+    const num = Math.max(0, Number(newVal) || 0);
+    item.ton_gpet = num;
+    item.chenh_lech = item.thuc_te - num;
+    if (item.chenh_lech === 0) item.trang_thai = 'KHOP';
+    else if (item.chenh_lech > 0) item.trang_thai = 'DU';
+    else item.trang_thai = 'THIEU';
+
+    renderCanBangKhoTable();
+    saveKiemKhoLocalSession();
+    syncCanBangKhoToDB();
+}
+
+// Delete a single row from Cân Bằng Kho
+function deleteCanBangKhoRow(encodedKey) {
+    const key = decodeURIComponent(encodedKey);
+    if (canBangKhoMap.has(key)) {
+        canBangKhoMap.delete(key);
+        renderCanBangKhoTable();
+        saveKiemKhoLocalSession();
+        syncCanBangKhoToDB();
+    }
+}
+
+// Clear all rows from Cân Bằng Kho
+async function clearCanBangKhoTable() {
+    if (canBangKhoMap.size === 0) return;
+    const ok = await showKiemKhoConfirmModal('Xóa Bảng Cân Bằng Kho', 'Bạn có chắc chắn muốn xóa toàn bộ danh sách cân bằng kho của phiếu này?');
+    if (!ok) return;
+
+    canBangKhoMap.clear();
+    renderCanBangKhoTable();
+    saveKiemKhoLocalSession();
+    syncCanBangKhoToDB();
+    showKiemKhoToast('info', 'Đã Xóa', 'Đã xóa toàn bộ dữ liệu bảng Cân Bằng Kho.');
+}
+
+// Filter Cân Bằng Kho table
+function filterCanBangKhoTable(query) {
+    canBangSearchQuery = (query || '').trim();
+    renderCanBangKhoTable();
+}
+
+// Normalize string removing Vietnamese diacritics and special characters for column header matching
+function normalizeExcelHeaderKey(str) {
+    if (!str) return '';
+    return String(str)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'd')
+        .toLowerCase()
+        .replace(/[\s_\-\.\:\/\(\)\[\]\{\}]/g, '');
+}
+
+// Handle Excel Import for GPET Stock
+async function handleCanBangExcelImportFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    if (typeof XLSX === 'undefined') {
+        showKiemKhoToast('error', 'Lỗi Thư Viện', 'Thư viện SheetJS chưa sẵn sàng!');
+        event.target.value = '';
+        return;
+    }
+
+    showVatTuLoading(true);
+
+    try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array', raw: true });
+        const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+            throw new Error('File Excel không có sheet dữ liệu nào!');
+        }
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: true });
+
+        if (!rawJson || rawJson.length === 0) {
+            showVatTuLoading(false);
+            showKiemKhoToast('warning', 'File Trống', 'File Excel không có dữ liệu hàng nào!');
+            event.target.value = '';
+            return;
+        }
+
+        // Helper to extract value from row matching aliases
+        const getColValue = (row, ...aliasList) => {
+            const rowEntries = Object.entries(row);
+            for (const alias of aliasList) {
+                const targetNorm = normalizeExcelHeaderKey(alias);
+                const found = rowEntries.find(([k, v]) => {
+                    const normK = normalizeExcelHeaderKey(k);
+                    return normK === targetNorm || normK.includes(targetNorm);
+                });
+                if (found && found[1] !== undefined && found[1] !== null && String(found[1]).trim() !== '') {
+                    return found[1];
+                }
+            }
+            return '';
+        };
+
+        let importedCount = 0;
+        const branch = kiemKhoSelectedBranch || 'CN1';
+
+        for (let i = 0; i < rawJson.length; i++) {
+            const row = rawJson[i];
+            
+            // 1. Mã Vạch / Mã VT
+            let rawBarcodeVal = getColValue(
+                row,
+                'mavach', 'mã vạch', 'ma vach', 'mavt', 'mã vt', 'ma vt', 'mã vật tư', 'ma vat tu',
+                'barcode', 'itemcode', 'item code', 'code', 'sku', 'mahang', 'mã hàng', 'mã hàng hóa',
+                'masp', 'mã sp', 'mã sản phẩm', 'ma'
+            );
+
+            let rawBarcode = '';
+            if (typeof rawBarcodeVal === 'number') {
+                rawBarcode = Number.isInteger(rawBarcodeVal) ? rawBarcodeVal.toLocaleString('fullwide', { useGrouping: false }) : String(rawBarcodeVal).trim();
+            } else {
+                rawBarcode = String(rawBarcodeVal || '').trim();
+            }
+
+            if (!rawBarcode || rawBarcode === '-' || rawBarcode.toLowerCase() === 'stt') continue;
+
+            // 2. Tên hàng hóa
+            const rawTenVal = getColValue(
+                row,
+                'tenhanghoa', 'tên hàng hóa', 'tenhang', 'tên hàng', 'tenmathang', 'tên mặt hàng',
+                'tenvattu', 'tên vật tư', 'tensanpham', 'tên sản phẩm', 'tenvt', 'ten', 'tên',
+                'productname', 'itemname', 'name', 'description'
+            );
+            const rawTen = String(rawTenVal || '').trim();
+
+            // 3. Tồn GPET
+            let rawGpetVal = getColValue(
+                row,
+                'tongpet', 'tồn gpet', 'ton gpet', 'gpet', 'soluonggpet', 'số lượng gpet',
+                'slgpet', 'sl gpet', 'soluong', 'số lượng', 'sl', 'tonkho', 'tồn kho', 'ton', 'tồn',
+                'quantity', 'qty', 'stock'
+            );
+            
+            let gpetQty = 0;
+            if (typeof rawGpetVal === 'number') {
+                gpetQty = Math.max(0, rawGpetVal);
+            } else if (rawGpetVal) {
+                const parsedNum = parseFloat(String(rawGpetVal).replace(/,/g, '.').replace(/[^\d.-]/g, ''));
+                gpetQty = !isNaN(parsedNum) ? Math.max(0, parsedNum) : 0;
+            }
+
+            const barcodeKey = rawBarcode.trim().toLowerCase();
+            const masterName = getProductNameByBarcode(rawBarcode);
+            const finalTen = masterName || rawTen || `Mặt hàng ${rawBarcode}`;
+
+            const tonKho = getCanBangTotalSystemQty(rawBarcode, branch);
+            const thucTe = getCanBangTotalActualScannedQty(rawBarcode);
+            const diff = thucTe - gpetQty;
+            let status = 'KHOP';
+            if (diff > 0) status = 'DU';
+            else if (diff < 0) status = 'THIEU';
+
+            canBangKhoMap.set(barcodeKey, {
+                ma_vach: rawBarcode,
+                ten_hang_hoa: finalTen,
+                ton_gpet: gpetQty,
+                ton_kho: tonKho,
+                thuc_te: thucTe,
+                chenh_lech: diff,
+                trang_thai: status
+            });
+
+            importedCount++;
+        }
+
+        showVatTuLoading(false);
+        renderCanBangKhoTable();
+        saveKiemKhoLocalSession();
+        await syncCanBangKhoToDB();
+
+        if (importedCount === 0) {
+            showKiemKhoToast('warning', 'Không Nhận Diện Được Cột', '⚠️ Không tìm thấy cột Mã Vạch hoặc Tồn GPET trong file! Vui lòng tải "Template" để kiểm tra định dạng chuẩn.');
+        } else {
+            showKiemKhoToast('success', 'Nhập Excel Thành Công', `🎉 Đã nhập thành công <b>${importedCount}</b> sản phẩm GPET vào bảng cân bằng kho!`);
+        }
+    } catch (err) {
+        showVatTuLoading(false);
+        console.error("handleCanBangExcelImportFile error:", err);
+        showKiemKhoToast('error', 'Lỗi Đọc File Excel', `Không thể đọc file: ${err.message}`);
+    } finally {
+        event.target.value = '';
+    }
+}
+
+// Download Excel Template for GPET Stock Import
+function downloadCanBangExcelTemplate() {
+    if (typeof XLSX === 'undefined') {
+        showKiemKhoToast('error', 'Lỗi Thư Viện', 'Thư viện SheetJS chưa sẵn sàng!');
+        return;
+    }
+
+    const sampleRows = [
+        { "STT": 1, "Mã Vạch": "893000000001", "Tên Hàng Hóa": "Kháng sinh Amoxicillin 500mg", "Tồn GPET": 50 },
+        { "STT": 2, "Mã Vạch": "893000000002", "Tên Hàng Hóa": "Thuốc hạ sốt Paracetamol 100ml", "Tồn GPET": 20 },
+        { "STT": 3, "Mã Vạch": "893000000003", "Tên Hàng Hóa": "Vitamin B-Complex thú y", "Tồn GPET": 15 }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(sampleRows);
+    worksheet['!cols'] = [
+        { wch: 6 },
+        { wch: 20 },
+        { wch: 38 },
+        { wch: 14 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Mau_Nhap_GPET");
+    downloadExcelWorkbook(workbook, "Mau_Nhap_Ton_GPET_Can_Bang_Kho.xlsx");
+}
+
+// Export Cân Bằng Kho comparison to Excel
+function exportCanBangKhoToExcel() {
+    if (canBangKhoMap.size === 0) {
+        showKiemKhoToast('warning', 'Bảng Dữ Liệu Trống', 'Chưa có sản phẩm nào trong bảng Cân Bằng Kho để xuất Excel!');
+        return;
+    }
+
+    if (typeof XLSX === 'undefined') {
+        showKiemKhoToast('error', 'Lỗi Thư Viện', 'Thư viện SheetJS chưa sẵn sàng!');
+        return;
+    }
+
+    try {
+        const items = Array.from(canBangKhoMap.values());
+        const exportRows = items.map((item, idx) => ({
+            "STT": idx + 1,
+            "Mã Vạch": item.ma_vach || '',
+            "Tên Hàng Hóa": item.ten_hang_hoa || '',
+            "Tồn GPET": item.ton_gpet,
+            "Tồn Kho Hệ Thống": item.ton_kho,
+            "Số Lượng Thực Tế": item.thuc_te,
+            "Chênh Lệch (Thực Tế - GPET)": item.chenh_lech,
+            "Trạng Thái": item.trang_thai === 'KHOP' ? 'KHỚP' : (item.trang_thai === 'DU' ? 'DƯ THỰC TẾ' : 'THIẾU THỰC TẾ')
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(exportRows);
+        worksheet['!cols'] = [
+            { wch: 6 },
+            { wch: 18 },
+            { wch: 38 },
+            { wch: 14 },
+            { wch: 18 },
+            { wch: 18 },
+            { wch: 26 },
+            { wch: 18 }
+        ];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Can_Bang_Kho_GPET");
+
+        const maPhieuStr = currentKiemKhoMaPhieu ? currentKiemKhoMaPhieu.replace(/[\/:]/g, '-') : 'CAN_BANG';
+        const todayStr = new Date().toISOString().split('T')[0];
+        const fileName = `Can_Bang_Kho_GPET_${maPhieuStr}_${todayStr}.xlsx`;
+
+        downloadExcelWorkbook(workbook, fileName);
+    } catch (err) {
+        console.error("exportCanBangKhoToExcel error:", err);
+        showKiemKhoToast('error', 'Lỗi Xuất Excel', err.message);
+    }
+}
+
+// Sync Cân Bằng Kho rows to Supabase table `kiem_kho_can_bang`
+async function syncCanBangKhoToDB() {
+    const client = getVatTuSupabaseClient();
+    if (!client) return;
+
+    const phieuId = await ensureActiveKiemKhoHeaderExists();
+    const maPhieu = currentKiemKhoMaPhieu;
+    if (!maPhieu && !phieuId) return;
+
+    try {
+        if (phieuId) {
+            await client.from('kiem_kho_can_bang').delete().eq('phieu_id', phieuId);
+        }
+        if (maPhieu) {
+            await client.from('kiem_kho_can_bang').delete().eq('ma_phieu', maPhieu);
+        }
+
+        const items = Array.from(canBangKhoMap.values());
+        if (items.length === 0) return;
+
+        const payload = items.map((item, idx) => ({
+            phieu_id: phieuId || null,
+            ma_phieu: maPhieu,
+            stt: idx + 1,
+            ma_vach: item.ma_vach,
+            ten_hang_hoa: item.ten_hang_hoa,
+            ton_gpet: Number(item.ton_gpet) || 0,
+            ton_kho: Number(item.ton_kho) || 0,
+            thuc_te: Number(item.thuc_te) || 0,
+            chenh_lech: Number(item.chenh_lech) || 0,
+            trang_thai: item.trang_thai || 'KHOP'
+        }));
+
+        const { error } = await client.from('kiem_kho_can_bang').insert(payload);
+        if (error) {
+            console.error("❌ GAIA KiemKho: syncCanBangKhoToDB Error:", error.message || error);
+            // Fallback without stt/trang_thai if columns not yet added to table
+            if (error.message && error.message.includes('column')) {
+                const fallbackPayload = items.map(item => ({
+                    phieu_id: phieuId || null,
+                    ma_phieu: maPhieu,
+                    ma_vach: item.ma_vach,
+                    ten_hang_hoa: item.ten_hang_hoa,
+                    ton_gpet: Number(item.ton_gpet) || 0,
+                    ton_kho: Number(item.ton_kho) || 0,
+                    thuc_te: Number(item.thuc_te) || 0,
+                    chenh_lech: Number(item.chenh_lech) || 0
+                }));
+                const { error: err2 } = await client.from('kiem_kho_can_bang').insert(fallbackPayload);
+                if (err2) {
+                    console.error("❌ GAIA KiemKho: syncCanBangKhoToDB Fallback Error:", err2.message || err2);
+                } else {
+                    console.log(`✅ GAIA KiemKho: syncCanBangKhoToDB Fallback OK -> ${items.length} items`);
+                }
+            }
+        } else {
+            console.log(`✅ GAIA KiemKho: syncCanBangKhoToDB Saved -> ${items.length} items for [${maPhieu}]`);
+        }
+    } catch (e) {
+        console.warn("syncCanBangKhoToDB error:", e);
+    }
+}
+
+// Global Window Exports for Cân Bằng Kho
+window.initCanBangKhoView = initCanBangKhoView;
+window.handleCanBangExcelImportFile = handleCanBangExcelImportFile;
+window.downloadCanBangExcelTemplate = downloadCanBangExcelTemplate;
+window.exportCanBangKhoToExcel = exportCanBangKhoToExcel;
+window.recalculateCanBangKhoData = recalculateCanBangKhoData;
+window.clearCanBangKhoTable = clearCanBangKhoTable;
+window.filterCanBangKhoTable = filterCanBangKhoTable;
+window.handleCanBangGpetQtyChange = handleCanBangGpetQtyChange;
+window.deleteCanBangKhoRow = deleteCanBangKhoRow;
+window.loadCanBangPhieuByInput = loadCanBangPhieuByInput;
+window.saveCanBangKhoDataToDB = saveCanBangKhoDataToDB;
+window.showOrHideCanBangKhoSection = showOrHideCanBangKhoSection;
+window.changeCanBangPageSize = changeCanBangPageSize;
+window.renderCanBangPaginationControls = renderCanBangPaginationControls;
+window.clearAllCanBangFilters = clearAllCanBangFilters;
+
+/* ==========================================================================
+   PER-COLUMN FUNNEL FILTERING & COLUMN RESIZING ENGINE (Kiểm Kho & Cân Bằng)
+   ========================================================================== */
+
+// Helper to extract string representation of a cell value for Kiểm Kho table
+function getKiemKhoItemColValueStr(item, colKey) {
+    if (!item) return '(Trống)';
+    let raw = '';
+    switch (colKey) {
+        case 'ma_vach':
+            raw = item.ma_vach;
+            break;
+        case 'ten_hang_hoa':
+            raw = item.ten_hang_hoa;
+            break;
+        case 'lot':
+            raw = item.lot;
+            break;
+        case 'date_expiry':
+            raw = (item.date_expiry && item.date_expiry !== '-') ? formatDate(item.date_expiry) : '-';
+            break;
+        case 'so_luong_thuc_te':
+            raw = String(item.so_luong_thuc_te ?? 0);
+            break;
+        case 'so_luong_he_thong':
+            raw = String(item.so_luong_he_thong ?? 0);
+            break;
+        case 'chenh_lech':
+            raw = item.chenh_lech > 0 ? `+${item.chenh_lech}` : String(item.chenh_lech ?? 0);
+            break;
+        case 'trang_thai':
+            raw = item.trang_thai === 'KHOP' ? 'ĐỦ' : (item.trang_thai === 'DU' ? 'DƯ' : 'THIẾU');
+            break;
+        case 'user_name': {
+            const scanners = (item.scanners && Array.isArray(item.scanners) && item.scanners.length > 0) ? 
+                item.scanners.map(s => normalizeScanner(s && (s.user_name || s.name || s), s && (s.branch || item.branch))) : 
+                parseKiemKhoScanners(item.user_name || item.scanners, item.branch);
+            if (scanners.length > 1) {
+                raw = scanners.map(s => `${s.user_name} (${s.branch})`).join(', ');
+            } else if (scanners.length === 1) {
+                raw = `${scanners[0].user_name} - ${scanners[0].branch}`;
+            } else {
+                const single = normalizeScanner(item.user_name, item.branch);
+                raw = `${single.user_name} - ${single.branch}`;
+            }
+            break;
+        }
+        case 'time_scanned':
+            raw = item.time_scanned ? formatDate(item.time_scanned) : '-';
+            break;
+        default:
+            raw = item[colKey];
+    }
+    if (raw === null || raw === undefined || String(raw).trim() === '' || String(raw).trim() === '-') {
+        return '(Trống)';
+    }
+    return String(raw).trim();
+}
+
+// Helper to extract string representation of a cell value for Cân Bằng Kho table
+function getCanBangItemColValueStr(item, colKey) {
+    if (!item) return '(Trống)';
+    let raw = '';
+    switch (colKey) {
+        case 'ma_vach':
+            raw = item.ma_vach;
+            break;
+        case 'ten_hang_hoa':
+            raw = item.ten_hang_hoa;
+            break;
+        case 'ton_gpet':
+            raw = String(item.ton_gpet !== undefined ? item.ton_gpet : 0);
+            break;
+        case 'ton_kho':
+            raw = String(item.ton_kho ?? 0);
+            break;
+        case 'thuc_te':
+            raw = String(item.thuc_te ?? 0);
+            break;
+        case 'chenh_lech':
+            raw = item.chenh_lech > 0 ? `+${item.chenh_lech}` : String(item.chenh_lech ?? 0);
+            break;
+        case 'trang_thai':
+            raw = item.trang_thai === 'KHOP' ? 'Khớp' : (item.trang_thai === 'DU' ? 'Dư' : 'Thiếu');
+            break;
+        default:
+            raw = item[colKey];
+    }
+    if (raw === null || raw === undefined || String(raw).trim() === '' || String(raw).trim() === '-') {
+        return '(Trống)';
+    }
+    return String(raw).trim();
+}
+
+// Calculate unique available options & counts for a column (respecting other active column filters)
+function getAvailableOptionsForKiemKhoCol(colKey, tableType) {
+    if (tableType === 'canbang') {
+        let items = Array.from(canBangKhoMap.values());
+        if (canBangSearchQuery) {
+            const q = canBangSearchQuery.toLowerCase().trim();
+            items = items.filter(it => 
+                (it.ma_vach || '').toLowerCase().includes(q) ||
+                (it.ten_hang_hoa || '').toLowerCase().includes(q)
+            );
+        }
+        for (const [otherCol, selectedSet] of Object.entries(canBangColumnFilters)) {
+            if (otherCol === colKey) continue;
+            if (!selectedSet || selectedSet.size === 0) continue;
+            items = items.filter(item => {
+                const valStr = getCanBangItemColValueStr(item, otherCol);
+                return selectedSet.has(valStr);
+            });
+        }
+        const countsMap = new Map();
+        items.forEach(item => {
+            const valStr = getCanBangItemColValueStr(item, colKey);
+            countsMap.set(valStr, (countsMap.get(valStr) || 0) + 1);
+        });
+        const results = [];
+        countsMap.forEach((count, valStr) => {
+            results.push({ valStr, count });
+        });
+        results.sort((a, b) => {
+            if (a.valStr === '(Trống)') return 1;
+            if (b.valStr === '(Trống)') return -1;
+            return a.valStr.localeCompare(b.valStr, 'vi', { numeric: true, sensitivity: 'base' });
+        });
+        return results;
+    } else {
+        let items = Array.from(kiemKhoItemsMap.values());
+        if (kiemKhoSearchQuery) {
+            const q = kiemKhoSearchQuery.toLowerCase().trim();
+            items = items.filter(it => 
+                (it.ma_vach || '').toLowerCase().includes(q) ||
+                (it.ten_hang_hoa || '').toLowerCase().includes(q) ||
+                (it.lot || '').toLowerCase().includes(q)
+            );
+        }
+        for (const [otherCol, selectedSet] of Object.entries(kiemKhoColumnFilters)) {
+            if (otherCol === colKey) continue;
+            if (!selectedSet || selectedSet.size === 0) continue;
+            items = items.filter(item => {
+                const valStr = getKiemKhoItemColValueStr(item, otherCol);
+                return selectedSet.has(valStr);
+            });
+        }
+        const countsMap = new Map();
+        items.forEach(item => {
+            const valStr = getKiemKhoItemColValueStr(item, colKey);
+            countsMap.set(valStr, (countsMap.get(valStr) || 0) + 1);
+        });
+        const results = [];
+        countsMap.forEach((count, valStr) => {
+            results.push({ valStr, count });
+        });
+        results.sort((a, b) => {
+            if (a.valStr === '(Trống)') return 1;
+            if (b.valStr === '(Trống)') return -1;
+            return a.valStr.localeCompare(b.valStr, 'vi', { numeric: true, sensitivity: 'base' });
+        });
+        return results;
+    }
+}
+
+// Toggle column filter popover dropdown
+function toggleKiemKhoColumnFilter(event, colKey, tableType = 'kiemkho') {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+
+    const popover = document.getElementById('kiemkho-col-filter-popover');
+    if (!popover) return;
+
+    if (popover.style.display === 'flex' && activeKiemKhoFilterCol === colKey && activeKiemKhoFilterTable === tableType) {
+        closeKiemKhoColumnFilterDropdown();
+        return;
+    }
+
+    activeKiemKhoFilterCol = colKey;
+    activeKiemKhoFilterTable = tableType;
+
+    const btn = (event && event.currentTarget) ? event.currentTarget : document.querySelector(`.col-filter-btn[data-col="${colKey}"][data-table="${tableType}"]`);
+    if (btn) {
+        const rect = btn.getBoundingClientRect();
+        let left = rect.left - 80;
+        let top = rect.bottom + 6;
+
+        if (left + 260 > window.innerWidth) {
+            left = window.innerWidth - 270;
+        }
+        if (left < 10) left = 10;
+        if (top + 380 > window.innerHeight) {
+            top = Math.max(10, rect.top - 380);
+        }
+
+        popover.style.left = `${left}px`;
+        popover.style.top = `${top}px`;
+    }
+
+    const titles = (tableType === 'canbang') ? canBangColTitles : kiemKhoColTitles;
+    const titleEl = document.getElementById('kiemkho-filter-popover-title');
+    if (titleEl) titleEl.textContent = `Lọc Cột: ${titles[colKey] || colKey}`;
+
+    const searchInput = document.getElementById('kiemkho-filter-popover-search-input');
+    if (searchInput) searchInput.value = '';
+
+    const filterObj = (tableType === 'canbang') ? canBangColumnFilters : kiemKhoColumnFilters;
+    const existing = filterObj[colKey];
+    const availableOptions = getAvailableOptionsForKiemKhoCol(colKey, tableType);
+
+    if (existing && existing.size > 0) {
+        kiemKhoPopoverTempSelectedValues = new Set(existing);
+    } else {
+        kiemKhoPopoverTempSelectedValues = new Set(availableOptions.map(x => x.valStr));
+    }
+
+    popover.style.display = 'flex';
+    renderKiemKhoFilterPopoverListOptions();
+}
+
+// Close column filter popover
+function closeKiemKhoColumnFilterDropdown() {
+    const popover = document.getElementById('kiemkho-col-filter-popover');
+    if (popover) popover.style.display = 'none';
+    activeKiemKhoFilterCol = null;
+}
+
+// Render options list with search
+function renderKiemKhoFilterPopoverListOptions() {
+    if (!activeKiemKhoFilterCol) return;
+
+    const listContainer = document.getElementById('kiemkho-filter-popover-list');
+    const searchVal = (document.getElementById('kiemkho-filter-popover-search-input')?.value || '').toLowerCase().trim();
+    if (!listContainer) return;
+
+    const options = getAvailableOptionsForKiemKhoCol(activeKiemKhoFilterCol, activeKiemKhoFilterTable);
+    const filteredOptions = options.filter(opt => !searchVal || opt.valStr.toLowerCase().includes(searchVal));
+
+    listContainer.innerHTML = '';
+
+    if (filteredOptions.length === 0) {
+        listContainer.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px;">Không có giá trị trùng khớp</div>`;
+    } else {
+        filteredOptions.forEach(opt => {
+            const isChecked = kiemKhoPopoverTempSelectedValues.has(opt.valStr);
+            const label = document.createElement('label');
+            label.className = 'popover-checkbox-label';
+
+            const escValue = opt.valStr.replace(/"/g, '&quot;');
+            const escText = opt.valStr.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            label.innerHTML = `
+                <input type="checkbox" value="${escValue}" ${isChecked ? 'checked' : ''}>
+                <span>${escText}</span>
+                <span class="popover-item-count">${opt.count}</span>
+            `;
+
+            const cb = label.querySelector('input');
+            cb.onchange = (e) => {
+                if (e.target.checked) {
+                    kiemKhoPopoverTempSelectedValues.add(opt.valStr);
+                } else {
+                    kiemKhoPopoverTempSelectedValues.delete(opt.valStr);
+                }
+                updateKiemKhoSelectAllCheckboxState(filteredOptions);
+            };
+
+            listContainer.appendChild(label);
+        });
+    }
+
+    updateKiemKhoSelectAllCheckboxState(filteredOptions);
+}
+
+function updateKiemKhoSelectAllCheckboxState(filteredOptions) {
+    const selectAllCb = document.getElementById('kiemkho-popover-select-all');
+    if (!selectAllCb || !filteredOptions || filteredOptions.length === 0) return;
+    const allChecked = filteredOptions.every(opt => kiemKhoPopoverTempSelectedValues.has(opt.valStr));
+    selectAllCb.checked = allChecked;
+}
+
+function toggleSelectAllKiemKhoPopoverOptions(checked) {
+    if (!activeKiemKhoFilterCol) return;
+    const options = getAvailableOptionsForKiemKhoCol(activeKiemKhoFilterCol, activeKiemKhoFilterTable);
+    options.forEach(opt => {
+        if (checked) {
+            kiemKhoPopoverTempSelectedValues.add(opt.valStr);
+        } else {
+            kiemKhoPopoverTempSelectedValues.delete(opt.valStr);
+        }
+    });
+    renderKiemKhoFilterPopoverListOptions();
+}
+
+function applyCurrentKiemKhoColumnFilter() {
+    if (!activeKiemKhoFilterCol) return;
+    const colKey = activeKiemKhoFilterCol;
+    const tableType = activeKiemKhoFilterTable;
+    const availableOptions = getAvailableOptionsForKiemKhoCol(colKey, tableType);
+
+    const filterObj = (tableType === 'canbang') ? canBangColumnFilters : kiemKhoColumnFilters;
+
+    if (kiemKhoPopoverTempSelectedValues.size >= availableOptions.length) {
+        delete filterObj[colKey];
+    } else {
+        filterObj[colKey] = new Set(kiemKhoPopoverTempSelectedValues);
+    }
+
+    updateKiemKhoColumnFilterBadgesUI(tableType);
+    closeKiemKhoColumnFilterDropdown();
+
+    if (tableType === 'canbang') {
+        renderCanBangKhoTable();
+    } else {
+        kiemKhoCurrentPage = 1;
+        renderKiemKhoTable();
+    }
+}
+
+function clearCurrentKiemKhoColumnFilter() {
+    if (!activeKiemKhoFilterCol) return;
+    const colKey = activeKiemKhoFilterCol;
+    const tableType = activeKiemKhoFilterTable;
+    const filterObj = (tableType === 'canbang') ? canBangColumnFilters : kiemKhoColumnFilters;
+
+    delete filterObj[colKey];
+
+    updateKiemKhoColumnFilterBadgesUI(tableType);
+    closeKiemKhoColumnFilterDropdown();
+
+    if (tableType === 'canbang') {
+        renderCanBangKhoTable();
+    } else {
+        kiemKhoCurrentPage = 1;
+        renderKiemKhoTable();
+    }
+}
+
+// Clear all column filters and search query for Kiểm Kho
+function clearAllKiemKhoFilters() {
+    kiemKhoColumnFilters = {};
+    kiemKhoSearchQuery = '';
+    const searchInput = document.getElementById('kiemkho-search-input');
+    if (searchInput) searchInput.value = '';
+
+    closeKiemKhoColumnFilterDropdown();
+    updateKiemKhoColumnFilterBadgesUI('kiemkho');
+    kiemKhoCurrentPage = 1;
+    renderKiemKhoTable();
+}
+
+// Clear all column filters and search query for Cân Bằng Kho
+function clearAllCanBangFilters() {
+    canBangColumnFilters = {};
+    canBangSearchQuery = '';
+    const searchInput = document.getElementById('canbang-search-input');
+    if (searchInput) searchInput.value = '';
+
+    closeKiemKhoColumnFilterDropdown();
+    updateKiemKhoColumnFilterBadgesUI('canbang');
+    canBangCurrentPage = 1;
+    renderCanBangKhoTable();
+}
+
+function updateKiemKhoColumnFilterBadgesUI(tableType = 'all') {
+    if (tableType === 'kiemkho' || tableType === 'all') {
+        let hasActiveKiemKho = !!(kiemKhoSearchQuery && kiemKhoSearchQuery.trim() !== '');
+        const kiemKhoBtns = document.querySelectorAll('#kiemkho-table .col-filter-btn[data-col]');
+        kiemKhoBtns.forEach(btn => {
+            const colKey = btn.getAttribute('data-col');
+            const badge = document.getElementById(`kiemkho-filter-badge-${colKey}`);
+            const selectedSet = kiemKhoColumnFilters[colKey];
+
+            if (selectedSet && selectedSet.size > 0) {
+                btn.classList.add('filter-active');
+                hasActiveKiemKho = true;
+                if (badge) {
+                    badge.textContent = selectedSet.size;
+                    badge.style.display = 'inline-flex';
+                }
+            } else {
+                btn.classList.remove('filter-active');
+                if (badge) {
+                    badge.style.display = 'none';
+                }
+            }
+        });
+
+        const clearBtnKiemKho = document.getElementById('btn-clear-all-filters-kiemkho');
+        if (clearBtnKiemKho) {
+            if (hasActiveKiemKho) {
+                clearBtnKiemKho.classList.add('filter-has-active');
+            } else {
+                clearBtnKiemKho.classList.remove('filter-has-active');
+            }
+        }
+    }
+
+    if (tableType === 'canbang' || tableType === 'all') {
+        let hasActiveCanBang = !!(canBangSearchQuery && canBangSearchQuery.trim() !== '');
+        const canBangBtns = document.querySelectorAll('#canbang-table .col-filter-btn[data-col]');
+        canBangBtns.forEach(btn => {
+            const colKey = btn.getAttribute('data-col');
+            const badge = document.getElementById(`canbang-filter-badge-${colKey}`);
+            const selectedSet = canBangColumnFilters[colKey];
+
+            if (selectedSet && selectedSet.size > 0) {
+                btn.classList.add('filter-active');
+                hasActiveCanBang = true;
+                if (badge) {
+                    badge.textContent = selectedSet.size;
+                    badge.style.display = 'inline-flex';
+                }
+            } else {
+                btn.classList.remove('filter-active');
+                if (badge) {
+                    badge.style.display = 'none';
+                }
+            }
+        });
+
+        const clearBtnCanBang = document.getElementById('btn-clear-all-filters-canbang');
+        if (clearBtnCanBang) {
+            if (hasActiveCanBang) {
+                clearBtnCanBang.classList.add('filter-has-active');
+            } else {
+                clearBtnCanBang.classList.remove('filter-has-active');
+            }
+        }
+    }
+}
+
+// Column Resizing Handlers (Identical to Vật Tư)
+function initKiemKhoColumnResizing() {
+    initGenericTableResizing('#kiemkho-table', 'gaia_kiemkho_column_widths');
+    initGenericTableResizing('#canbang-table', 'gaia_canbang_column_widths');
+}
+
+function initGenericTableResizing(tableSelector, storageKey) {
+    const table = document.querySelector(tableSelector);
+    if (!table) return;
+
+    // Restore saved widths from localStorage
+    if (storageKey) {
+        try {
+            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            table.querySelectorAll('th[data-col]').forEach(th => {
+                const col = th.getAttribute('data-col');
+                if (saved[col]) {
+                    th.style.width = saved[col] + 'px';
+                }
+            });
+        } catch (e) {}
+    }
+
+    const resizers = table.querySelectorAll('.col-resizer');
+    resizers.forEach(resizer => {
+        const th = resizer.parentElement;
+        if (!th) return;
+
+        let startX, startWidth;
+
+        const onMouseMove = (e) => {
+            if (!startX) return;
+            const diffX = e.pageX - startX;
+            const minW = parseInt(th.style.minWidth, 10) || 50;
+            const newWidth = Math.max(minW, startWidth + diffX);
+            th.style.width = `${newWidth}px`;
+        };
+
+        const onMouseUp = (e) => {
+            if (!startX) return;
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            startX = null;
+            resizer.classList.remove('resizing');
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            if (storageKey) {
+                try {
+                    const widths = {};
+                    table.querySelectorAll('th[data-col]').forEach(h => {
+                        const colKey = h.getAttribute('data-col');
+                        if (colKey) widths[colKey] = h.offsetWidth;
+                    });
+                    localStorage.setItem(storageKey, JSON.stringify(widths));
+                } catch (err) {}
+            }
+        };
+
+        resizer.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            startX = e.pageX;
+            startWidth = th.offsetWidth;
+            resizer.classList.add('resizing');
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        resizer.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+}
+
+// Global click listener to close popover when clicking outside
+document.addEventListener('click', (e) => {
+    const popover = document.getElementById('kiemkho-col-filter-popover');
+    if (!popover || popover.style.display === 'none') return;
+    if (popover.contains(e.target) || e.target.closest('.col-filter-btn')) return;
+    closeKiemKhoColumnFilterDropdown();
+});
+
+// Window Exports
+window.toggleKiemKhoColumnFilter = toggleKiemKhoColumnFilter;
+window.closeKiemKhoColumnFilterDropdown = closeKiemKhoColumnFilterDropdown;
+window.renderKiemKhoFilterPopoverListOptions = renderKiemKhoFilterPopoverListOptions;
+window.toggleSelectAllKiemKhoPopoverOptions = toggleSelectAllKiemKhoPopoverOptions;
+window.applyCurrentKiemKhoColumnFilter = applyCurrentKiemKhoColumnFilter;
+window.clearCurrentKiemKhoColumnFilter = clearCurrentKiemKhoColumnFilter;
+window.initKiemKhoColumnResizing = initKiemKhoColumnResizing;
+window.changeKiemKhoPageSize = changeKiemKhoPageSize;
+window.changeCanBangPageSize = changeCanBangPageSize;
+

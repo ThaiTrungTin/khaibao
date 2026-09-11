@@ -84,8 +84,10 @@ function bindNhapXuatEvents() {
                 generateNextNxOrderCode(val);
             }
             saveNxDraftToStorage();
+            renderNxDraftItemsTable();
             renderNhapXuatOrderList(filteredNhapXuatData);
             checkNxOrderModified();
+            updateNxSaveButtonState();
         });
     }
 
@@ -873,7 +875,9 @@ function renderNhapXuatOrderList(orders) {
         const isSelected = selectedNxOrderId === order.id;
         const isNhap = order.loai_don === 'Nhập';
         const isCancelled = order.trang_thai === 'Đã hủy';
-        const isPending = order.trang_thai === 'Chờ';
+        const orderItems = order.chi_tiet_san_pham || [];
+        const isAllZeroQty = orderItems.length > 0 && orderItems.every(x => (Number(x.so_luong) || 0) === 0);
+        const isPending = !isCancelled && (order.trang_thai === 'Chờ' || isAllZeroQty);
         const srcInfo = getNxOrderSourceInfo(order);
 
         let statusBadgeHtml = '';
@@ -1172,8 +1176,12 @@ async function _doSelectNxOrderForView(order) {
         }
     }
 
+    currentDraftNxItems = order.chi_tiet_san_pham ? JSON.parse(JSON.stringify(order.chi_tiet_san_pham)) : [];
+
     const isCancelled = order.trang_thai === 'Đã hủy';
-    const isPending = order.trang_thai === 'Chờ';
+    const isAllZeroQty = currentDraftNxItems.length > 0 && currentDraftNxItems.every(x => (Number(x.so_luong) || 0) === 0);
+    const hasNoProducts = currentDraftNxItems.length === 0;
+    const isPending = !isCancelled && (order.trang_thai === 'Chờ' || isAllZeroQty);
 
     if (statusBadge) {
         if (isCancelled) {
@@ -1209,12 +1217,12 @@ async function _doSelectNxOrderForView(order) {
     const btnHardDelete = document.getElementById('btn-hard-delete-nx-order');
     const btnSave = document.getElementById('btn-save-nx-order');
     const scannerInput = document.getElementById('nx-qr-scanner-input');
-    const scanTrigger = document.querySelector('.btn-scan-trigger');
+    const scanTrigger = document.querySelector('.btn-scan-trigger') || document.getElementById('btn-nx-excel-import');
+    const excelFileInput = document.getElementById('nx-excel-file-input');
 
     const srcInfo = getNxOrderSourceInfo(order);
     const isPdfOrder = srcInfo.type === 'pdf_import';
-    const hasNoProducts = !currentDraftNxItems || currentDraftNxItems.length === 0;
-    const canHardDelete = isPdfOrder || isPending || hasNoProducts;
+    const canHardDelete = isPdfOrder || isPending || hasNoProducts || isCancelled || isAllZeroQty;
 
     if (isCancelled) {
         if (btnCancel) btnCancel.style.display = 'none';
@@ -1226,6 +1234,7 @@ async function _doSelectNxOrderForView(order) {
             scannerInput.placeholder = 'Đơn đã bị hủy - Không thể quét hoặc chỉnh sửa';
         }
         if (scanTrigger) scanTrigger.disabled = true;
+        if (excelFileInput) excelFileInput.disabled = true;
     } else {
         if (btnCancel) btnCancel.style.display = 'flex';
         if (btnRestore) btnRestore.style.display = 'none';
@@ -1236,6 +1245,7 @@ async function _doSelectNxOrderForView(order) {
             scannerInput.placeholder = 'Quét QR / Mã vạch hoặc tìm tên vật tư...';
         }
         if (scanTrigger) scanTrigger.disabled = false;
+        if (excelFileInput) excelFileInput.disabled = false;
     }
 
     const btnDownload = document.getElementById('btn-download-nx-pdf');
@@ -1351,7 +1361,8 @@ async function _doCreateNewNhapXuatOrderForm() {
     const btnSave = document.getElementById('btn-save-nx-order');
     const btnDownload = document.getElementById('btn-download-nx-pdf');
     const scannerInput = document.getElementById('nx-qr-scanner-input');
-    const scanTrigger = document.querySelector('.btn-scan-trigger');
+    const scanTrigger = document.querySelector('.btn-scan-trigger') || document.getElementById('btn-nx-excel-import');
+    const excelFileInput = document.getElementById('nx-excel-file-input');
 
     if (btnCancel) btnCancel.style.display = 'none';
     if (btnRestore) btnRestore.style.display = 'none';
@@ -1363,6 +1374,7 @@ async function _doCreateNewNhapXuatOrderForm() {
         scannerInput.placeholder = 'Quét QR / Mã vạch hoặc tìm tên vật tư...';
     }
     if (scanTrigger) scanTrigger.disabled = false;
+    if (excelFileInput) excelFileInput.disabled = false;
 
     if (titleEl) titleEl.textContent = '📝 Tạo Đơn Nhập / Xuất Kho Mới';
     if (modeBadge) {
@@ -1662,6 +1674,51 @@ function handleNxScannerInputSearch(event) {
     dropdown.style.display = 'flex';
 }
 
+// Helper to format Date for Nhập Xuất
+function formatDateForNx(rawDate) {
+    if (!rawDate || rawDate === '-' || rawDate === 'null' || rawDate === 'undefined') return '';
+    const str = String(rawDate).trim();
+    if (!str) return '';
+    // DD/MM/YYYY
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+        const parts = str.split('/');
+        return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+    }
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        const parts = str.substring(0, 10).split('-');
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    try {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+    } catch (e) {}
+    return str;
+}
+
+// Helper to construct clean ma_qr string without generating empty trailing `;-;`
+function buildMaQr(ma_vach, lot, date_expiry) {
+    const vach = (ma_vach || '').trim();
+    const cleanLot = (lot && lot !== 'null' && lot !== 'undefined' && lot !== '-') ? String(lot).trim() : '';
+    const cleanDate = (date_expiry && date_expiry !== 'null' && date_expiry !== 'undefined' && date_expiry !== '-') ? (formatDateForNx(date_expiry) || String(date_expiry).trim()) : '';
+
+    if (!cleanLot && !cleanDate) {
+        return vach;
+    }
+    if (cleanLot && cleanDate) {
+        return `${vach};${cleanLot};${cleanDate}`;
+    }
+    if (cleanLot && !cleanDate) {
+        return `${vach};${cleanLot}`;
+    }
+    return `${vach};-;${cleanDate}`;
+}
+
 function addNxItemFromSearch(productId, lot = '-', date_expiry = null) {
     const allVatTu = (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData)) ? window.vatTuData : (typeof vatTuData !== 'undefined' ? vatTuData : []);
     const product = allVatTu.find(x => String(x.id) === String(productId));
@@ -1671,7 +1728,7 @@ function addNxItemFromSearch(productId, lot = '-', date_expiry = null) {
     const ten_hang_hoa = product.ten_mat_hang || product.ten_hoa_don || 'Vật tư y tế';
     const cleanLot = (lot && lot !== 'null' && lot !== 'undefined') ? lot : '-';
     let cleanDate = date_expiry ? formatDateForNx(date_expiry) : null;
-    const ma_qr = `${ma_vach};${cleanLot};${cleanDate || ''}`;
+    const ma_qr = buildMaQr(ma_vach, cleanLot, cleanDate);
 
     const currentMaDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || 'ĐƠN-NHÁP';
     const currentLoai = document.getElementById('nx-input-loai')?.value || currentDraftOrder.loai_don || 'Nhập';
@@ -1993,6 +2050,499 @@ async function handleNxQrScannerAdd() {
 
 }
 
+// =========================================================================
+// DOWNLOAD EXCEL TEMPLATE CHO VIEW NHẬP XUẤT (.xlsx)
+// =========================================================================
+function downloadNhapXuatExcelTemplate() {
+    if (typeof XLSX === 'undefined') {
+        if (typeof showVatTuNoticeModal === 'function') {
+            showVatTuNoticeModal('warning', 'Chưa Sẵn Sàng', 'Thư viện SheetJS chưa sẵn sàng. Vui lòng kiểm tra lại kết nối mạng!');
+        } else {
+            alert('Thư viện SheetJS chưa sẵn sàng!');
+        }
+        return;
+    }
+
+    const templateRows = [
+        [
+            "STT",
+            "Mã VT",
+            "Tên Hàng Hóa",
+            "LOT",
+            "Date",
+            "Số Lượng"
+        ],
+        [
+            1,
+            "300000000197",
+            "Povidine 10% 500ml",
+            "LOT202601",
+            "31/12/2026",
+            10
+        ],
+        [
+            2,
+            "8935110200625",
+            "Vinco-Forte 100ml",
+            "LOT202602",
+            "15/08/2027",
+            5
+        ],
+        [
+            3,
+            "8936001234567",
+            "Nước cất tiêm 5ml",
+            "-",
+            "-",
+            20
+        ]
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(templateRows);
+
+    worksheet['!cols'] = [
+        { wch: 6 },   // STT
+        { wch: 18 },  // Mã VT
+        { wch: 35 },  // Tên Hàng Hóa
+        { wch: 16 },  // LOT
+        { wch: 16 },  // Date
+        { wch: 12 }   // Số Lượng
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Mau_Nhap_Xuat");
+
+    const fileName = `File_Mau_Nhap_Xuat_GAIA.xlsx`;
+
+    try {
+        const b64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+        const dataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${b64}`;
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (e) {
+        console.warn("downloadNhapXuatExcelTemplate: Fallback to XLSX.writeFile due to:", e);
+        XLSX.writeFile(workbook, fileName);
+    }
+
+    if (typeof showToast === 'function') {
+        showToast('success', 'Tải Template Mẫu', 'Đã tải xuống file Excel mẫu nhập xuất thành công.');
+    }
+}
+
+// =========================================================================
+// EXCEL IMPORT CHO VIEW NHẬP XUẤT (Tự động lấy tên theo mã vạch từ kho Vật tư)
+// =========================================================================
+async function handleNxExcelFileImport(event) {
+    const fileInput = event.target;
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+
+    if (typeof XLSX === 'undefined') {
+        if (typeof showVatTuNoticeModal === 'function') {
+            showVatTuNoticeModal('warning', 'Chưa Sẵn Sàng', 'Thư viện SheetJS (XLSX) chưa sẵn sàng. Vui lòng kiểm tra lại kết nối!');
+        } else {
+            alert('Thư viện SheetJS chưa sẵn sàng!');
+        }
+        fileInput.value = '';
+        return;
+    }
+
+    // Kiểm tra đơn bị hủy
+    if (currentDraftOrder && currentDraftOrder.trang_thai === 'Đã hủy') {
+        if (typeof showVatTuNoticeModal === 'function') {
+            showVatTuNoticeModal('warning', 'Đơn Đã Bị Hủy', 'Không thể nạp thêm sản phẩm vào đơn hàng đã bị hủy!');
+        } else {
+            alert('Không thể nạp thêm sản phẩm vào đơn hàng đã bị hủy!');
+        }
+        fileInput.value = '';
+        return;
+    }
+
+    try {
+        const dataBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(dataBuffer, { type: 'array', cellDates: false });
+        const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+            throw new Error('File Excel không có sheet dữ liệu nào!');
+        }
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: true });
+
+        const isRowEmpty = (row) => Object.values(row).every(v => v === null || v === undefined || String(v).trim() === '');
+        const validRawRows = (rawJson || []).filter(row => !isRowEmpty(row));
+
+        if (!validRawRows || validRawRows.length === 0) {
+            if (typeof showVatTuNoticeModal === 'function') {
+                showVatTuNoticeModal('warning', 'File Excel Trống', 'File Excel được chọn không chứa dữ liệu!');
+            } else {
+                alert('File Excel được chọn không chứa dữ liệu!');
+            }
+            fileInput.value = '';
+            return;
+        }
+
+        // Helper tìm giá trị theo nhiều alias cột khác nhau
+        const getRowVal = (row, ...keys) => {
+            const rowKeys = Object.keys(row);
+            for (const k of keys) {
+                const targetNorm = k.trim().toLowerCase().replace(/[\s_\-\.\:\/]/g, '');
+                const foundKey = rowKeys.find(rk => {
+                    const rkNorm = rk.trim().toLowerCase().replace(/[\s_\-\.\:\/]/g, '');
+                    return rkNorm === targetNorm;
+                });
+                if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null && String(row[foundKey]).trim() !== '') {
+                    return row[foundKey];
+                }
+            }
+            return '';
+        };
+
+        // Helper chuẩn hóa Date sang dd/mm/yyyy
+        const parseExcelDate = (val) => {
+            if (!val || val === '-' || val === 'null' || val === 'undefined') return null;
+            
+            // 1. Nếu là số serial của Excel (e.g. 45289)
+            if (typeof val === 'number' && val > 1000) {
+                try {
+                    if (typeof XLSX !== 'undefined' && XLSX.SSF && typeof XLSX.SSF.parse_date_code === 'function') {
+                        const p = XLSX.SSF.parse_date_code(val);
+                        if (p && p.y && p.m && p.d) {
+                            const d = String(p.d).padStart(2, '0');
+                            const m = String(p.m).padStart(2, '0');
+                            const y = String(p.y);
+                            return `${d}/${m}/${y}`;
+                        }
+                    }
+                } catch (e) {}
+
+                // Fallback tính toán từ epoch 1900
+                const dt = new Date(Math.round((val - 25569) * 86400 * 1000));
+                if (!isNaN(dt.getTime())) {
+                    const d = String(dt.getUTCDate()).padStart(2, '0');
+                    const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+                    const y = dt.getUTCFullYear();
+                    return `${d}/${m}/${y}`;
+                }
+            }
+
+            // 2. Nếu là chuỗi ký tự
+            const str = String(val).trim();
+            if (!str || str === '-') return null;
+
+            // dd/mm/yyyy hoặc d/m/yyyy hoặc dd/mm/yy
+            const ddMmMatch = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
+            if (ddMmMatch) {
+                const d = ddMmMatch[1].padStart(2, '0');
+                const m = ddMmMatch[2].padStart(2, '0');
+                const y = ddMmMatch[3].length === 2 ? '20' + ddMmMatch[3] : ddMmMatch[3];
+                return `${d}/${m}/${y}`;
+            }
+
+            // yyyy-mm-dd hoặc yyyy/mm/dd
+            const yyyyMmMatch = str.match(/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/);
+            if (yyyyMmMatch) {
+                const y = yyyyMmMatch[1];
+                const m = yyyyMmMatch[2].padStart(2, '0');
+                const d = yyyyMmMatch[3].padStart(2, '0');
+                return `${d}/${m}/${y}`;
+            }
+
+            if (typeof formatDateForNx === 'function') {
+                const res = formatDateForNx(str);
+                return (res && res !== '-') ? res : null;
+            }
+
+            return str;
+        };
+
+        const rawImportList = [];
+        for (let i = 0; i < validRawRows.length; i++) {
+            const row = validRawRows[i];
+
+            // 1. Mã VT / Mã Vạch
+            const rawCode = getRowVal(
+                row,
+                'mã vt', 'mãvt', 'mã vật tư', 'ma vt', 'mavt', 'ma vat tu',
+                'mã vạch', 'mãvạch', 'ma vach', 'mavach',
+                'mã hàng', 'ma hang', 'mã hàng hóa', 'ma hang hoa',
+                'mã sp', 'ma sp', 'mã sản phẩm', 'ma san pham',
+                'barcode', 'item code', 'itemcode', 'item_code', 'code', 'sku',
+                'ma_vach', 'ma_vt'
+            );
+            const ma_vach = String(rawCode).trim();
+            if (!ma_vach) continue; // Bỏ qua dòng không có mã vạch
+
+            // 2. Tên hàng hóa từ Excel (người dùng nhập gì cũng được, app tự động map lại theo vật tư)
+            const rawTenHangHoa = getRowVal(
+                row,
+                'tên hàng hóa', 'ten hang hoa', 'tên hàng', 'ten hang',
+                'tên mặt hàng', 'ten mat hang', 'tên sản phẩm', 'ten san pham',
+                'tên vật tư', 'ten vat tu',
+                'product name', 'item name', 'name', 'description',
+                'ten_hang_hoa', 'ten_mat_hang', 'ten_san_pham'
+            );
+
+            // 3. LOT
+            const rawLot = getRowVal(
+                row,
+                'lot', 'lô', 'số lô', 'so lo', 'solo', 'lô sx', 'lo sx',
+                'batch', 'batch no', 'batch_no', 'lot no', 'lot_no', 'so_lo'
+            );
+            const lot = String(rawLot).trim() || '-';
+
+            // 4. Date (hạn dùng định dạng dd/mm/yyyy)
+            const rawDate = getRowVal(
+                row,
+                'date', 'date expiry', 'date_expiry', 'expiry', 'exp date', 'exp_date',
+                'hạn dùng', 'han dung', 'hsd', 'hạn sử dụng', 'han su dung',
+                'ngày hết hạn', 'ngay het han', 'date_hsd', 'hạn'
+            );
+            const date_expiry = parseExcelDate(rawDate);
+
+            // 5. Số lượng (>= 0)
+            const rawQty = getRowVal(
+                row,
+                'số lượng', 'so luong', 'soluong', 'sl', 'số lượng thực tế',
+                'quantity', 'qty', 'count', 'so_luong', 'sl_nhap', 'sl_xuat'
+            );
+            let parsedQty = 1;
+            if (rawQty !== '') {
+                const p = parseFloat(String(rawQty).replace(/,/g, ''));
+                parsedQty = isNaN(p) ? 0 : Math.max(0, p);
+            }
+
+            rawImportList.push({
+                ma_vach: ma_vach,
+                excel_ten_hang_hoa: String(rawTenHangHoa).trim(),
+                lot: lot,
+                date_expiry: date_expiry,
+                so_luong: parsedQty
+            });
+        }
+
+        if (rawImportList.length === 0) {
+            if (typeof showVatTuNoticeModal === 'function') {
+                showVatTuNoticeModal(
+                    'warning',
+                    'Không Tìm Thấy Dữ Liệu Hợp Lệ',
+                    'File Excel không có dòng nào chứa cột <strong>Mã VT / Mã Vạch</strong> hợp lệ!<br><br>' +
+                    '<i>Gợi ý các cột hỗ trợ: Mã VT, Tên hàng hóa, LOT, Date (dd/mm/yyyy), Số lượng.</i>'
+                );
+            } else {
+                alert('File Excel không có dòng nào chứa cột Mã VT / Mã Vạch hợp lệ!');
+            }
+            fileInput.value = '';
+            return;
+        }
+
+        // --- TRA CỨU TÊN HÀNG HÓA TỪ DANH MỤC VẬT TƯ (MASTER DATA) ---
+        let allVatTu = [];
+        if (typeof vatTuData !== 'undefined' && Array.isArray(vatTuData) && vatTuData.length > 0) {
+            allVatTu = vatTuData;
+        } else if (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData) && window.vatTuData.length > 0) {
+            allVatTu = window.vatTuData;
+        }
+
+        const vatTuLookupMap = new Map();
+        const missingBarcodes = [];
+
+        allVatTu.forEach(v => {
+            const vCode = v.ma_vach ? String(v.ma_vach).trim().toLowerCase() : '';
+            const vQr = v.ma_qr ? String(v.ma_qr).trim().toLowerCase() : '';
+            if (vCode && !vatTuLookupMap.has(vCode)) vatTuLookupMap.set(vCode, v);
+            if (vQr && !vatTuLookupMap.has(vQr)) vatTuLookupMap.set(vQr, v);
+        });
+
+        rawImportList.forEach(item => {
+            const qLower = item.ma_vach.toLowerCase();
+            if (!vatTuLookupMap.has(qLower)) {
+                if (!missingBarcodes.includes(item.ma_vach)) {
+                    missingBarcodes.push(item.ma_vach);
+                }
+            }
+        });
+
+        // Nếu có mã vạch chưa có sẵn trong RAM, truy vấn bảng san_pham Supabase
+        if (missingBarcodes.length > 0) {
+            const client = getNhapXuatSupabaseClient();
+            if (client) {
+                try {
+                    const { data } = await client
+                        .from('san_pham')
+                        .select('*')
+                        .in('ma_vach', missingBarcodes);
+
+                    if (data && data.length > 0) {
+                        data.forEach(v => {
+                            const vCode = v.ma_vach ? String(v.ma_vach).trim().toLowerCase() : '';
+                            if (vCode) vatTuLookupMap.set(vCode, v);
+                        });
+                    }
+                } catch (e) {
+                    console.warn("handleNxExcelFileImport: Error querying Supabase table san_pham:", e);
+                }
+            }
+        }
+
+        // Bổ sung vào danh sách đơn hàng (currentDraftNxItems)
+        const currentMaDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || 'ĐƠN-NHÁP';
+        const currentLoai = document.getElementById('nx-input-loai')?.value || currentDraftOrder.loai_don || 'Nhập';
+        
+        const validRows = [];
+        const notFoundCodes = [];
+
+        rawImportList.forEach(row => {
+            const qLower = row.ma_vach.toLowerCase();
+            const matchedVatTu = vatTuLookupMap.get(qLower);
+
+            if (matchedVatTu) {
+                // TỰ ĐỘNG LẤY TÊN THEO MÃ VẠCH TỪ VIEW VẬT TƯ
+                const officialName = matchedVatTu.ten_mat_hang || matchedVatTu.ten_hoa_don || matchedVatTu.ten_san_pham || row.excel_ten_hang_hoa || 'Vật tư y tế';
+                const officialBarcode = matchedVatTu.ma_vach || row.ma_vach;
+                validRows.push({
+                    ma_vach: officialBarcode,
+                    ten_hang_hoa: officialName,
+                    lot: row.lot || '-',
+                    date_expiry: row.date_expiry || null,
+                    so_luong: row.so_luong
+                });
+            } else {
+                if (!notFoundCodes.includes(row.ma_vach)) {
+                    notFoundCodes.push(row.ma_vach);
+                }
+            }
+        });
+
+        // Hàm nạp các dòng hợp lệ vào đơn
+        const applyValidRowsToDraft = (rowsToApply) => {
+            if (!rowsToApply || rowsToApply.length === 0) {
+                if (typeof showToast === 'function') {
+                    showToast('warning', 'Không Có Dữ Liệu', 'Không có sản phẩm hợp lệ nào để thêm vào đơn.');
+                }
+                return;
+            }
+
+            let importedCount = 0;
+            let totalImportedQty = 0;
+
+            rowsToApply.forEach(row => {
+                const cleanLot = row.lot || '-';
+                const cleanDate = row.date_expiry || null;
+                const qty = row.so_luong;
+
+                // Kiểm tra xem sản phẩm đã có trong bảng chưa (trùng mã vạch + lot + date)
+                const existingIndex = currentDraftNxItems.findIndex(item => {
+                    const sameBarcode = item.ma_vach === row.ma_vach;
+                    const sameLot = (item.lot || '-') === cleanLot;
+                    const itemDate = item.date_expiry ? (formatDateForNx(item.date_expiry) || item.date_expiry) : '-';
+                    const rowDate = cleanDate ? (formatDateForNx(cleanDate) || cleanDate) : '-';
+                    return sameBarcode && sameLot && itemDate === rowDate;
+                });
+
+                if (existingIndex !== -1) {
+                    currentDraftNxItems[existingIndex].so_luong = (Number(currentDraftNxItems[existingIndex].so_luong) || 0) + qty;
+                    currentDraftNxItems[existingIndex].ten_hang_hoa = row.ten_hang_hoa;
+                } else {
+                    currentDraftNxItems.push({
+                        ma_qr: buildMaQr(row.ma_vach, cleanLot, cleanDate),
+                        ma_vach: row.ma_vach,
+                        lot: cleanLot,
+                        date_expiry: cleanDate,
+                        ten_hang_hoa: row.ten_hang_hoa,
+                        so_luong: qty
+                    });
+                }
+
+                importedCount++;
+                totalImportedQty += qty;
+            });
+
+            // Ghi nhật ký thao tác
+            logNxOrderAction(
+                currentMaDon,
+                currentLoai,
+                'NHAP_EXCEL',
+                `Nạp file Excel [${file.name}] thêm ${importedCount} dòng (Tổng SL: ${totalImportedQty})`
+            );
+
+            // Lưu đơn nháp và cập nhật bảng hiển thị
+            currentDraftOrder.items = currentDraftNxItems;
+            saveNxDraftToStorage();
+            renderNxDraftItemsTable();
+            renderNhapXuatOrderList(filteredNhapXuatData);
+            checkNxOrderModified();
+
+            // Âm thanh thông báo
+            if (typeof playScanSuccessSound === 'function') {
+                playScanSuccessSound();
+            }
+
+            // Thông báo đơn giản: Đã thêm ... sản phẩm : tổng số lượng: ...
+            if (typeof showVatTuNoticeModal === 'function') {
+                showVatTuNoticeModal('success', 'Nhập Excel Thành Công', `Đã thêm <strong>${importedCount}</strong> sản phẩm : Tổng số lượng: <strong style="color: #10b981;">${totalImportedQty.toLocaleString('vi-VN')}</strong>`);
+            } else if (typeof showToast === 'function') {
+                showToast('success', 'Nhập Excel Thành Công', `Đã thêm ${importedCount} sản phẩm : Tổng số lượng: ${totalImportedQty.toLocaleString('vi-VN')}`);
+            }
+        };
+
+        // Nếu có mã vạch không tìm thấy -> Hiển thị cửa sổ nổi báo lỗi (Hủy / OK bỏ qua)
+        if (notFoundCodes.length > 0) {
+            if (typeof playScanErrorSound === 'function') {
+                playScanErrorSound();
+            }
+
+            const errorListHtml = notFoundCodes.map(c => `• ${escapeHtml(c)}`).join('<br>');
+
+            if (validRows.length === 0) {
+                if (typeof showVatTuNoticeModal === 'function') {
+                    showVatTuNoticeModal(
+                        'error',
+                        'Mã Vạch Không Tồn Tại',
+                        `Tất cả <strong>${notFoundCodes.length} mã vạch</strong> trong file Excel không tồn tại trong kho Vật Tư:<br><br>` +
+                        `<div style="max-height: 130px; overflow-y: auto; background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 12px; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">${errorListHtml}</div>`
+                    );
+                } else {
+                    alert(`Không tìm thấy mã vạch trong kho: ${notFoundCodes.join(', ')}`);
+                }
+                return;
+            }
+
+            const confirmMsg = `Phát hiện <strong>${notFoundCodes.length} mã vạch</strong> không tìm thấy trong kho Vật Tư:<br><br>` +
+                `<div style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 12px; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); margin-bottom: 12px;">${errorListHtml}</div>` +
+                `Bạn có muốn <strong>bỏ qua các mã lỗi này</strong> và tiếp tục thêm <strong>${validRows.length} sản phẩm hợp lệ</strong> vào đơn không?`;
+
+            showGenericConfirmModal(
+                'LỖI MÃ VẠCH',
+                'Phát Hiện Mã Vạch Không Tồn Tại',
+                confirmMsg,
+                'Nhấn "Đồng ý" để nạp các mã hợp lệ và bỏ qua mã lỗi, hoặc "Hủy bỏ" để dừng lại.',
+                '#ef4444',
+                'Đồng ý (Bỏ qua mã lỗi)',
+                () => {
+                    applyValidRowsToDraft(validRows);
+                }
+            );
+        } else {
+            // Tất cả hợp lệ
+            applyValidRowsToDraft(validRows);
+        }
+
+    } catch (err) {
+        console.error("handleNxExcelFileImport error:", err);
+        if (typeof showVatTuNoticeModal === 'function') {
+            showVatTuNoticeModal('error', 'Lỗi Đọc File Excel', `Có lỗi xảy ra khi đọc file Excel: ${err.message || err}`);
+        } else {
+            alert(`Có lỗi khi đọc file Excel: ${err.message || err}`);
+        }
+    } finally {
+        fileInput.value = '';
+    }
+}
+
 // Render Draft Order Items Table
 function renderNxDraftItemsTable() {
     const tbody = document.getElementById('nx-items-table-body');
@@ -2026,15 +2576,24 @@ function renderNxDraftItemsTable() {
         const nameEscaped = escapeHtml(item.ten_hang_hoa || '-');
 
         let barcodeStyle = '';
-        let stockLabel = '';
+
+        // TỒN DƯỚI MÃ VẠCH: LUÔN XUẤT HIỆN KỂ CẢ NHẬP HAY XUẤT
+        const availableStock = getAvailableStockInNx(item.ma_vach, item.lot, item.date_expiry, branchCode, currentMaDon);
 
         if (currentLoai === 'Xuất') {
-            const availableStock = getAvailableStockInNx(item.ma_vach, item.lot, item.date_expiry, branchCode, currentMaDon);
-            if (availableStock <= 0 || qty >= availableStock) {
+            if (availableStock <= 0 || qty > availableStock) {
                 barcodeStyle = 'background: #ef4444 !important; color: #ffffff !important; font-weight: bold; border: 1px solid #dc2626; box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);';
             }
-            stockLabel = `<span style="font-size: 11px; font-weight: 600; color: ${availableStock <= 0 ? '#ef4444' : '#f59e0b'}; line-height: 1.2; text-align: center; display: block; white-space: nowrap;">Tồn: ${availableStock}</span>`;
         }
+
+        let stockColor = '#10b981';
+        if (availableStock <= 0) {
+            stockColor = '#ef4444';
+        } else if (currentLoai === 'Xuất' && qty >= availableStock) {
+            stockColor = '#f59e0b';
+        }
+
+        const stockLabel = `<span style="font-size: 11px; font-weight: 600; color: ${stockColor}; line-height: 1.2; text-align: center; display: block; white-space: nowrap;">Tồn: ${availableStock}</span>`;
 
         let qtyDisplay = `<input type="number" min="0" class="form-control-sm" style="width: 75px; text-align: right; font-weight: 700; color: #10b981;" value="${qty}" onchange="updateNxDraftItemQty(${idx}, this.value)">`;
         if (currentDraftOrder.trang_thai === 'Đã hủy') {
@@ -2372,6 +2931,8 @@ async function saveNxOrderToSystem() {
         }
     }
 
+    const isAllZeroQty = currentDraftNxItems.length > 0 && currentDraftNxItems.every(x => (Number(x.so_luong) || 0) === 0);
+
     const orderPayload = {
         ma_don: maDon,
         loai_don: loaiDon,
@@ -2379,7 +2940,8 @@ async function saveNxOrderToSystem() {
         user_name: userName,
         chi_tiet_san_pham: currentDraftNxItems,
         tong_so_luong: tongSoLuong,
-        file_url: finalFileUrl
+        file_url: finalFileUrl,
+        trang_thai: isAllZeroQty ? 'Chờ' : 'Hoàn thành'
     };
 
     const client = getNhapXuatSupabaseClient();
@@ -2413,7 +2975,12 @@ async function saveNxOrderToSystem() {
                     file_url: finalFileUrl
                 };
 
-                if (isPendingOrder) {
+                const selectedOrder = nhapXuatData.find(x => String(x.id) === String(selectedNxOrderId) || x.ma_don === maDon);
+                if (selectedOrder && selectedOrder.trang_thai === 'Đã hủy') {
+                    updatePayload.trang_thai = 'Đã hủy';
+                } else if (isAllZeroQty) {
+                    updatePayload.trang_thai = 'Chờ';
+                } else if (isPendingOrder) {
                     updatePayload.trang_thai = 'Done';
                 }
 
@@ -2856,19 +3423,27 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
 
     const theKhoEntries = (order.chi_tiet_san_pham || [])
         .filter(item => Number(item.so_luong) > 0)
-        .map(item => ({
-            ma_don: maDon,
-            ma_qr: item.ma_qr || item.ma_vach || '',
-            ma_vach: item.ma_vach || item.ma_qr || 'KHONG-MA',
-            lot: item.lot || '-',
-            date_expiry: parseDateToYyyyMmDd(item.date_expiry),
-            ten_hang_hoa: item.ten_hang_hoa || 'Sản phẩm kho',
-            loai: normalizedLoai, // Khớp chính xác CHECK (loai IN ('Nhập', 'Xuất'))
-            so_luong: Number(item.so_luong),
-            muc_dich: order.muc_dich || '',
-            user_name: order.user_name || 'Thái Trung Tín - CN1',
-            created_at: new Date().toISOString()
-        }));
+        .map(item => {
+            let itemMaQr = (item.ma_qr || '').trim();
+            // Sanitize trailing empty delimiters like `;-;` or `;-`
+            itemMaQr = itemMaQr.replace(/;-;?$/g, '').replace(/;-$/g, '');
+            if (!itemMaQr) {
+                itemMaQr = buildMaQr(item.ma_vach || '', item.lot, item.date_expiry);
+            }
+            return {
+                ma_don: maDon,
+                ma_qr: itemMaQr || item.ma_vach || '',
+                ma_vach: item.ma_vach || item.ma_qr || 'KHONG-MA',
+                lot: (item.lot && item.lot !== 'null' && item.lot !== 'undefined') ? item.lot : '-',
+                date_expiry: parseDateToYyyyMmDd(item.date_expiry),
+                ten_hang_hoa: item.ten_hang_hoa || 'Sản phẩm kho',
+                loai: normalizedLoai, // Khớp chính xác CHECK (loai IN ('Nhập', 'Xuất'))
+                so_luong: Number(item.so_luong),
+                muc_dich: order.muc_dich || '',
+                user_name: order.user_name || 'Thái Trung Tín - CN1',
+                created_at: new Date().toISOString()
+            };
+        });
 
     const client = getNhapXuatSupabaseClient();
     try {
@@ -2986,6 +3561,8 @@ window.fetchNhapXuatData = fetchNhapXuatData;
 window.createNewNhapXuatOrderForm = createNewNhapXuatOrderForm;
 window.applyNhapXuatFilters = applyNhapXuatFilters;
 window.handleNxQrScannerAdd = handleNxQrScannerAdd;
+window.handleNxExcelFileImport = handleNxExcelFileImport;
+window.downloadNhapXuatExcelTemplate = downloadNhapXuatExcelTemplate;
 
 // =========================================================================
 // PDF Invoice Batch Processor (Core Logic for Manual Upload & Folder Watcher)
