@@ -613,10 +613,10 @@ html, body {
    ========================================================================== */
 
 .tq-dashboard-container {
-    padding: 22px 26px;
+    padding: 12px 20px 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 14px;
     width: 100%;
     max-width: 1600px;
     margin: 0 auto;
@@ -627,13 +627,13 @@ html, body {
 .tq-header-bar {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    border-radius: 16px;
-    padding: 18px 22px;
+    border-radius: 14px;
+    padding: 12px 18px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 12px;
     backdrop-filter: blur(16px);
     box-shadow: var(--shadow-soft);
 }
@@ -779,7 +779,7 @@ html, body {
 .tq-kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    gap: 12px;
 }
 
 @media (max-width: 1200px) {
@@ -914,11 +914,11 @@ html, body {
 .tq-quick-actions-bar {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    border-radius: 14px;
-    padding: 12px 18px;
+    border-radius: 12px;
+    padding: 9px 16px;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
     flex-wrap: wrap;
     backdrop-filter: blur(12px);
 }
