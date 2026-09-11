@@ -56,14 +56,14 @@ function getTongQuanLoggedUser() {
 }
 
 function isTongQuanManager(user) {
-    if (!user) return true; // Default to manager if no session
+    if (!user) return false; // If no session → default staff view (locked)
     const roleLower = (user.role || "").toLowerCase().trim();
     const branchLower = (user.branch || "").toLowerCase().trim();
-    return roleLower === "admin" || 
-           roleLower.includes("quản lý") || 
+    // Only "Quản lý" role can freely choose all branches
+    // Admin and Nhân viên are locked to their own branch
+    return roleLower.includes("quản lý") || 
            roleLower.includes("quan ly") || 
-           roleLower.includes("manager") || 
-           roleLower.includes("bác sĩ trưởng") ||
+           roleLower.includes("manager") ||
            branchLower.includes("toàn hệ thống") ||
            branchLower.includes("all");
 }
