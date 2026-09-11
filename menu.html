@@ -226,8 +226,19 @@
                 </div>
 
                 <!-- Right Side: User Profile Header Widget & Dropdown -->
-                <div class="header-user-area">
-                    <div id="user-profile-widget" class="user-profile-widget" title="Bấm để xem tùy chọn tài khoản">
+                <div class="header-user-area" style="display:flex; align-items:center; gap:10px;">
+
+                    <!-- Global Search Trigger Button -->
+                    <button type="button" class="gs-trigger-btn" onclick="openGlobalSearch()" title="Tim kiem toan cuc (Ctrl+K)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <span class="gs-trigger-text">Tim kiem...</span>
+                        <span class="gs-trigger-hint">Ctrl K</span>
+                    </button>
+
+                    <div id="user-profile-widget" class="user-profile-widget" title="Bam de xem tuy chon tai khoan">
                         <div class="user-avatar" id="header-user-avatar">NV</div>
                         <div class="user-info-text">
                             <span class="user-display-name" id="header-user-name">Đang tải...</span>
@@ -3739,8 +3750,9 @@
     <script src="nhap_xuat.js?v=69"></script>
     <script src="the_kho.js?v=20"></script>
     <script src="kiem_kho.js?v=67"></script>
-    <script src="tong_quan.js?v=2"></script>
+    <script src="tong_quan.js?v=3"></script>
     <script src="auth.js?v=4"></script>
+    <script src="global_search.js?v=1"></script>
 </body>
 
 </html>
