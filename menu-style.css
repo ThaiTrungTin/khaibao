@@ -6573,3 +6573,178 @@ mark.gs-highlight {
     .gs-panel { max-width: calc(100vw - 32px); margin: 0 16px; }
     .gs-modal { padding-top: 20px; }
 }
+
+/* ==========================================================================
+   Inline Global Search Bar (header center)
+   ========================================================================== */
+
+.app-global-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.gs-inline-wrap {
+    flex: 1;
+    max-width: 480px;
+    position: relative;
+    margin: 0 auto;
+}
+
+.gs-inline-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--input-bg);
+    border: 1.5px solid rgba(99,102,241,0.3);
+    border-radius: 12px;
+    padding: 9px 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.gs-inline-bar:focus-within {
+    border-color: rgba(99,102,241,0.7);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+.gs-inline-icon {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    color: #6366f1;
+}
+
+.gs-inline-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-family: inherit;
+    min-width: 0;
+}
+
+.gs-inline-input::placeholder { color: var(--text-muted); font-size: 13px; }
+
+.gs-inline-kbd {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text-muted);
+    font-family: inherit;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+[data-theme="light"] .gs-inline-kbd {
+    background: rgba(0,0,0,0.05);
+    border-color: rgba(0,0,0,0.12);
+}
+
+/* Inline Dropdown */
+.gs-inline-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: rgba(17,24,39,0.98);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    max-height: 480px;
+    overflow-y: auto;
+    z-index: 9999;
+    animation: gsDropIn 0.15s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+[data-theme="light"] .gs-inline-dropdown {
+    background: rgba(255,255,255,0.99);
+    border-color: rgba(99,102,241,0.25);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+}
+
+@keyframes gsDropIn {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.gs-inline-dropdown.gs-dd-open { display: block; }
+
+.gs-inline-dropdown::-webkit-scrollbar { width: 4px; }
+.gs-inline-dropdown::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.35); border-radius: 4px; }
+
+.gs-dd-group {
+    padding: 9px 14px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.gs-dd-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-left: 2px solid transparent;
+}
+.gs-dd-item:hover, .gs-dd-item.gs-dd-active {
+    background: rgba(99,102,241,0.08);
+    border-left-color: #6366f1;
+}
+[data-theme="light"] .gs-dd-item:hover,
+[data-theme="light"] .gs-dd-item.gs-dd-active { background: rgba(99,102,241,0.06); }
+
+.gs-dd-item-body { flex: 1; min-width: 0; }
+.gs-dd-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.gs-dd-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.gs-dd-tag {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid;
+}
+.gs-dd-hint, .gs-dd-empty {
+    padding: 20px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12.5px;
+}
+mark.gs-hl {
+    background: rgba(251,191,36,0.25);
+    color: #fbbf24;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+@media (max-width: 900px) {
+    .gs-inline-wrap { max-width: 280px; }
+    .gs-inline-kbd { display: none; }
+}
+@media (max-width: 650px) {
+    .gs-inline-wrap { display: none; }
+}

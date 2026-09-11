@@ -1,384 +1,250 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    GAIA Animal Hospital - Global Search Module (global_search.js)
-   Ctrl+K spotlight-style search across all data sources in the app.
+   Inline dropdown search attached to header input. No modal.
    ========================================================================== */
 
 (function () {
     'use strict';
 
-    let gsIsOpen = false;
     let gsDebounceTimer = null;
     let gsActiveIndex = -1;
     let gsCurrentResults = [];
+    let gsDropdownVisible = false;
 
     // ── Init ──────────────────────────────────────────────────────────────────
     function initGlobalSearch() {
-        renderGlobalSearchModal();
-        bindGlobalSearchEvents();
-    }
-
-    // ── Render Modal HTML ──────────────────────────────────────────────────────
-    function renderGlobalSearchModal() {
-        if (document.getElementById('gs-modal')) return;
-
-        const modal = document.createElement('div');
-        modal.id = 'gs-modal';
-        modal.className = 'gs-modal';
-        modal.setAttribute('role', 'dialog');
-        modal.setAttribute('aria-label', 'Tim kiem toan cuc');
-        modal.innerHTML = `
-            <div class="gs-backdrop" id="gs-backdrop"></div>
-            <div class="gs-panel" id="gs-panel">
-                <div class="gs-input-wrap">
-                    <svg class="gs-icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                    <input
-                        type="text"
-                        id="gs-input"
-                        class="gs-input"
-                        placeholder="Tim kiem vat tu, don kho, ca kham, nhan su..."
-                        autocomplete="off"
-                        spellcheck="false"
-                    >
-                    <kbd class="gs-kbd-hint">ESC</kbd>
-                    <button type="button" class="gs-close-btn" id="gs-close-btn" title="Dong">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                </div>
-                <div class="gs-results" id="gs-results">
-                    <div class="gs-hint-state">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <span>Go de tim vat tu, don nhap xuat, ca kham, nhan su...</span>
-                    </div>
-                </div>
-                <div class="gs-footer">
-                    <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> Di chuyen</span>
-                    <span><kbd>Enter</kbd> Chon</span>
-                    <span><kbd>Esc</kbd> Dong</span>
-                    <span class="gs-footer-sep"></span>
-                    <span><kbd>Ctrl</kbd><kbd>K</kbd> Mo tim kiem</span>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
-
-    // ── Event Bindings ─────────────────────────────────────────────────────────
-    function bindGlobalSearchEvents() {
-        // Ctrl+K shortcut
+        const tryAttach = () => {
+            const input = document.getElementById('gs-header-input');
+            if (!input) { setTimeout(tryAttach, 100); return; }
+            attachInlineSearch(input);
+        };
+        tryAttach();
         document.addEventListener('keydown', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                toggleGlobalSearch();
+                const inp = document.getElementById('gs-header-input');
+                if (inp) { inp.focus(); inp.select(); }
             }
-            if (e.key === 'Escape' && gsIsOpen) {
-                closeGlobalSearch();
-            }
-        });
-
-        // Input typing
-        document.addEventListener('input', function (e) {
-            if (e.target && e.target.id === 'gs-input') {
-                onGsInput(e.target.value);
-            }
-        });
-
-        // Keyboard navigation within results
-        document.addEventListener('keydown', function (e) {
-            if (!gsIsOpen) return;
-            if (e.key === 'ArrowDown') { e.preventDefault(); moveGsSelection(1); }
-            if (e.key === 'ArrowUp') { e.preventDefault(); moveGsSelection(-1); }
-            if (e.key === 'Enter') { e.preventDefault(); selectActiveResult(); }
-        });
-
-        // Close on backdrop click
-        document.addEventListener('click', function (e) {
-            if (e.target && e.target.id === 'gs-backdrop') closeGlobalSearch();
-            if (e.target && e.target.id === 'gs-close-btn') closeGlobalSearch();
-            if (e.target && e.target.closest && e.target.closest('#gs-close-btn')) closeGlobalSearch();
         });
     }
 
-    // ── Open / Close ───────────────────────────────────────────────────────────
-    window.openGlobalSearch = function () {
-        const modal = document.getElementById('gs-modal');
-        if (!modal) return;
-        gsIsOpen = true;
-        gsActiveIndex = -1;
-        modal.classList.add('gs-open');
-        setTimeout(() => {
-            const inp = document.getElementById('gs-input');
-            if (inp) { inp.focus(); inp.value = ''; }
-            resetGsResults();
-        }, 50);
-    };
+    function attachInlineSearch(input) {
+        input.addEventListener('focus', function () {
+            if (input.value.trim().length > 0) performSearch(input.value.trim());
+            else showDropdownHint();
+        });
+        input.addEventListener('input', function () {
+            clearTimeout(gsDebounceTimer);
+            gsDebounceTimer = setTimeout(() => performSearch(input.value.trim()), 150);
+        });
+        input.addEventListener('keydown', function (e) {
+            if (!gsDropdownVisible) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); moveGsSelection(1); }
+            if (e.key === 'ArrowUp')   { e.preventDefault(); moveGsSelection(-1); }
+            if (e.key === 'Enter')     { e.preventDefault(); selectActiveResult(); }
+            if (e.key === 'Escape')    { hideDropdown(); input.blur(); }
+        });
+        document.addEventListener('mousedown', function (e) {
+            const wrap = document.getElementById('gs-inline-wrap');
+            if (wrap && !wrap.contains(e.target)) hideDropdown();
+        });
+    }
 
-    function closeGlobalSearch() {
-        const modal = document.getElementById('gs-modal');
-        if (!modal) return;
-        gsIsOpen = false;
-        modal.classList.remove('gs-open');
+    // ── Dropdown visibility ────────────────────────────────────────────────────
+    function showDropdownHint() {
+        const dd = document.getElementById('gs-inline-dropdown');
+        if (!dd) return;
+        dd.innerHTML = '<div class="gs-dd-hint">&#x1F50D; Go de tim vat tu, don kho, ca kham, nhan su...</div>';
+        dd.classList.add('gs-dd-open');
+        gsDropdownVisible = true;
+    }
+
+    function hideDropdown() {
+        const dd = document.getElementById('gs-inline-dropdown');
+        if (dd) dd.classList.remove('gs-dd-open');
+        gsDropdownVisible = false;
         gsActiveIndex = -1;
         gsCurrentResults = [];
     }
 
-    function toggleGlobalSearch() {
-        if (gsIsOpen) closeGlobalSearch();
-        else window.openGlobalSearch();
-    }
+    // Legacy compat
+    window.openGlobalSearch = function () {
+        const inp = document.getElementById('gs-header-input');
+        if (inp) { inp.focus(); inp.select(); }
+    };
 
     // ── Search Logic ───────────────────────────────────────────────────────────
-    function onGsInput(query) {
-        clearTimeout(gsDebounceTimer);
-        gsDebounceTimer = setTimeout(() => performSearch(query.trim()), 150);
-    }
-
     function performSearch(query) {
-        const container = document.getElementById('gs-results');
-        if (!container) return;
-
-        if (!query || query.length < 1) {
-            resetGsResults();
-            return;
-        }
+        const dd = document.getElementById('gs-inline-dropdown');
+        if (!dd) return;
+        if (!query || query.length < 1) { showDropdownHint(); return; }
 
         const q = query.toLowerCase();
         const results = [];
 
-        // --- 1. Vat Tu / Thuoc ---
+        // 1. Vat Tu
         const rawVatTu = getDataSafe('vatTuData');
         const vatTuHits = rawVatTu.filter(item =>
-            strMatch(item.ten_mat_hang, q) ||
-            strMatch(item.ma_vach, q) ||
-            strMatch(item.danh_muc, q) ||
-            strMatch(item.nhom_hang, q)
+            strMatch(item.ten_mat_hang, q) || strMatch(item.ma_vach, q) ||
+            strMatch(item.danh_muc, q) || strMatch(item.nhom_hang, q)
         ).slice(0, 8);
-
         if (vatTuHits.length > 0) {
-            results.push({ type: 'group', label: '&#x1F9EA; V&#7853;t T&#432; / Thu&#7889;c' });
+            results.push({ type: 'group', label: 'Vat Tu / Thuoc' });
             vatTuHits.forEach(item => results.push({
-                type: 'vattu',
+                type: 'result',
                 title: item.ten_mat_hang || item.ma_vach || '-',
-                sub: 'Ma: ' + (item.ma_vach || '-') + ' \u2022 ' + (item.danh_muc || item.nhom_hang || 'Chung'),
-                tag: '\u2192 V&#7853;t T&#432;',
-                tagColor: '#10b981',
-                action: () => {
-                    closeGlobalSearch();
-                    if (typeof window.jumpToVatTuItem === 'function') window.jumpToVatTuItem(item.ma_vach || '');
-                    else { window.location.hash = 'vat-tu'; }
-                }
+                sub: 'Ma: ' + (item.ma_vach || '-') + ' - ' + (item.danh_muc || item.nhom_hang || 'Chung'),
+                tag: 'Vat Tu', tagColor: '#10b981',
+                action: () => { closeAndNavigate(); if (typeof window.jumpToVatTuItem === 'function') window.jumpToVatTuItem(item.ma_vach || ''); else window.location.hash = 'vat-tu'; }
             }));
         }
 
-        // --- 2. Don Nhap / Xuat ---
+        // 2. Nhap Xuat
         const rawNx = getDataSafe('nhapXuatData');
         const nxHits = rawNx.filter(ord =>
-            strMatch(ord.ma_don, q) ||
-            strMatch(ord.muc_dich, q) ||
-            strMatch(ord.user_name, q) ||
-            strMatch(ord.loai_don, q)
+            strMatch(ord.ma_don, q) || strMatch(ord.muc_dich, q) ||
+            strMatch(ord.user_name, q) || strMatch(ord.loai_don, q)
         ).slice(0, 8);
-
         if (nxHits.length > 0) {
-            results.push({ type: 'group', label: '&#x1F4E6; &#272;&#417;n Nh&#7853;p / Xu&#7845;t Kho' });
+            results.push({ type: 'group', label: 'Don Nhap / Xuat Kho' });
             nxHits.forEach(ord => {
-                const isNhap = (ord.loai_don || '').includes('Nh');
+                const isNhap = (ord.loai_don || '').toLowerCase().includes('nh');
                 results.push({
-                    type: 'nhapxuat',
+                    type: 'result',
                     title: ord.ma_don || 'DON-KHO',
-                    sub: (isNhap ? '[Nhap]' : '[Xuat]') + ' \u2022 ' + (ord.user_name || '-') + ' \u2022 ' + formatGsDate(ord.created_at),
-                    tag: '\u2192 Nh&#7853;p Xu&#7845;t',
-                    tagColor: isNhap ? '#10b981' : '#f59e0b',
-                    action: () => {
-                        closeGlobalSearch();
-                        if (typeof window.jumpToNxOrder === 'function') window.jumpToNxOrder(ord.id || ord.ma_don);
-                        else { window.location.hash = 'nhap-xuat'; }
-                    }
+                    sub: (isNhap ? '[Nhap]' : '[Xuat]') + ' - ' + (ord.user_name || '-') + ' - ' + formatGsDate(ord.created_at),
+                    tag: isNhap ? 'Nhap' : 'Xuat', tagColor: isNhap ? '#10b981' : '#f59e0b',
+                    action: () => { closeAndNavigate(); if (typeof window.jumpToNxOrder === 'function') window.jumpToNxOrder(ord.id || ord.ma_don); else window.location.hash = 'nhap-xuat'; }
                 });
             });
         }
 
-        // --- 3. The Kho ---
+        // 3. The Kho
         const rawTK = getDataSafe('theKhoData');
         const tkHits = rawTK.filter(tk =>
-            strMatch(tk.ten_hang_hoa, q) ||
-            strMatch(tk.ma_vach, q) ||
-            strMatch(tk.ma_qr, q) ||
-            strMatch(tk.lot, q) ||
-            strMatch(tk.user_name, q)
+            strMatch(tk.ten_hang_hoa, q) || strMatch(tk.ma_vach, q) ||
+            strMatch(tk.lot, q) || strMatch(tk.user_name, q)
         ).slice(0, 8);
-
         if (tkHits.length > 0) {
-            results.push({ type: 'group', label: '&#x1F4CB; Th&#7867; Kho' });
+            results.push({ type: 'group', label: 'The Kho' });
             tkHits.forEach(tk => results.push({
-                type: 'thekho',
+                type: 'result',
                 title: tk.ten_hang_hoa || tk.ma_vach || '-',
-                sub: (tk.loai || '-') + ' \u2022 MV: ' + (tk.ma_vach || '-') + ' \u2022 ' + (tk.user_name || '-'),
-                tag: '\u2192 Th&#7867; Kho',
-                tagColor: '#38bdf8',
-                action: () => {
-                    closeGlobalSearch();
-                    if (typeof window.navigateToTheKhoFilter === 'function')
-                        window.navigateToTheKhoFilter(tk.ma_vach || '', tk.lot || '', '');
-                    else { window.location.hash = 'the-kho'; }
-                }
+                sub: (tk.loai || '-') + ' - MV: ' + (tk.ma_vach || '-') + ' - ' + (tk.user_name || '-'),
+                tag: 'The Kho', tagColor: '#38bdf8',
+                action: () => { closeAndNavigate(); if (typeof window.navigateToTheKhoFilter === 'function') window.navigateToTheKhoFilter(tk.ma_vach || '', tk.lot || '', ''); else window.location.hash = 'the-kho'; }
             }));
         }
 
-        // --- 4. Ca Kham ---
+        // 4. Ca Kham
         const rawIntakes = getDataSafe('intakesData');
         const intakeHits = rawIntakes.filter(r =>
-            strMatch(r.pet_name, q) ||
-            strMatch(r.owner_name, q) ||
-            strMatch(r.owner_phone, q) ||
-            strMatch(r.bac_si_kham, q) ||
-            strMatch(r.pet_breed, q)
+            strMatch(r.pet_name, q) || strMatch(r.owner_name, q) ||
+            strMatch(r.owner_phone, q) || strMatch(r.bac_si_kham, q)
         ).slice(0, 8);
-
         if (intakeHits.length > 0) {
-            results.push({ type: 'group', label: '&#x1F43E; Ca Kh&#225;m' });
+            results.push({ type: 'group', label: 'Ca Kham' });
             intakeHits.forEach(r => results.push({
-                type: 'intake',
-                title: (r.pet_name || 'Thu cung') + ' \u2014 ' + (r.owner_name || 'Chu khong ro'),
-                sub: (r.pet_breed || '-') + ' \u2022 BS: ' + (r.bac_si_kham || '-') + ' \u2022 ' + formatGsDate(r.created_at || r.date_signed),
-                tag: '\u2192 L&#7883;ch Kh&#225;m',
-                tagColor: '#a78bfa',
-                action: () => {
-                    closeGlobalSearch();
-                    if (typeof window.jumpToIntakeRecord === 'function') window.jumpToIntakeRecord(r.id);
-                    else { window.location.hash = 'lich-kham'; }
-                }
+                type: 'result',
+                title: (r.pet_name || 'Thu cung') + ' - ' + (r.owner_name || '-'),
+                sub: (r.pet_breed || '-') + ' - BS: ' + (r.bac_si_kham || '-') + ' - ' + formatGsDate(r.created_at),
+                tag: 'Lich Kham', tagColor: '#a78bfa',
+                action: () => { closeAndNavigate(); if (typeof window.jumpToIntakeRecord === 'function') window.jumpToIntakeRecord(r.id); else window.location.hash = 'lich-kham'; }
             }));
         }
 
-        // --- 5. Nhan Su ---
+        // 5. Nhan Su
         const rawStaff = getDataSafe('staffData');
         const staffHits = rawStaff.filter(s =>
-            strMatch(s.full_name, q) ||
-            strMatch(s.role, q) ||
-            strMatch(s.branch, q) ||
-            strMatch(s.email, q) ||
-            strMatch(s.phone, q)
+            strMatch(s.full_name, q) || strMatch(s.role, q) ||
+            strMatch(s.branch, q) || strMatch(s.email, q) || strMatch(s.phone, q)
         ).slice(0, 8);
-
         if (staffHits.length > 0) {
-            results.push({ type: 'group', label: '&#x1F464; Nh&#226;n S&#7921;' });
+            results.push({ type: 'group', label: 'Nhan Su' });
             staffHits.forEach(s => results.push({
-                type: 'staff',
+                type: 'result',
                 title: s.full_name || 'Nhan vien',
-                sub: (s.role || '-') + ' \u2022 ' + (s.branch || '-') + ' \u2022 ' + (s.phone || s.email || '-'),
-                tag: '\u2192 Nh&#226;n S&#7921;',
-                tagColor: '#f97316',
-                action: () => {
-                    closeGlobalSearch();
-                    window.location.hash = 'nhan-su';
-                    const navEl = document.querySelector('[data-view="nhan-su"], [href="#nhan-su"]');
-                    if (navEl) navEl.click();
-                }
+                sub: (s.role || '-') + ' - ' + (s.branch || '-') + ' - ' + (s.phone || s.email || '-'),
+                tag: 'Nhan Su', tagColor: '#f97316',
+                action: () => { closeAndNavigate(); window.location.hash = 'nhan-su'; }
             }));
         }
 
-        gsCurrentResults = results.filter(r => r.type !== 'group');
+        gsCurrentResults = results.filter(r => r.type === 'result');
         gsActiveIndex = -1;
-        renderGsResults(results, query);
+        renderDropdown(results, query);
+        dd.classList.add('gs-dd-open');
+        gsDropdownVisible = true;
     }
 
-    // ── Render Results ─────────────────────────────────────────────────────────
-    function renderGsResults(results, query) {
-        const container = document.getElementById('gs-results');
-        if (!container) return;
-
+    function renderDropdown(results, query) {
+        const dd = document.getElementById('gs-inline-dropdown');
+        if (!dd) return;
         if (results.length === 0) {
-            container.innerHTML = '<div class="gs-empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>Khong tim thay ket qua cho "<strong>' + escapeGsHtml(query) + '</strong>"</span></div>';
+            dd.innerHTML = '<div class="gs-dd-empty">Khong tim thay ket qua nao</div>';
             return;
         }
-
         let html = '';
-        let resultIndex = 0;
+        let idx = 0;
         results.forEach(item => {
             if (item.type === 'group') {
-                html += '<div class="gs-group-label">' + item.label + '</div>';
+                html += '<div class="gs-dd-group">' + escH(item.label) + '</div>';
             } else {
-                const idx = resultIndex++;
-                html += '<div class="gs-result-item" data-idx="' + idx + '" onclick="gsSelectItem(' + idx + ')">' +
-                    '<div class="gs-result-main">' +
-                    '<div class="gs-result-title">' + highlightGsMatch(escapeGsHtml(item.title), query) + '</div>' +
-                    '<div class="gs-result-sub">' + escapeGsHtml(item.sub) + '</div>' +
+                const i = idx++;
+                html += '<div class="gs-dd-item" data-idx="' + i + '" onmousedown="event.preventDefault();gsInlineSelect(' + i + ')">' +
+                    '<div class="gs-dd-item-body">' +
+                    '<div class="gs-dd-title">' + highlightMatch(escH(item.title), query) + '</div>' +
+                    '<div class="gs-dd-sub">' + escH(item.sub) + '</div>' +
                     '</div>' +
-                    '<span class="gs-result-tag" style="border-color:' + item.tagColor + '20; color:' + item.tagColor + '; background:' + item.tagColor + '15;">' + item.tag + '</span>' +
+                    '<span class="gs-dd-tag" style="color:' + item.tagColor + ';background:' + item.tagColor + '18;border-color:' + item.tagColor + '30;">' + escH(item.tag) + '</span>' +
                     '</div>';
             }
         });
-
-        container.innerHTML = html;
+        dd.innerHTML = html;
     }
 
-    function resetGsResults() {
-        gsCurrentResults = [];
-        gsActiveIndex = -1;
-        const container = document.getElementById('gs-results');
-        if (container) container.innerHTML = '<div class="gs-hint-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>Go de tim vat tu, don nhap xuat, ca kham, nhan su...</span></div>';
+    function closeAndNavigate() {
+        const inp = document.getElementById('gs-header-input');
+        if (inp) inp.value = '';
+        hideDropdown();
     }
 
-    // ── Keyboard Navigation ────────────────────────────────────────────────────
+    // ── Keyboard nav ──────────────────────────────────────────────────────────
     function moveGsSelection(dir) {
-        const items = document.querySelectorAll('.gs-result-item');
+        const dd = document.getElementById('gs-inline-dropdown');
+        if (!dd) return;
+        const items = dd.querySelectorAll('.gs-dd-item');
         if (!items.length) return;
-        if (gsActiveIndex >= 0 && items[gsActiveIndex]) items[gsActiveIndex].classList.remove('gs-active');
+        if (gsActiveIndex >= 0 && items[gsActiveIndex]) items[gsActiveIndex].classList.remove('gs-dd-active');
         gsActiveIndex = Math.max(0, Math.min(items.length - 1, gsActiveIndex + dir));
         const el = items[gsActiveIndex];
-        if (el) { el.classList.add('gs-active'); el.scrollIntoView({ block: 'nearest' }); }
+        if (el) { el.classList.add('gs-dd-active'); el.scrollIntoView({ block: 'nearest' }); }
     }
 
     function selectActiveResult() {
-        if (gsActiveIndex >= 0 && gsCurrentResults[gsActiveIndex]) {
-            gsCurrentResults[gsActiveIndex].action();
-        }
+        if (gsActiveIndex >= 0 && gsCurrentResults[gsActiveIndex]) gsCurrentResults[gsActiveIndex].action();
     }
 
-    window.gsSelectItem = function (idx) {
+    window.gsInlineSelect = function (idx) {
         if (gsCurrentResults[idx]) gsCurrentResults[idx].action();
     };
 
     // ── Helpers ────────────────────────────────────────────────────────────────
-    function getDataSafe(key) {
-        try { const v = window[key]; return Array.isArray(v) ? v : []; } catch { return []; }
+    function getDataSafe(key) { try { const v = window[key]; return Array.isArray(v) ? v : []; } catch { return []; } }
+    function strMatch(val, q) { if (!val) return false; return String(val).toLowerCase().includes(q); }
+    function escH(str) { if (!str) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function highlightMatch(esc, q) {
+        if (!q) return esc;
+        const safe = escH(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        return esc.replace(new RegExp('('+safe+')', 'gi'), '<mark class="gs-hl">$1</mark>');
     }
-
-    function strMatch(val, q) {
-        if (!val) return false;
-        return String(val).toLowerCase().includes(q);
-    }
-
-    function escapeGsHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    function highlightGsMatch(escaped, query) {
-        if (!query) return escaped;
-        const q = escapeGsHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        return escaped.replace(new RegExp('(' + q + ')', 'gi'), '<mark class="gs-highlight">$1</mark>');
-    }
-
     function formatGsDate(iso) {
         if (!iso) return '-';
-        try { const d = new Date(iso); return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'); } catch { return '-'; }
+        try { const d = new Date(iso); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); } catch { return '-'; }
     }
 
-    // ── Boot ───────────────────────────────────────────────────────────────────
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initGlobalSearch);
-    } else {
-        initGlobalSearch();
-    }
+    // ── Boot ──────────────────────────────────────────────────────────────────
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initGlobalSearch);
+    else initGlobalSearch();
 
 })();

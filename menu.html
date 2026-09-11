@@ -181,6 +181,7 @@
 
             <!-- Global Top Header Bar (App-wide shell header) -->
             <header class="app-global-header">
+                <!-- Left: Branch Info -->
                 <div class="header-branch-info">
                     <div class="branch-main-row">
                         <h1 class="header-hospital-title">GAIA Animal Hospital Ho Chi Minh City</h1>
@@ -189,56 +190,59 @@
                         <a id="header-map-link"
                             href="https://maps.google.com/?q=No.+2D,+22+Road,+Hiep+Binh+Ward,+Ho+Chi+Minh+City"
                             target="_blank" rel="noopener noreferrer" class="branch-detail-item header-interactive-link"
-                            title="Bấm để mở vị trí trên Google Maps">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                class="detail-icon">
+                            title="B&#7845;m &#273;&#7875; m&#7903; v&#7883; tr&#237; tr&#234;n Google Maps">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="detail-icon">
                                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                                 <circle cx="12" cy="10" r="3"></circle>
                             </svg>
-                            <span id="header-user-branch-location">Chi Nhánh TP.HCM</span>
+                            <span id="header-user-branch-location">Chi Nh&#225;nh TP.HCM</span>
                         </a>
-                        <span class="branch-divider">•</span>
+                        <span class="branch-divider">&bull;</span>
                         <a href="https://zalo.me/0934395168" target="_blank" rel="noopener noreferrer"
                             class="branch-detail-item header-interactive-link"
-                            title="Bấm để chat Zalo hoặc gọi 0934395168">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                class="detail-icon">
-                                <path
-                                    d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z">
-                                </path>
+                            title="B&#7845;m &#273;&#7875; chat Zalo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="detail-icon">
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                             </svg>
                             <span>0934 395 168 (Zalo)</span>
                         </a>
-                        <span class="branch-divider">•</span>
+                        <span class="branch-divider">&bull;</span>
                         <a href="https://www.gaialifestyle.vn" target="_blank" rel="noopener noreferrer"
-                            class="branch-detail-item header-interactive-link" title="Bấm để truy cập website GAIA">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                class="detail-icon">
+                            class="branch-detail-item header-interactive-link" title="Website GAIA">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="detail-icon">
                                 <circle cx="12" cy="12" r="10"></circle>
                                 <line x1="2" y1="12" x2="22" y2="12"></line>
-                                <path
-                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
-                                </path>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                             </svg>
                             <span>www.gaialifestyle.vn</span>
                         </a>
                     </div>
                 </div>
 
-                <!-- Right Side: User Profile Header Widget & Dropdown -->
-                <div class="header-user-area" style="display:flex; align-items:center; gap:10px;">
-
-                    <!-- Global Search Trigger Button -->
-                    <button type="button" class="gs-trigger-btn" onclick="openGlobalSearch()" title="Tim kiem toan cuc (Ctrl+K)">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <!-- Center: Inline Global Search Bar -->
+                <div class="gs-inline-wrap" id="gs-inline-wrap">
+                    <div class="gs-inline-bar">
+                        <svg class="gs-inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                             <circle cx="11" cy="11" r="8"></circle>
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
-                        <span class="gs-trigger-text">Tim kiem...</span>
-                        <span class="gs-trigger-hint">Ctrl K</span>
-                    </button>
+                        <input
+                            type="text"
+                            id="gs-header-input"
+                            class="gs-inline-input"
+                            placeholder="T&#236;m ki&#7871;m v&#7853;t t&#432;, &#273;&#417;n kho, ca kh&#225;m... (Ctrl+K)"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <kbd class="gs-inline-kbd">Ctrl K</kbd>
+                    </div>
+                    <!-- Inline Dropdown Results -->
+                    <div class="gs-inline-dropdown" id="gs-inline-dropdown"></div>
+                </div>
 
-                    <div id="user-profile-widget" class="user-profile-widget" title="Bam de xem tuy chon tai khoan">
+                <!-- Right: User Profile -->
+                <div class="header-user-area">
+
                         <div class="user-avatar" id="header-user-avatar">NV</div>
                         <div class="user-info-text">
                             <span class="user-display-name" id="header-user-name">Đang tải...</span>
