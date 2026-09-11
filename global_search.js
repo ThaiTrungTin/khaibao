@@ -160,7 +160,7 @@
             strMatch(item.ma_vach, q) ||
             strMatch(item.danh_muc, q) ||
             strMatch(item.nhom_hang, q)
-        ).slice(0, 5);
+        ).slice(0, 8);
 
         if (vatTuHits.length > 0) {
             results.push({ type: 'group', label: '&#x1F9EA; V&#7853;t T&#432; / Thu&#7889;c' });
@@ -185,7 +185,7 @@
             strMatch(ord.muc_dich, q) ||
             strMatch(ord.user_name, q) ||
             strMatch(ord.loai_don, q)
-        ).slice(0, 5);
+        ).slice(0, 8);
 
         if (nxHits.length > 0) {
             results.push({ type: 'group', label: '&#x1F4E6; &#272;&#417;n Nh&#7853;p / Xu&#7845;t Kho' });
@@ -214,7 +214,7 @@
             strMatch(tk.ma_qr, q) ||
             strMatch(tk.lot, q) ||
             strMatch(tk.user_name, q)
-        ).slice(0, 5);
+        ).slice(0, 8);
 
         if (tkHits.length > 0) {
             results.push({ type: 'group', label: '&#x1F4CB; Th&#7867; Kho' });
@@ -241,7 +241,7 @@
             strMatch(r.owner_phone, q) ||
             strMatch(r.bac_si_kham, q) ||
             strMatch(r.pet_breed, q)
-        ).slice(0, 5);
+        ).slice(0, 8);
 
         if (intakeHits.length > 0) {
             results.push({ type: 'group', label: '&#x1F43E; Ca Kh&#225;m' });
@@ -267,7 +267,7 @@
             strMatch(s.branch, q) ||
             strMatch(s.email, q) ||
             strMatch(s.phone, q)
-        ).slice(0, 5);
+        ).slice(0, 8);
 
         if (staffHits.length > 0) {
             results.push({ type: 'group', label: '&#x1F464; Nh&#226;n S&#7921;' });
