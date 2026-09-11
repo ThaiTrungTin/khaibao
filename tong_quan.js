@@ -848,7 +848,7 @@ function renderTopExportList(topItems, rawVatTu, rawDetails, branch) {
                     <div class="tq-item-code">${escapeHtml(item.ma_vach || '-')}</div>
                 </td>
                 <td style="text-align:center;">
-                    <span class="tq-badge-export-count">📤 ${item.tongXuat.toLocaleString('vi-VN')}</span>
+                    <span style="font-weight: 700; color: var(--text-primary); font-size: 13px;">${item.tongXuat.toLocaleString('vi-VN')}</span>
                 </td>
                 <td style="text-align:center;">
                     <span class="tq-badge-stock-count ${stockClass}">${stockLabel}</span>
