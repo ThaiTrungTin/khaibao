@@ -658,6 +658,44 @@ function clearAllVatTuFilters() {
     applyVatTuFilters();
 }
 
+// Filter Out of Stock (Tồn Cuối = 0)
+window.filterVatTuOutOfStock = function () {
+    const searchInput = document.getElementById('vattu-search-input');
+    if (searchInput) searchInput.value = '';
+
+    const catFilter = document.getElementById('vattu-category-filter');
+    if (catFilter) catFilter.value = 'all';
+
+    const statusFilter = document.getElementById('vattu-status-filter');
+    if (statusFilter) statusFilter.value = 'out_of_stock';
+
+    vattuColumnFilters = {};
+
+    // Collect all zero / negative / empty values for ton_cuoi in current dataset
+    const zeroSet = new Set();
+    (vatTuData || []).forEach(item => {
+        const stats = computeProductBranchStats(item);
+        if (stats.ton_cuoi <= 0) {
+            let rawVal = stats.ton_cuoi;
+            let valStr = (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-') ? '(Trống)' : String(rawVal).trim();
+            zeroSet.add(valStr);
+        }
+    });
+
+    if (zeroSet.size === 0) {
+        zeroSet.add('0');
+        zeroSet.add('(Trống)');
+    }
+
+    vattuColumnFilters['ton_cuoi'] = zeroSet;
+
+    closeColumnFilterDropdown();
+    updateColumnFilterBadgesUI();
+
+    vattuCurrentPage = 1;
+    applyVatTuFilters();
+};
+
 // Filter & Sort Function
 function applyVatTuFilters() {
     const searchVal = (document.getElementById('vattu-search-input')?.value || '').toLowerCase().trim();

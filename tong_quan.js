@@ -42,41 +42,80 @@ function getTongQuanSupabaseClient() {
     return null;
 }
 
+// --- Helper: Get Logged User & Check Permissions ---
+function getTongQuanLoggedUser() {
+    let u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+    if (!u) {
+        try {
+            const saved = localStorage.getItem("gaia_logged_user");
+            if (saved) u = JSON.parse(saved);
+        } catch (e) {}
+    }
+    return u;
+}
+
+function isTongQuanManager(user) {
+    if (!user) return true; // Default to full access if no session
+    const roleLower = (user.role || "").toLowerCase().trim();
+    const branchLower = (user.branch || "").toLowerCase().trim();
+    return roleLower === "admin" || 
+           roleLower.includes("quản lý") || 
+           roleLower.includes("quan ly") || 
+           roleLower.includes("manager") || 
+           roleLower.includes("bác sĩ trưởng") ||
+           branchLower.includes("toàn hệ thống") ||
+           branchLower.includes("all");
+}
+
+function extractBranchCode(str) {
+    if (!str) return 'CN1';
+    const s = String(str).toUpperCase().trim();
+    if (s === 'ALL' || s.includes('TOÀN HỆ THỐNG') || s.includes('TOAN HE THONG')) return 'ALL';
+    if (s.includes('CN2') || s.includes('HUỲNH TẤN PHÁT') || s.includes('HUYNH TAN PHAT') || s.includes('CHI NHÁNH 2') || s.includes('HÀ NỘI') || s.includes('HA NOI')) return 'CN2';
+    if (s.includes('CN1') || s.includes('AN DƯƠNG VƯƠNG') || s.includes('AN DUONG VUONG') || s.includes('CHI NHÁNH 1') || s.includes('TP.HCM') || s.includes('HCM')) return 'CN1';
+    const m = s.match(/CN\d+/);
+    if (m) return m[0];
+    return 'CN1';
+}
+
 // --- 2. Initialize Dashboard ---
 window.initTongQuanDashboard = async function () {
-    if (tongQuanIsInitialized) {
-        renderTongQuanDashboard();
-        return;
-    }
-    tongQuanIsInitialized = true;
+    const loggedUser = getTongQuanLoggedUser();
+    const isManager = isTongQuanManager(loggedUser);
+    const branchSelect = document.getElementById("tq-branch-filter");
 
-    // Detect user role & branch restriction if logged in
-    const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
-    if (loggedUser) {
-        const roleLower = (loggedUser.role || "").toLowerCase().trim();
-        const isManager = roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower.includes("manager") || roleLower.includes("admin");
-        if (!isManager && loggedUser.cn) {
-            tongQuanBranchFilter = loggedUser.cn;
-            // Update branch filter dropdown if present
-            const branchSelect = document.getElementById("tq-branch-filter");
+    // Enforce branch permission
+    if (!isManager && loggedUser) {
+        const userCN = extractBranchCode(loggedUser.branch || loggedUser.cn || '');
+        if (userCN && userCN !== 'ALL') {
+            tongQuanBranchFilter = userCN;
             if (branchSelect) {
-                branchSelect.value = loggedUser.cn;
+                branchSelect.value = userCN;
                 branchSelect.disabled = true;
+                branchSelect.title = `Bạn đang xem dữ liệu của chi nhánh được phân công (${userCN})`;
+            }
+        }
+    } else {
+        if (branchSelect) {
+            branchSelect.disabled = false;
+            if (branchSelect.value) {
+                tongQuanBranchFilter = branchSelect.value;
             }
         }
     }
 
-    // Bind Event Listeners
-    setupTongQuanEventListeners();
-
-    // Start Live Clock
-    startDashboardLiveClock();
+    if (!tongQuanIsInitialized) {
+        tongQuanIsInitialized = true;
+        // Bind Event Listeners
+        setupTongQuanEventListeners();
+        // Start Live Clock
+        startDashboardLiveClock();
+        // Setup Supabase Realtime Listeners
+        setupTongQuanRealtime();
+    }
 
     // Initial Data Fetch & Render
     await refreshTongQuanData();
-
-    // Setup Supabase Realtime Listeners
-    setupTongQuanRealtime();
 };
 
 // --- 3. Setup Event Listeners ---
@@ -119,8 +158,8 @@ function startDashboardLiveClock() {
             dateEl.textContent = `${dayName}, ${d}/${m}/${y}`;
         }
         if (greetingEl) {
-            const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
-            const name = loggedUser ? (loggedUser.name || loggedUser.username || "Bác sĩ / Nhân viên") : "Quản Trị Viên";
+            const loggedUser = getTongQuanLoggedUser();
+            const name = loggedUser ? (loggedUser.full_name || loggedUser.name || loggedUser.username || "Bác sĩ / Nhân viên") : "Quản Trị Viên";
             const hour = now.getHours();
             let greet = "Chào buổi sáng";
             if (hour >= 12 && hour < 18) greet = "Chào buổi chiều";
@@ -147,22 +186,34 @@ window.refreshTongQuanData = async function () {
             await fetchInitialIntakes();
         } else {
             // Background fetch latest pet_intakes
-            const { data: intakes } = await client.from('pet_intakes').select('*').order('created_at', { ascending: false }).limit(100);
-            if (intakes) window.intakesData = intakes;
+            const { data: intakes } = await client.from('pet_intakes').select('*').order('created_at', { ascending: false }).limit(200);
+            if (intakes) {
+                if (typeof intakesData !== 'undefined') intakesData = intakes;
+                window.intakesData = intakes;
+            }
         }
 
         // Fetch san_pham if vatTuData empty
         if (typeof vatTuData === 'undefined' || !vatTuData || vatTuData.length === 0) {
-            const { data: vts } = await client.from('san_pham').select('*').limit(1000);
+            const { data: vts } = await client.from('san_pham').select('*').limit(1500);
             if (vts) {
                 if (typeof vatTuData !== 'undefined') vatTuData = vts;
                 window.vatTuData = vts;
             }
         }
 
+        // Fetch ton_kho_detail for accurate branch calculations
+        if (typeof tonKhoDetailData === 'undefined' || !tonKhoDetailData || tonKhoDetailData.length === 0) {
+            const { data: details } = await client.from('ton_kho_detail').select('*');
+            if (details) {
+                if (typeof tonKhoDetailData !== 'undefined') tonKhoDetailData = details;
+                window.tonKhoDetailData = details;
+            }
+        }
+
         // Fetch nhap_xuat if nhapXuatData empty
         if (typeof nhapXuatData === 'undefined' || !nhapXuatData || nhapXuatData.length === 0) {
-            const { data: nxs } = await client.from('nhap_xuat').select('*').order('created_at', { ascending: false }).limit(50);
+            const { data: nxs } = await client.from('nhap_xuat').select('*').order('created_at', { ascending: false }).limit(60);
             if (nxs) {
                 if (typeof nhapXuatData !== 'undefined') nhapXuatData = nxs;
                 window.nhapXuatData = nxs;
@@ -184,15 +235,15 @@ function setupTongQuanRealtime() {
         client.channel('gaia_tong_quan_realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'pet_intakes' }, () => {
                 if (tongQuanRefreshTimer) clearTimeout(tongQuanRefreshTimer);
-                tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 500);
+                tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 600);
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'san_pham' }, () => {
                 if (tongQuanRefreshTimer) clearTimeout(tongQuanRefreshTimer);
-                tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 500);
+                tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 600);
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'nhap_xuat' }, () => {
                 if (tongQuanRefreshTimer) clearTimeout(tongQuanRefreshTimer);
-                tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 500);
+                tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 600);
             })
             .subscribe();
     } catch (e) {
@@ -200,10 +251,40 @@ function setupTongQuanRealtime() {
     }
 }
 
+// --- Helper: Calculate Product Stock For Branch ---
+function getProductStockForBranch(item, branch, details) {
+    const rawBarcode = (item.ma_vach || '').trim().toLowerCase();
+    const matching = (details || []).filter(d => {
+        const dBarcode = (d.ma_vach || '').trim().toLowerCase();
+        const dQr = (d.ma_qr || '').trim().toLowerCase();
+        return (dBarcode && dBarcode === rawBarcode) || (dQr && dQr === rawBarcode);
+    });
+
+    if (matching.length > 0) {
+        if (branch === 'all') {
+            return matching.reduce((sum, r) => sum + (Number(r.ton_kho) || 0), 0);
+        } else {
+            const branchMatches = matching.filter(d => extractBranchCode(d.chi_nhanh) === branch);
+            if (branchMatches.length > 0) {
+                return branchMatches.reduce((sum, r) => sum + (Number(r.ton_kho) || 0), 0);
+            }
+        }
+    }
+
+    // Fallback to direct fields
+    if (branch === 'CN1') {
+        return Number(item.so_luong_cn1 ?? item.ton_cuoi ?? item.so_luong ?? 0);
+    } else if (branch === 'CN2') {
+        return Number(item.so_luong_cn2 ?? 0);
+    }
+    return Number(item.ton_cuoi ?? item.so_luong ?? 0);
+}
+
 // --- 7. Main Render Logic ---
 window.renderTongQuanDashboard = function () {
     const rawIntakes = (typeof intakesData !== 'undefined' && Array.isArray(intakesData)) ? intakesData : (window.intakesData || []);
     const rawVatTu = (typeof vatTuData !== 'undefined' && Array.isArray(vatTuData)) ? vatTuData : (window.vatTuData || []);
+    const rawDetails = (typeof tonKhoDetailData !== 'undefined' && Array.isArray(tonKhoDetailData)) ? tonKhoDetailData : (window.tonKhoDetailData || []);
     const rawNhapXuat = (typeof nhapXuatData !== 'undefined' && Array.isArray(nhapXuatData)) ? nhapXuatData : (window.nhapXuatData || []);
 
     const branch = tongQuanBranchFilter; // 'all', 'CN1', 'CN2'
@@ -211,22 +292,15 @@ window.renderTongQuanDashboard = function () {
     // Filter Intakes by branch
     const intakes = rawIntakes.filter(r => {
         if (branch === 'all') return true;
-        const cn = (r.cn || extractBranchCode(r.branch || '')).toUpperCase();
-        return cn.includes(branch.toUpperCase());
-    });
-
-    // Filter Vat Tu by branch
-    const vatTuList = rawVatTu.filter(item => {
-        if (branch === 'all') return true;
-        const cn = (item.cn || item.chi_nhanh || '').toUpperCase();
-        return !cn || cn.includes(branch.toUpperCase()) || cn.includes('ALL') || cn.includes('TOÀN');
+        const cn = extractBranchCode(r.cn || r.branch || r.chi_nhanh || '');
+        return cn === branch;
     });
 
     // Filter Nhap Xuat by branch
     const nhapXuatList = rawNhapXuat.filter(order => {
         if (branch === 'all') return true;
-        const cn = (order.chi_nhanh || order.cn || '').toUpperCase();
-        return cn.includes(branch.toUpperCase());
+        const cn = extractBranchCode(order.chi_nhanh || order.cn || '');
+        return cn === branch;
     });
 
     // --- Compute Key Metrics ---
@@ -242,7 +316,7 @@ window.renderTongQuanDashboard = function () {
     const doneCount = todayIntakesList.filter(r => r.trang_thai === 'done' || r.trang_thai === 'kham_xong' || r.trang_thai === 'tiep_nhan').length;
     const processingCount = todayIntakesList.filter(r => r.trang_thai === 'processing' || r.trang_thai === 'dang_kham').length;
 
-    // 2. Inventory Metrics
+    // 2. Inventory Metrics (Evaluated according to active branch filter!)
     let lowStockItems = [];
     let outOfStockItems = [];
     let nearExpiryItems = [];
@@ -252,14 +326,16 @@ window.renderTongQuanDashboard = function () {
     const sixtyDaysAhead = new Date();
     sixtyDaysAhead.setDate(sixtyDaysAhead.getDate() + 60);
 
-    vatTuList.forEach(item => {
-        const ton = Number(item.ton_cuoi ?? item.so_luong ?? 0);
+    rawVatTu.forEach(item => {
+        const ton = getProductStockForBranch(item, branch, rawDetails);
         const minStock = Number(item.ton_kho_an_toan ?? 5);
 
+        const itemWithComputedTon = { ...item, computedTon: ton };
+
         if (ton <= 0) {
-            outOfStockItems.push(item);
+            outOfStockItems.push(itemWithComputedTon);
         } else if (ton <= minStock) {
-            lowStockItems.push(item);
+            lowStockItems.push(itemWithComputedTon);
         }
 
         // Check Expiry Date
@@ -268,9 +344,9 @@ window.renderTongQuanDashboard = function () {
             const expDate = parseExpiryDate(dateStr);
             if (expDate) {
                 if (expDate < now) {
-                    expiredItems.push({ ...item, expDate, daysLeft: Math.round((expDate - now) / (1000 * 60 * 60 * 24)) });
+                    expiredItems.push({ ...itemWithComputedTon, expDate, daysLeft: Math.round((expDate - now) / (1000 * 60 * 60 * 24)) });
                 } else if (expDate <= sixtyDaysAhead) {
-                    nearExpiryItems.push({ ...item, expDate, daysLeft: Math.round((expDate - now) / (1000 * 60 * 60 * 24)) });
+                    nearExpiryItems.push({ ...itemWithComputedTon, expDate, daysLeft: Math.round((expDate - now) / (1000 * 60 * 60 * 24)) });
                 }
             }
         }
@@ -283,15 +359,15 @@ window.renderTongQuanDashboard = function () {
     // 3. Stock Movement Metrics
     const recentOrdersCount = nhapXuatList.length;
 
-    // 4. Branch Breakdown Stats
-    const cn1IntakesCount = rawIntakes.filter(r => (r.cn || '').includes('CN1') && (r.created_at || '').substring(0, 10) === todayStr).length;
-    const cn2IntakesCount = rawIntakes.filter(r => (r.cn || '').includes('CN2') && (r.created_at || '').substring(0, 10) === todayStr).length;
+    // 4. Branch Breakdown Stats (Comparison CN1 vs CN2)
+    const cn1IntakesCount = rawIntakes.filter(r => extractBranchCode(r.cn || r.branch || r.chi_nhanh) === 'CN1' && (r.created_at || '').substring(0, 10) === todayStr).length;
+    const cn2IntakesCount = rawIntakes.filter(r => extractBranchCode(r.cn || r.branch || r.chi_nhanh) === 'CN2' && (r.created_at || '').substring(0, 10) === todayStr).length;
     
     let cn1StockSum = 0;
     let cn2StockSum = 0;
     rawVatTu.forEach(item => {
-        cn1StockSum += Number(item.so_luong_cn1 ?? item.ton_cuoi ?? 0);
-        cn2StockSum += Number(item.so_luong_cn2 ?? item.ton_cuoi ?? 0);
+        cn1StockSum += getProductStockForBranch(item, 'CN1', rawDetails);
+        cn2StockSum += getProductStockForBranch(item, 'CN2', rawDetails);
     });
 
     // --- Update KPI DOM Elements ---
@@ -321,14 +397,6 @@ window.renderTongQuanDashboard = function () {
         cn2Stock: cn2StockSum
     });
 };
-
-// --- Helper: Extract Branch Code ---
-function extractBranchCode(str) {
-    if (!str) return 'CN1';
-    const s = String(str).toUpperCase();
-    if (s.includes('CN2') || s.includes('HUỲNH TẤN PHÁT') || s.includes('HUYNH TAN PHAT') || s.includes('CHI NHÁNH 2')) return 'CN2';
-    return 'CN1';
-}
 
 // --- Helper: Parse Expiry Date ---
 function parseExpiryDate(dateStr) {
@@ -381,7 +449,7 @@ function updateKpiCards(stats) {
         kpi1Desc.textContent = `${stats.doneCount} đã khám xong • ${stats.processingCount} đang tiếp nhận`;
     }
 
-    // 2. Tồn Kho Cảnh Báo
+    // 2. Tồn Kho Cảnh Báo (Out of Stock / Low Stock)
     const kpi2Val = document.getElementById("tq-kpi-stock-val");
     const kpi2Badge = document.getElementById("tq-kpi-stock-badge");
     const kpi2Desc = document.getElementById("tq-kpi-stock-desc");
@@ -389,7 +457,7 @@ function updateKpiCards(stats) {
     if (kpi2Badge) {
         if (stats.outOfStockCount > 0) {
             kpi2Badge.className = "tq-card-badge badge-danger";
-            kpi2Badge.textContent = `${stats.outOfStockCount} hết hàng`;
+            kpi2Badge.textContent = `${stats.outOfStockCount} hết hàng (tồn 0)`;
             kpi2Badge.style.display = "inline-flex";
         } else if (stats.lowStockCount > 0) {
             kpi2Badge.className = "tq-card-badge badge-warning";
@@ -402,7 +470,7 @@ function updateKpiCards(stats) {
         }
     }
     if (kpi2Desc) {
-        kpi2Desc.textContent = `${stats.outOfStockCount} đã hết sạch • ${stats.lowStockCount} dưới mức an toàn`;
+        kpi2Desc.textContent = `${stats.outOfStockCount} đã hết sạch (tồn 0) • ${stats.lowStockCount} dưới mức an toàn`;
     }
 
     // 3. Dược Phẩm Cận Hạn Dùng
@@ -481,7 +549,8 @@ function renderRecentIntakesTable(records) {
         const breedInfo = r.pet_breed ? `(${escapeHtml(r.pet_breed)}${r.pet_weight ? ' - ' + escapeHtml(r.pet_weight) + 'kg' : ''})` : '';
         const ownerName = escapeHtml(r.owner_name || 'Khách Vãng Lai');
         const ownerPhone = escapeHtml(r.owner_phone || '-');
-        const cnBadge = (r.cn || extractBranchCode(r.branch)).toUpperCase() === 'CN2' 
+        const cnCode = extractBranchCode(r.cn || r.branch || r.chi_nhanh);
+        const cnBadge = cnCode === 'CN2' 
             ? `<span class="tq-badge-branch badge-cn2">CN2</span>` 
             : `<span class="tq-badge-branch badge-cn1">CN1</span>`;
 
@@ -548,7 +617,7 @@ function renderLowStockTable(items) {
     `;
 
     items.forEach(item => {
-        const ton = Number(item.ton_cuoi ?? item.so_luong ?? 0);
+        const ton = Number(item.computedTon ?? item.ton_cuoi ?? item.so_luong ?? 0);
         const min = Number(item.ton_kho_an_toan ?? 5);
         const isZero = ton <= 0;
 
@@ -601,7 +670,7 @@ function renderExpiryWatchlist(items) {
         const badgeText = isExpired ? `Quá hạn ${Math.abs(item.daysLeft)} ngày` : `Còn ${item.daysLeft} ngày`;
 
         const dateStr = item.date || item.date_expiry || '-';
-        const ton = Number(item.ton_cuoi ?? item.so_luong ?? 0);
+        const ton = Number(item.computedTon ?? item.ton_cuoi ?? item.so_luong ?? 0);
 
         html += `
             <div class="tq-expiry-card" onclick="jumpToVatTuItem('${escapeHtml(item.ma_vach || '')}')">
@@ -654,7 +723,7 @@ function renderRecentWarehouseTimeline(orders) {
         const timeStr = formatTqTime(ord.created_at || ord.ngay_tao);
         const code = escapeHtml(ord.ma_don || 'ĐƠN-KHO');
         const creator = escapeHtml(ord.user_name || 'Kho GAIA');
-        const branch = (ord.chi_nhanh || ord.cn || 'CN1').toUpperCase();
+        const branch = extractBranchCode(ord.chi_nhanh || ord.cn || 'CN1');
 
         html += `
             <div class="tq-timeline-item" onclick="jumpToNxOrder('${escapeHtml(ord.id || ord.ma_don)}')">
@@ -714,6 +783,16 @@ window.jumpToView = function (viewName) {
     window.location.hash = viewName;
 };
 
+// Jump to Vật Tư view and filter specifically for Out of Stock (Tồn Cuối = 0)
+window.jumpToVatTuLowStock = function () {
+    window.location.hash = 'vat-tu';
+    setTimeout(() => {
+        if (typeof window.filterVatTuOutOfStock === 'function') {
+            window.filterVatTuOutOfStock();
+        }
+    }, 250);
+};
+
 window.jumpToIntakeRecord = function (recordId) {
     window.location.hash = 'lich-kham';
     setTimeout(() => {
@@ -728,7 +807,7 @@ window.jumpToIntakeRecord = function (recordId) {
 window.jumpToVatTuItem = function (maVach) {
     window.location.hash = 'vat-tu';
     setTimeout(() => {
-        const searchInp = document.getElementById("vattu-search");
+        const searchInp = document.getElementById("vattu-search-input") || document.getElementById("vattu-search");
         if (searchInp && maVach) {
             searchInp.value = maVach;
             searchInp.dispatchEvent(new Event('input'));
