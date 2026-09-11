@@ -2760,6 +2760,92 @@ html, body {
     flex-wrap: wrap;
 }
 
+/* Expiry Date Filter Elements in Toolbar */
+.vattu-select-pill {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.vattu-select-pill:focus,
+.vattu-select-pill.filter-active {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.vattu-date-range-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 4px 8px;
+}
+
+.vattu-date-input {
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 12px;
+    outline: none;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.vattu-date-range-wrap .date-sep {
+    color: var(--text-muted);
+    font-weight: bold;
+}
+
+/* Expiry Status Badges in Vat Tu Table */
+.vattu-badge-exp {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.vattu-badge-exp.exp-expired {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.vattu-badge-exp.exp-near-30 {
+    background: rgba(245, 158, 11, 0.18);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.vattu-badge-exp.exp-near-60 {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.vattu-badge-exp.exp-safe {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.vattu-badge-exp.exp-none {
+    color: var(--text-muted);
+}
+
 /* Toolbar Buttons Base */
 .btn-toolbar-secondary,
 .btn-toolbar-excel,
@@ -6114,5 +6200,110 @@ select.vattu-select-branch:focus,
     animation: kiemkhoRedPulse 2s infinite ease-in-out;
     border-left: 4px solid #ef4444 !important;
 }
+
+/* ==========================================================================
+   Dashboard Tổng Quan - Rank Badges & Export Count Badges
+   ========================================================================== */
+.tq-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 11.5px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.tq-rank-1 {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+    border: 1px solid #fbbf24;
+}
+
+.tq-rank-2 {
+    background: linear-gradient(135deg, #94a3b8, #64748b);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(148, 163, 184, 0.4);
+    border: 1px solid #cbd5e1;
+}
+
+.tq-rank-3 {
+    background: linear-gradient(135deg, #b45309, #78350f);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(180, 83, 9, 0.4);
+    border: 1px solid #d97706;
+}
+
+.tq-rank-other {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted, #94a3b8);
+    border: 1px solid var(--card-border, #334155);
+}
+
+[data-theme="light"] .tq-rank-other {
+    background: #f1f5f9;
+    color: #64748b;
+    border-color: #cbd5e1;
+}
+
+.tq-badge-export-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+[data-theme="light"] .tq-badge-export-count {
+    background: #faf5ff;
+    color: #9333ea;
+    border-color: #e9d5ff;
+}
+
+.tq-badge-stock-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.tq-badge-stock-count.has-stock {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.tq-badge-stock-count.zero-stock {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.tq-timeline-item {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tq-timeline-item:hover {
+    transform: translateX(4px);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+[data-theme="light"] .tq-timeline-item:hover {
+    background: #f8fafc;
+    border-color: #818cf8;
+}
+
 
 

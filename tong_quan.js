@@ -1,9 +1,10 @@
 /* ==========================================================================
    GAIA Animal Hospital - Bảng Điều Khiển Tổng Quan (tong_quan.js)
    Realtime Aggregation Dashboard: Lịch Khám, Vật Tư, Nhập Xuất, Kiểm Kho & Thẻ Kho
+   Branch RBAC: Dynamically loaded from Staff Table 'branch' column
    ========================================================================== */
 
-let tongQuanBranchFilter = 'all'; // 'all' | 'CN1' | 'CN2'
+let tongQuanBranchFilter = 'all'; // 'all' | 'CN1' | 'CN2' | ...
 let tongQuanIsInitialized = false;
 let tongQuanRefreshTimer = null;
 
@@ -42,7 +43,7 @@ function getTongQuanSupabaseClient() {
     return null;
 }
 
-// --- Helper: Get Logged User & Check Permissions ---
+// --- Helper: Get Logged User & Check Permissions from Staff Table ---
 function getTongQuanLoggedUser() {
     let u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
     if (!u) {
@@ -55,7 +56,7 @@ function getTongQuanLoggedUser() {
 }
 
 function isTongQuanManager(user) {
-    if (!user) return true; // Default to full access if no session
+    if (!user) return true; // Default to manager if no session
     const roleLower = (user.role || "").toLowerCase().trim();
     const branchLower = (user.branch || "").toLowerCase().trim();
     return roleLower === "admin" || 
@@ -68,41 +69,191 @@ function isTongQuanManager(user) {
 }
 
 function extractBranchCode(str) {
-    if (!str) return 'CN1';
-    const s = String(str).toUpperCase().trim();
-    if (s === 'ALL' || s.includes('TOÀN HỆ THỐNG') || s.includes('TOAN HE THONG')) return 'ALL';
-    if (s.includes('CN2') || s.includes('HUỲNH TẤN PHÁT') || s.includes('HUYNH TAN PHAT') || s.includes('CHI NHÁNH 2') || s.includes('HÀ NỘI') || s.includes('HA NOI')) return 'CN2';
-    if (s.includes('CN1') || s.includes('AN DƯƠNG VƯƠNG') || s.includes('AN DUONG VUONG') || s.includes('CHI NHÁNH 1') || s.includes('TP.HCM') || s.includes('HCM')) return 'CN1';
-    const m = s.match(/CN\d+/);
-    if (m) return m[0];
-    return 'CN1';
+    if (!str) return '';
+    const s = String(str).trim();
+    if (!s) return '';
+    const upper = s.toUpperCase();
+    if (upper === 'ALL' || upper === 'TOÀN HỆ THỐNG' || upper === 'TOAN HE THONG' || upper.includes('TOÀN HỆ THỐNG') || upper.includes('TOAN HE THONG')) {
+        return 'ALL';
+    }
+    
+    // Explicit regex match for CN followed by digit(s) e.g. CN1, CN2, CN01, etc.
+    const m = upper.match(/CN\s*(\d+)/i);
+    if (m) {
+        return `CN${parseInt(m[1], 10)}`;
+    }
+    
+    const mChiNhanh = upper.match(/CHI\s*NH\xC1NH\s*(\d+)/i) || upper.match(/CHI\s*NHANH\s*(\d+)/i);
+    if (mChiNhanh) {
+        return `CN${parseInt(mChiNhanh[1], 10)}`;
+    }
+
+    // Keywords matching known branch names from DB
+    if (upper.includes('HUỲNH TẤN PHÁT') || upper.includes('HUYNH TAN PHAT') || upper.includes('QUẬN 7') || upper.includes('QUAN 7') || upper.includes('HÀ NỘI') || upper.includes('HA NOI')) {
+        return 'CN2';
+    }
+    if (upper.includes('HIỆP BÌNH') || upper.includes('HIEP BINH') || upper.includes('22 ROAD') || upper.includes('AN DƯƠNG VƯƠNG') || upper.includes('AN DUONG VUONG') || upper.includes('TP.HCM') || upper.includes('HCM')) {
+        return 'CN1';
+    }
+
+    return '';
 }
 
-// --- 2. Initialize Dashboard ---
-window.initTongQuanDashboard = async function () {
+// Dedicated helper for extracting branch code from an Order (nhap_xuat / the_kho)
+function extractOrderBranchCode(ord) {
+    if (!ord) return '';
+    if (ord.cn) {
+        const c = extractBranchCode(ord.cn);
+        if (c && c !== 'ALL') return c;
+    }
+    if (ord.branch) {
+        const c = extractBranchCode(ord.branch);
+        if (c && c !== 'ALL') return c;
+    }
+    if (ord.chi_nhanh) {
+        const c = extractBranchCode(ord.chi_nhanh);
+        if (c && c !== 'ALL') return c;
+    }
+    if (ord.user_name) {
+        const c = extractBranchCode(ord.user_name);
+        if (c && c !== 'ALL') return c;
+    }
+    if (ord.ma_don) {
+        const m = String(ord.ma_don).match(/-(CN\d+)-/i) || String(ord.ma_don).match(/CN\d+/i);
+        if (m) {
+            return (m[1] ? m[1] : m[0]).toUpperCase();
+        }
+    }
+    return '';
+}
+
+// Dedicated helper for extracting branch code from a Pet Intake record
+function extractIntakeBranchCode(r) {
+    if (!r) return '';
+    if (r.cn) {
+        const c = extractBranchCode(r.cn);
+        if (c && c !== 'ALL') return c;
+    }
+    if (r.branch) {
+        const c = extractBranchCode(r.branch);
+        if (c && c !== 'ALL') return c;
+    }
+    if (r.chi_nhanh) {
+        const c = extractBranchCode(r.chi_nhanh);
+        if (c && c !== 'ALL') return c;
+    }
+    if (r.user_name || r.bac_si_kham) {
+        const c = extractBranchCode(r.user_name || r.bac_si_kham);
+        if (c && c !== 'ALL') return c;
+    }
+    return '';
+}
+
+// --- 2. Dynamic Branch Dropdown based on Staff Table ---
+async function initTongQuanBranchDropdown() {
+    const branchSelect = document.getElementById("tq-branch-filter");
+    if (!branchSelect) return;
+
     const loggedUser = getTongQuanLoggedUser();
     const isManager = isTongQuanManager(loggedUser);
-    const branchSelect = document.getElementById("tq-branch-filter");
+    let userCN = loggedUser ? (loggedUser.cn || extractBranchCode(loggedUser.branch || "")) : "";
+    userCN = userCN ? userCN.toUpperCase().trim() : "";
+    const userBranchName = loggedUser ? (loggedUser.branch || "").trim() : "";
 
-    // Enforce branch permission
-    if (!isManager && loggedUser) {
-        const userCN = extractBranchCode(loggedUser.branch || loggedUser.cn || '');
-        if (userCN && userCN !== 'ALL') {
-            tongQuanBranchFilter = userCN;
-            if (branchSelect) {
-                branchSelect.value = userCN;
-                branchSelect.disabled = true;
-                branchSelect.title = `Bạn đang xem dữ liệu của chi nhánh được phân công (${userCN})`;
-            }
-        }
-    } else {
-        if (branchSelect) {
-            branchSelect.disabled = false;
-            if (branchSelect.value) {
-                tongQuanBranchFilter = branchSelect.value;
+    // 1. Fetch/Collect unique branches from staff table
+    let staffList = (typeof staffData !== 'undefined' && Array.isArray(staffData) && staffData.length > 0) ? staffData : [];
+    if (staffList.length === 0) {
+        const client = getTongQuanSupabaseClient();
+        if (client) {
+            try {
+                const { data } = await client.from('staff').select('branch, cn').order('created_at', { ascending: false });
+                if (data && data.length > 0) {
+                    staffList = data;
+                }
+            } catch (e) {
+                console.warn("GAIA TongQuan: Error fetching staff branches:", e);
             }
         }
     }
+
+    // Map of CN Code -> Full Branch Display Name from staff table
+    const branchMap = new Map(); // e.g. "CN1" => "CN1 - No. 2D, 22 Road...", "CN2" => "CN2 - Huỳnh Tấn Phát..."
+    
+    staffList.forEach(s => {
+        const rawBranch = (s.branch || "").trim();
+        if (rawBranch && rawBranch !== "Toàn hệ thống" && rawBranch.toLowerCase() !== "all") {
+            const cnCode = extractBranchCode(s.cn || rawBranch);
+            if (cnCode && cnCode !== "ALL") {
+                if (!branchMap.has(cnCode) || rawBranch.length > (branchMap.get(cnCode) || '').length) {
+                    branchMap.set(cnCode, rawBranch);
+                }
+            }
+        }
+    });
+
+    // Ensure loggedUser branch is in map if present
+    if (userBranchName && userBranchName !== "Toàn hệ thống" && userBranchName.toLowerCase() !== "all") {
+        const cnCode = extractBranchCode(userBranchName);
+        if (cnCode && cnCode !== "ALL" && !branchMap.has(cnCode)) {
+            branchMap.set(cnCode, userBranchName);
+        }
+    }
+
+    // Fallbacks if database has no records yet
+    if (!branchMap.has("CN1")) branchMap.set("CN1", "CN1 - No. 2D, 22 Road, Hiep Binh Ward, Ho Chi Minh City");
+    if (!branchMap.has("CN2")) branchMap.set("CN2", "CN2 - Huỳnh Tấn Phát, Quận 7, Ho Chi Minh City");
+
+    const currentSelection = branchSelect.value;
+    branchSelect.innerHTML = "";
+
+    if (isManager) {
+        branchSelect.disabled = false;
+        branchSelect.style.opacity = "1";
+        branchSelect.style.cursor = "pointer";
+        branchSelect.title = "Lọc dữ liệu tổng quan theo chi nhánh";
+
+        const optAll = document.createElement("option");
+        optAll.value = "all";
+        optAll.textContent = "🌐 Toàn Hệ Thống";
+        branchSelect.appendChild(optAll);
+
+        Array.from(branchMap.keys()).sort().forEach(cnCode => {
+            const opt = document.createElement("option");
+            opt.value = cnCode;
+            opt.textContent = `📍 ${branchMap.get(cnCode)}`;
+            branchSelect.appendChild(opt);
+        });
+
+        if (currentSelection && (currentSelection === 'all' || branchMap.has(currentSelection))) {
+            branchSelect.value = currentSelection;
+            tongQuanBranchFilter = currentSelection;
+        } else {
+            branchSelect.value = "all";
+            tongQuanBranchFilter = "all";
+        }
+    } else {
+        // Strict lock for Staff / Doctor to their own branch from staff table
+        const finalCN = userCN || "CN1";
+        const finalBranchLabel = branchMap.get(finalCN) || userBranchName || `Chi Nhánh ${finalCN}`;
+        
+        branchSelect.disabled = true;
+        branchSelect.style.opacity = "0.85";
+        branchSelect.style.cursor = "not-allowed";
+        branchSelect.title = `Bạn chỉ có quyền xem dữ liệu của chi nhánh: ${finalBranchLabel}`;
+
+        const opt = document.createElement("option");
+        opt.value = finalCN;
+        opt.textContent = `🔒 ${finalBranchLabel}`;
+        branchSelect.appendChild(opt);
+        branchSelect.value = finalCN;
+        tongQuanBranchFilter = finalCN;
+    }
+}
+
+// --- 3. Initialize Dashboard ---
+window.initTongQuanDashboard = async function () {
+    // Populate branch filter dropdown dynamically from Staff Table & User permissions
+    await initTongQuanBranchDropdown();
 
     if (!tongQuanIsInitialized) {
         tongQuanIsInitialized = true;
@@ -118,7 +269,7 @@ window.initTongQuanDashboard = async function () {
     await refreshTongQuanData();
 };
 
-// --- 3. Setup Event Listeners ---
+// --- 4. Setup Event Listeners ---
 function setupTongQuanEventListeners() {
     const branchSelect = document.getElementById("tq-branch-filter");
     if (branchSelect) {
@@ -132,13 +283,14 @@ function setupTongQuanEventListeners() {
     if (refreshBtn) {
         refreshBtn.addEventListener("click", async () => {
             refreshBtn.classList.add("spinning");
+            await initTongQuanBranchDropdown();
             await refreshTongQuanData();
             setTimeout(() => refreshBtn.classList.remove("spinning"), 600);
         });
     }
 }
 
-// --- 4. Live Clock & Greeting ---
+// --- 5. Live Clock & Greeting ---
 function startDashboardLiveClock() {
     const clockEl = document.getElementById("tq-live-clock");
     const dateEl = document.getElementById("tq-live-date");
@@ -172,7 +324,7 @@ function startDashboardLiveClock() {
     setInterval(update, 1000);
 }
 
-// --- 5. Fetch / Refresh All Needed Data ---
+// --- 6. Fetch / Refresh All Needed Data ---
 window.refreshTongQuanData = async function () {
     const client = getTongQuanSupabaseClient();
     if (!client) {
@@ -226,7 +378,7 @@ window.refreshTongQuanData = async function () {
     renderTongQuanDashboard();
 };
 
-// --- 6. Realtime Subscription ---
+// --- 7. Realtime Subscription ---
 function setupTongQuanRealtime() {
     const client = getTongQuanSupabaseClient();
     if (!client) return;
@@ -244,6 +396,10 @@ function setupTongQuanRealtime() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'nhap_xuat' }, () => {
                 if (tongQuanRefreshTimer) clearTimeout(tongQuanRefreshTimer);
                 tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 600);
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'staff' }, async () => {
+                await initTongQuanBranchDropdown();
+                renderTongQuanDashboard();
             })
             .subscribe();
     } catch (e) {
@@ -268,38 +424,41 @@ function getProductStockForBranch(item, branch, details) {
             if (branchMatches.length > 0) {
                 return branchMatches.reduce((sum, r) => sum + (Number(r.ton_kho) || 0), 0);
             }
+            return 0;
         }
     }
 
     // Fallback to direct fields
     if (branch === 'CN1') {
-        return Number(item.so_luong_cn1 ?? item.ton_cuoi ?? item.so_luong ?? 0);
+        if (item.so_luong_cn1 !== undefined && item.so_luong_cn1 !== null) return Number(item.so_luong_cn1) || 0;
+        return Number(item.ton_cuoi ?? item.so_luong ?? 0);
     } else if (branch === 'CN2') {
-        return Number(item.so_luong_cn2 ?? 0);
+        if (item.so_luong_cn2 !== undefined && item.so_luong_cn2 !== null) return Number(item.so_luong_cn2) || 0;
+        return 0;
     }
     return Number(item.ton_cuoi ?? item.so_luong ?? 0);
 }
 
-// --- 7. Main Render Logic ---
+// --- 8. Main Render Logic ---
 window.renderTongQuanDashboard = function () {
     const rawIntakes = (typeof intakesData !== 'undefined' && Array.isArray(intakesData)) ? intakesData : (window.intakesData || []);
     const rawVatTu = (typeof vatTuData !== 'undefined' && Array.isArray(vatTuData)) ? vatTuData : (window.vatTuData || []);
     const rawDetails = (typeof tonKhoDetailData !== 'undefined' && Array.isArray(tonKhoDetailData)) ? tonKhoDetailData : (window.tonKhoDetailData || []);
     const rawNhapXuat = (typeof nhapXuatData !== 'undefined' && Array.isArray(nhapXuatData)) ? nhapXuatData : (window.nhapXuatData || []);
 
-    const branch = tongQuanBranchFilter; // 'all', 'CN1', 'CN2'
+    const branch = tongQuanBranchFilter; // 'all', 'CN1', 'CN2', ...
 
     // Filter Intakes by branch
     const intakes = rawIntakes.filter(r => {
         if (branch === 'all') return true;
-        const cn = extractBranchCode(r.cn || r.branch || r.chi_nhanh || '');
+        const cn = extractIntakeBranchCode(r);
         return cn === branch;
     });
 
     // Filter Nhap Xuat by branch
     const nhapXuatList = rawNhapXuat.filter(order => {
         if (branch === 'all') return true;
-        const cn = extractBranchCode(order.chi_nhanh || order.cn || '');
+        const cn = extractOrderBranchCode(order);
         return cn === branch;
     });
 
@@ -359,9 +518,62 @@ window.renderTongQuanDashboard = function () {
     // 3. Stock Movement Metrics
     const recentOrdersCount = nhapXuatList.length;
 
-    // 4. Branch Breakdown Stats (Comparison CN1 vs CN2)
-    const cn1IntakesCount = rawIntakes.filter(r => extractBranchCode(r.cn || r.branch || r.chi_nhanh) === 'CN1' && (r.created_at || '').substring(0, 10) === todayStr).length;
-    const cn2IntakesCount = rawIntakes.filter(r => extractBranchCode(r.cn || r.branch || r.chi_nhanh) === 'CN2' && (r.created_at || '').substring(0, 10) === todayStr).length;
+    // 4. Top Export Items (compute from theKhoData)
+    const rawTheKho = (typeof theKhoData !== 'undefined' && Array.isArray(theKhoData)) ? theKhoData : (window.theKhoData || []);
+    const exportMap = {};
+    rawTheKho.forEach(tk => {
+        if ((tk.loai || '').toLowerCase() !== 'xuất') return;
+        // Filter by branch if needed
+        if (branch !== 'all') {
+            const tkBranch = extractBranchCode(tk.user_name || '');
+            if (tkBranch && tkBranch !== branch) return;
+        }
+        const key = tk.ma_vach || tk.ten_hang_hoa || '';
+        if (!key) return;
+        if (!exportMap[key]) {
+            exportMap[key] = {
+                ma_vach: tk.ma_vach || '',
+                ten_mat_hang: tk.ten_hang_hoa || tk.ten_mat_hang || key,
+                don_vi: tk.don_vi || 'cái',
+                tongXuat: 0
+            };
+        }
+        exportMap[key].tongXuat += Number(tk.so_luong) || 0;
+    });
+    // If theKhoData empty, fallback to nhapXuatData items
+    if (Object.keys(exportMap).length === 0) {
+        rawNhapXuat.forEach(ord => {
+            if ((ord.loai_don || '').toLowerCase() !== 'xuất') return;
+            if (branch !== 'all') {
+                const ordBranch = extractOrderBranchCode(ord);
+                if (ordBranch && ordBranch !== branch) return;
+            }
+            const items = ord.chi_tiet_san_pham || [];
+            items.forEach(it => {
+                const key = it.ma_vach || it.ten_hang_hoa || '';
+                if (!key) return;
+                if (!exportMap[key]) {
+                    exportMap[key] = {
+                        ma_vach: it.ma_vach || '',
+                        ten_mat_hang: it.ten_hang_hoa || key,
+                        don_vi: it.don_vi || 'cái',
+                        tongXuat: 0
+                    };
+                }
+                exportMap[key].tongXuat += Number(it.so_luong) || 0;
+            });
+        });
+    }
+    const topExportItems = Object.values(exportMap)
+        .sort((a, b) => b.tongXuat - a.tongXuat)
+        .slice(0, 8);
+
+    // 5. Branch Breakdown Stats (Comparison CN1 vs CN2) — Manager only
+    const loggedUserForRender = getTongQuanLoggedUser();
+    const isManagerForRender = isTongQuanManager(loggedUserForRender);
+
+    const cn1IntakesCount = rawIntakes.filter(r => extractIntakeBranchCode(r) === 'CN1' && (r.created_at || '').substring(0, 10) === todayStr).length;
+    const cn2IntakesCount = rawIntakes.filter(r => extractIntakeBranchCode(r) === 'CN2' && (r.created_at || '').substring(0, 10) === todayStr).length;
     
     let cn1StockSum = 0;
     let cn2StockSum = 0;
@@ -369,6 +581,12 @@ window.renderTongQuanDashboard = function () {
         cn1StockSum += getProductStockForBranch(item, 'CN1', rawDetails);
         cn2StockSum += getProductStockForBranch(item, 'CN2', rawDetails);
     });
+
+    // Show/hide Widget 5 (Branch Comparison) based on role: Manager only
+    const branchComparisonWidget = document.getElementById('tq-widget-branch-comparison');
+    if (branchComparisonWidget) {
+        branchComparisonWidget.style.display = isManagerForRender ? '' : 'none';
+    }
 
     // --- Update KPI DOM Elements ---
     updateKpiCards({
@@ -387,15 +605,17 @@ window.renderTongQuanDashboard = function () {
 
     // --- Render Sub-Sections ---
     renderRecentIntakesTable(intakes.slice(0, 6));
-    renderLowStockTable([...outOfStockItems, ...lowStockItems].slice(0, 6));
+    renderTopExportList(topExportItems, rawVatTu, rawDetails, branch);
     renderExpiryWatchlist([...expiredItems, ...nearExpiryItems].slice(0, 6));
-    renderRecentWarehouseTimeline(nhapXuatList.slice(0, 6));
-    renderBranchComparisonBars({
-        cn1Intakes: cn1IntakesCount,
-        cn2Intakes: cn2IntakesCount,
-        cn1Stock: cn1StockSum,
-        cn2Stock: cn2StockSum
-    });
+    renderRecentWarehouseTimeline(nhapXuatList.slice(0, 5));
+    if (isManagerForRender) {
+        renderBranchComparisonBars({
+            cn1Intakes: cn1IntakesCount,
+            cn2Intakes: cn2IntakesCount,
+            cn1Stock: cn1StockSum,
+            cn2Stock: cn2StockSum
+        });
+    }
 };
 
 // --- Helper: Parse Expiry Date ---
@@ -427,7 +647,7 @@ function parseExpiryDate(dateStr) {
     return null;
 }
 
-// --- 8. Update Top KPI Cards ---
+// --- 9. Update Top KPI Cards ---
 function updateKpiCards(stats) {
     // 1. Ca Khám Hôm Nay
     const kpi1Val = document.getElementById("tq-kpi-intakes-val");
@@ -506,7 +726,7 @@ function updateKpiCards(stats) {
     }
 }
 
-// --- 9. Render Recent Intakes Table ---
+// --- 10. Render Recent Intakes Table ---
 function renderRecentIntakesTable(records) {
     const container = document.getElementById("tq-recent-intakes-list");
     if (!container) return;
@@ -549,10 +769,10 @@ function renderRecentIntakesTable(records) {
         const breedInfo = r.pet_breed ? `(${escapeHtml(r.pet_breed)}${r.pet_weight ? ' - ' + escapeHtml(r.pet_weight) + 'kg' : ''})` : '';
         const ownerName = escapeHtml(r.owner_name || 'Khách Vãng Lai');
         const ownerPhone = escapeHtml(r.owner_phone || '-');
-        const cnCode = extractBranchCode(r.cn || r.branch || r.chi_nhanh);
+        const cnCode = extractIntakeBranchCode(r) || 'CN1';
         const cnBadge = cnCode === 'CN2' 
             ? `<span class="tq-badge-branch badge-cn2">CN2</span>` 
-            : `<span class="tq-badge-branch badge-cn1">CN1</span>`;
+            : `<span class="tq-badge-branch badge-cn1">${cnCode}</span>`;
 
         const timeStr = formatTqTime(r.created_at || r.date_signed);
 
@@ -587,7 +807,65 @@ function renderRecentIntakesTable(records) {
     container.innerHTML = html;
 }
 
-// --- 10. Render Low Stock Table ---
+// --- 11. Render Low Stock Table ---
+// --- 11. Render Top Export Items List ---
+function renderTopExportList(topItems, rawVatTu, rawDetails, branch) {
+    const container = document.getElementById('tq-top-export-list');
+    if (!container) return;
+
+    if (!topItems || topItems.length === 0) {
+        container.innerHTML = `
+            <div class="tq-empty-state">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                <p style="color: var(--text-muted);">Chưa có dữ liệu xuất kho</p>
+            </div>`;
+        return;
+    }
+
+    let html = `<div class="tq-table-responsive"><table class="tq-table"><thead><tr>
+        <th style="width:32px;">#</th>
+        <th>Mặt Hàng</th>
+        <th style="text-align:center;">Xuất</th>
+        <th style="text-align:center;">Tồn</th>
+        <th style="text-align:right;">Thao Tác</th>
+    </tr></thead><tbody>`;
+
+    topItems.forEach((item, idx) => {
+        const rank = idx + 1;
+        const rankClass = rank === 1 ? 'tq-rank-1' : rank === 2 ? 'tq-rank-2' : rank === 3 ? 'tq-rank-3' : 'tq-rank-other';
+
+        // Compute current stock for this branch
+        const vatTuItem = rawVatTu.find(v => v.ma_vach === item.ma_vach);
+        const ton = vatTuItem ? getProductStockForBranch(vatTuItem, branch, rawDetails) : 0;
+        const stockClass = ton <= 0 ? 'zero-stock' : 'has-stock';
+        const stockLabel = ton <= 0 ? 'Hết hàng' : ton.toLocaleString('vi-VN');
+
+        html += `
+            <tr class="tq-interactive-row" onclick="navigateToTheKhoFilter && navigateToTheKhoFilter('${escapeHtml(item.ma_vach || '')}', '', '')">
+                <td><span class="tq-rank-badge ${rankClass}">${rank}</span></td>
+                <td>
+                    <div class="tq-item-title" style="font-size:13px;">${escapeHtml(item.ten_mat_hang || item.ma_vach || '-')}</div>
+                    <div class="tq-item-code">${escapeHtml(item.ma_vach || '-')}</div>
+                </td>
+                <td style="text-align:center;">
+                    <span class="tq-badge-export-count">📤 ${item.tongXuat.toLocaleString('vi-VN')}</span>
+                </td>
+                <td style="text-align:center;">
+                    <span class="tq-badge-stock-count ${stockClass}">${stockLabel}</span>
+                </td>
+                <td style="text-align:right;">
+                    <button class="tq-btn-mini-action" onclick="event.stopPropagation(); typeof navigateToTheKhoFilter === 'function' && navigateToTheKhoFilter('${escapeHtml(item.ma_vach || '')}', '', '')" title="Xem Thẻ Kho" style="background: rgba(56,189,248,0.1); color:#38bdf8; border-color:rgba(56,189,248,0.3);">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                        <span>Thẻ Kho</span>
+                    </button>
+                </td>
+            </tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+}
+
 function renderLowStockTable(items) {
     const container = document.getElementById("tq-low-stock-list");
     if (!container) return;
@@ -634,7 +912,11 @@ function renderLowStockTable(items) {
                 <td>${stockBadge}</td>
                 <td><span style="font-weight: 600; color: var(--text-secondary);">${min}</span></td>
                 <td><span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(item.don_vi || 'Cái')}</span></td>
-                <td style="text-align: right;">
+                <td style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;">
+                    <button class="tq-btn-mini-action" style="background: rgba(56,189,248,0.1); color:#38bdf8; border-color:rgba(56,189,248,0.3);" onclick="event.stopPropagation(); typeof navigateToTheKhoFilter === 'function' && navigateToTheKhoFilter('${escapeHtml(item.ma_vach || '')}', '', '')" title="Xem Thẻ Kho">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                        <span>Thẻ Kho</span>
+                    </button>
                     <button class="tq-btn-mini-action" onclick="event.stopPropagation(); jumpToCreateImportOrder('${escapeHtml(item.ma_vach || '')}', '${escapeHtml(item.ten_mat_hang || '')}')" title="Tạo đơn nhập hàng">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                         <span>Nhập Hàng</span>
@@ -648,7 +930,7 @@ function renderLowStockTable(items) {
     container.innerHTML = html;
 }
 
-// --- 11. Render Expiry Watchlist ---
+// --- 12. Render Expiry Watchlist ---
 function renderExpiryWatchlist(items) {
     const container = document.getElementById("tq-expiry-watchlist");
     if (!container) return;
@@ -694,7 +976,7 @@ function renderExpiryWatchlist(items) {
     container.innerHTML = html;
 }
 
-// --- 12. Render Recent Warehouse Movement Timeline ---
+// --- 13. Render Recent Warehouse Movement Timeline ---
 function renderRecentWarehouseTimeline(orders) {
     const container = document.getElementById("tq-recent-orders-timeline");
     if (!container) return;
@@ -723,7 +1005,7 @@ function renderRecentWarehouseTimeline(orders) {
         const timeStr = formatTqTime(ord.created_at || ord.ngay_tao);
         const code = escapeHtml(ord.ma_don || 'ĐƠN-KHO');
         const creator = escapeHtml(ord.user_name || 'Kho GAIA');
-        const branch = extractBranchCode(ord.chi_nhanh || ord.cn || 'CN1');
+        const branch = extractOrderBranchCode(ord) || 'CN1';
 
         html += `
             <div class="tq-timeline-item" onclick="jumpToNxOrder('${escapeHtml(ord.id || ord.ma_don)}')">
@@ -747,7 +1029,7 @@ function renderRecentWarehouseTimeline(orders) {
     container.innerHTML = html;
 }
 
-// --- 13. Render Branch Comparison Progress Bars ---
+// --- 14. Render Branch Comparison Progress Bars ---
 function renderBranchComparisonBars(data) {
     const totalIntakes = (data.cn1Intakes + data.cn2Intakes) || 1;
     const cn1IntakePct = Math.round((data.cn1Intakes / totalIntakes) * 100);
@@ -793,6 +1075,16 @@ window.jumpToVatTuLowStock = function () {
     }, 250);
 };
 
+// Jump to Vật Tư view and filter specifically for Near Expiry / Expired products (≤ 60d)
+window.jumpToVatTuExpiryWatch = function () {
+    window.location.hash = 'vat-tu';
+    setTimeout(() => {
+        if (typeof window.handleVatTuExpiryFilterChange === 'function') {
+            window.handleVatTuExpiryFilterChange('near_60');
+        }
+    }, 250);
+};
+
 window.jumpToIntakeRecord = function (recordId) {
     window.location.hash = 'lich-kham';
     setTimeout(() => {
@@ -833,6 +1125,30 @@ window.jumpToCreateImportOrder = function (maVach, tenMatHang) {
 
 window.jumpToNxOrder = function (orderId) {
     window.location.hash = 'nhap-xuat';
+    // Trigger navigation click to activate the view
+    const navEl = document.querySelector('[data-view="nhap-xuat"], [href="#nhap-xuat"]');
+    if (navEl) navEl.click();
+
+    setTimeout(() => {
+        // Find the order in nhapXuatData and open it
+        const rawNx = (typeof nhapXuatData !== 'undefined' && Array.isArray(nhapXuatData))
+            ? nhapXuatData
+            : (window.nhapXuatData || []);
+        const order = rawNx.find(o => String(o.id) === String(orderId) || String(o.ma_don) === String(orderId));
+        if (order && typeof window.selectNxOrderForView === 'function') {
+            window.selectNxOrderForView(order);
+        } else {
+            // Fallback: scroll to matching card
+            const cards = document.querySelectorAll('.nx-order-card');
+            cards.forEach(card => {
+                const codeEl = card.querySelector('.nx-card-code');
+                if (codeEl && (codeEl.textContent.trim() === String(orderId) || card.dataset.orderId === String(orderId))) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.click();
+                }
+            });
+        }
+    }, 350);
 };
 
 // --- Helpers: Formatting & Icons ---

@@ -300,8 +300,6 @@
                                 <label for="tq-branch-filter" class="tq-filter-label">Chi nhánh:</label>
                                 <select id="tq-branch-filter" class="tq-select-branch">
                                     <option value="all">🌐 Toàn Hệ Thống</option>
-                                    <option value="CN1">📍 CN1 - An Dương Vương</option>
-                                    <option value="CN2">📍 CN2 - Huỳnh Tấn Phát</option>
                                 </select>
                             </div>
 
@@ -362,7 +360,7 @@
                         </div>
 
                         <!-- Card 3: Cận Hạn Dùng / Quá Hạn -->
-                        <div class="tq-kpi-card card-kpi-expiry" onclick="jumpToView('vat-tu')">
+                        <div class="tq-kpi-card card-kpi-expiry" onclick="jumpToVatTuExpiryWatch()">
                             <div class="tq-kpi-header">
                                 <div class="tq-kpi-icon icon-rose">
                                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -468,24 +466,24 @@
                                 </div>
                             </div>
 
-                            <!-- Widget 2: Danh Sách Vật Tư Sắp Hết / Cần Nhập Thêm -->
+                            <!-- Widget 2: Danh Sách Vật Tư & Thuốc Xuất Nhiều -->
                             <div class="tq-widget-card">
                                 <div class="tq-widget-header">
                                     <div class="tq-widget-title-wrap">
                                         <div class="tq-widget-icon icon-amber">
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
                                         </div>
                                         <div>
-                                            <h3 class="tq-widget-title">Vật Tư & Thuốc Cần Nhập Hàng</h3>
-                                            <p class="tq-widget-subtitle">Mặt hàng hết hàng hoặc đang dưới mức tồn kho an toàn</p>
+                                            <h3 class="tq-widget-title">Vật Tư & Thuốc Xuất Nhiều</h3>
+                                            <p class="tq-widget-subtitle">Mặt hàng có lượng tiêu thụ & xuất kho nhiều nhất</p>
                                         </div>
                                     </div>
-                                    <button class="tq-btn-view-all" onclick="jumpToView('vat-tu')">Xem Kho Vật Tư →</button>
+                                    <button class="tq-btn-view-all" onclick="jumpToView('the-kho')">Xem Sổ Thẻ Kho →</button>
                                 </div>
-                                <div class="tq-widget-body" id="tq-low-stock-list">
+                                <div class="tq-widget-body" id="tq-top-export-list">
                                     <div class="tq-loading-state">
                                         <div class="tq-spinner"></div>
-                                        <span>Đang phân tích tồn kho an toàn...</span>
+                                        <span>Đang tổng hợp dữ liệu xuất kho...</span>
                                     </div>
                                 </div>
                             </div>
@@ -539,7 +537,7 @@
                             </div>
 
                             <!-- Widget 5: So Sánh Hoạt Động Giữa 2 Chi Nhánh -->
-                            <div class="tq-widget-card">
+                            <div class="tq-widget-card" id="tq-widget-branch-comparison">
                                 <div class="tq-widget-header">
                                     <div class="tq-widget-title-wrap">
                                         <div class="tq-widget-icon icon-blue">
@@ -762,6 +760,24 @@
                         <select id="vattu-filter-branch" class="branch-filter-select manager-branch-select" style="display: none; width: 160px; max-width: 160px;" title="Lọc theo Chi Nhánh (Chỉ dành cho Quản Lý)">
                             <option value="all">🏢 Tất cả chi nhánh</option>
                         </select>
+
+                        <!-- Expiry Date Filter Dropdown (2 Dạng: Trạng Thái & Khoảng Ngày) -->
+                        <div class="vattu-expiry-filter-group" style="display: flex; align-items: center; gap: 6px;">
+                            <select id="vattu-filter-expiry" class="vattu-select-pill" title="Lọc theo Hạn Sử Dụng / Date" onchange="handleVatTuExpiryFilterChange(this.value)">
+                                <option value="all">📅 Tất cả Hạn Dùng</option>
+                                <option value="expired">🔴 Đã quá hạn</option>
+                                <option value="near_30">🟡 Cận hạn (≤ 30 ngày)</option>
+                                <option value="near_60">🟠 Cận hạn (≤ 60 ngày)</option>
+                                <option value="safe">🟢 Hạn an toàn (> 60 ngày)</option>
+                                <option value="range">📆 Khoảng ngày (Từ - Đến)...</option>
+                            </select>
+
+                            <div id="vattu-date-range-wrap" class="vattu-date-range-wrap" style="display: none;">
+                                <input type="date" id="vattu-filter-date-from" class="vattu-date-input" title="Hạn dùng từ ngày" onchange="handleVatTuDateRangeChange()">
+                                <span class="date-sep">-</span>
+                                <input type="date" id="vattu-filter-date-to" class="vattu-date-input" title="Hạn dùng đến ngày" onchange="handleVatTuDateRangeChange()">
+                            </div>
+                        </div>
 
                         <div class="vattu-toolbar-actions">
                             <button type="button" id="btn-clear-all-filters-vattu" class="btn-toolbar-secondary btn-clear-filter" title="Xóa toàn bộ bộ lọc & ô tìm kiếm" onclick="clearAllVatTuFilters()">

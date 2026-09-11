@@ -30,10 +30,13 @@ let vattuColumnFilters = {}; // { colKey: Set([...selectedValues]) }
 let activePopoverColKey = null;
 let popoverTempSelectedValues = new Set();
 
+// Dedicated Expiry Date Filter State (2 Dạng: Trạng thái & Khoảng ngày)
+let vattuExpiryFilterState = { mode: 'all', from: '', to: '' };
+
 const vattuColTitles = {
     ma_vach: 'Mã Vạch',
     lot: 'LOT',
-    date: 'DATE',
+    date: 'Hạn SD',
     ten_mat_hang: 'Tên Mặt Hàng',
     ten_hoa_don: 'Tên Hóa Đơn',
     nha_san_xuat: 'Nhà Sản Xuất',
@@ -50,11 +53,93 @@ const vattuColTitles = {
     gia_von_ton_kho_trung_binh: 'Giá Vốn TB'
 };
 
+// Expiry Date Helper Functions
+function parseDateObj(dateStr) {
+    if (!dateStr || dateStr === '-' || dateStr === 'null' || dateStr === 'undefined') return null;
+    const str = String(dateStr).trim();
+    if (!str || str === '-') return null;
+
+    const dmy = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (dmy) {
+        let y = parseInt(dmy[3], 10);
+        if (y < 100) y += 2000;
+        return new Date(y, parseInt(dmy[2], 10) - 1, parseInt(dmy[1], 10));
+    }
+    const ymd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (ymd) {
+        return new Date(parseInt(ymd[1], 10), parseInt(ymd[2], 10) - 1, parseInt(ymd[3], 10));
+    }
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function getExpiryDiffDays(dateStr) {
+    const d = parseDateObj(dateStr);
+    if (!d) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(d);
+    target.setHours(0, 0, 0, 0);
+    return Math.round((target - today) / (1000 * 60 * 60 * 24));
+}
+
+function getExpBadgeInfo(dateStr) {
+    const diff = getExpiryDiffDays(dateStr);
+    const formatted = formatDate(dateStr);
+    if (diff === null || formatted === '-') {
+        return { formatted: '-', className: 'exp-none', label: '-' };
+    }
+    if (diff < 0) {
+        return { formatted, className: 'exp-expired', label: `Quá hạn ${Math.abs(diff)}d (${formatted})` };
+    }
+    if (diff <= 30) {
+        return { formatted, className: 'exp-near-30', label: `Cận hạn ${diff}d (${formatted})` };
+    }
+    if (diff <= 60) {
+        return { formatted, className: 'exp-near-60', label: `Cận hạn ${diff}d (${formatted})` };
+    }
+    return { formatted, className: 'exp-safe', label: formatted };
+}
+
+function isDateMatchingExpiryFilter(dateStr, filterState) {
+    if (!filterState || filterState.mode === 'all') return true;
+    const dateObj = parseDateObj(dateStr);
+    if (!dateObj) return false;
+
+    const diff = getExpiryDiffDays(dateStr);
+
+    if (filterState.mode === 'expired') {
+        return diff !== null && diff < 0;
+    } else if (filterState.mode === 'near_30') {
+        return diff !== null && diff >= 0 && diff <= 30;
+    } else if (filterState.mode === 'near_60') {
+        return diff !== null && diff >= 0 && diff <= 60;
+    } else if (filterState.mode === 'safe') {
+        return diff !== null && diff > 60;
+    } else if (filterState.mode === 'range') {
+        const targetDate = new Date(dateObj);
+        targetDate.setHours(0, 0, 0, 0);
+        if (filterState.from) {
+            const fromD = new Date(filterState.from);
+            fromD.setHours(0, 0, 0, 0);
+            if (targetDate < fromD) return false;
+        }
+        if (filterState.to) {
+            const toD = new Date(filterState.to);
+            toD.setHours(23, 59, 59, 999);
+            if (targetDate > toD) return false;
+        }
+        return true;
+    }
+    return true;
+}
+
 // Dynamic Column Configuration State
 const defaultVatTuCols = [
     { key: 'ma_vach', title: 'Mã Vạch', visible: true, width: '165px', align: 'left', minWidth: '70px' },
     { key: 'ten_mat_hang', title: 'Tên Mặt Hàng', visible: true, width: '210px', align: 'left', minWidth: '80px' },
     { key: 'ten_hoa_don', title: 'Tên Hóa Đơn', visible: true, width: '190px', align: 'left', minWidth: '80px' },
+    { key: 'date', title: 'Hạn SD', visible: true, width: '130px', align: 'center', minWidth: '85px' },
     { key: 'ton_dau', title: 'Đầu', visible: true, width: '110px', align: 'right', minWidth: '70px' },
     { key: 'nhap', title: 'Nhập', visible: true, width: '110px', align: 'right', minWidth: '70px' },
     { key: 'xuat', title: 'Xuất', visible: true, width: '110px', align: 'right', minWidth: '70px' },
@@ -635,6 +720,49 @@ function renderVatTuStats(allData) {
     if (warningCountEl) warningCountEl.textContent = warningCount.toLocaleString('vi-VN');
 }
 
+// Handle Expiry Preset Change (from Toolbar or Popover)
+window.handleVatTuExpiryFilterChange = function (mode) {
+    const rangeWrap = document.getElementById('vattu-date-range-wrap');
+    if (rangeWrap) {
+        rangeWrap.style.display = (mode === 'range') ? 'inline-flex' : 'none';
+    }
+
+    const selectEl = document.getElementById('vattu-filter-expiry');
+    if (selectEl && selectEl.value !== mode) {
+        selectEl.value = mode;
+    }
+
+    vattuExpiryFilterState.mode = mode;
+    if (mode === 'range') {
+        vattuExpiryFilterState.from = document.getElementById('vattu-filter-date-from')?.value || '';
+        vattuExpiryFilterState.to = document.getElementById('vattu-filter-date-to')?.value || '';
+    } else {
+        vattuExpiryFilterState.from = '';
+        vattuExpiryFilterState.to = '';
+    }
+
+    vattuCurrentPage = 1;
+    applyVatTuFilters();
+};
+
+window.handleVatTuDateRangeChange = function () {
+    const fromVal = document.getElementById('vattu-filter-date-from')?.value || '';
+    const toVal = document.getElementById('vattu-filter-date-to')?.value || '';
+
+    vattuExpiryFilterState.mode = 'range';
+    vattuExpiryFilterState.from = fromVal;
+    vattuExpiryFilterState.to = toVal;
+
+    const selectEl = document.getElementById('vattu-filter-expiry');
+    if (selectEl) selectEl.value = 'range';
+
+    const rangeWrap = document.getElementById('vattu-date-range-wrap');
+    if (rangeWrap) rangeWrap.style.display = 'inline-flex';
+
+    vattuCurrentPage = 1;
+    applyVatTuFilters();
+};
+
 // Clear All Filters & Search Input
 function clearAllVatTuFilters() {
     const searchInput = document.getElementById('vattu-search-input');
@@ -645,6 +773,17 @@ function clearAllVatTuFilters() {
 
     const statusFilter = document.getElementById('vattu-status-filter');
     if (statusFilter) statusFilter.value = 'all';
+
+    // Reset Expiry Filter State & Controls
+    vattuExpiryFilterState = { mode: 'all', from: '', to: '' };
+    const expirySelect = document.getElementById('vattu-filter-expiry');
+    if (expirySelect) expirySelect.value = 'all';
+    const rangeWrap = document.getElementById('vattu-date-range-wrap');
+    if (rangeWrap) rangeWrap.style.display = 'none';
+    const dateFromInp = document.getElementById('vattu-filter-date-from');
+    if (dateFromInp) dateFromInp.value = '';
+    const dateToInp = document.getElementById('vattu-filter-date-to');
+    if (dateToInp) dateToInp.value = '';
 
     vattuColumnFilters = {};
     vattuSortColumn = null;
@@ -723,9 +862,37 @@ function applyVatTuFilters() {
 
         if (!matchSearch || !matchCat || !matchStatus) return false;
 
+        // Expiry Date Filter: checks across all subrows in stats.details & main product date
+        if (vattuExpiryFilterState && vattuExpiryFilterState.mode !== 'all') {
+            const hasDetailMatch = (stats.details || []).some(d => isDateMatchingExpiryFilter(d.date_expiry, vattuExpiryFilterState));
+            const mainDateMatch = isDateMatchingExpiryFilter(item.date || item.date_expiry || item.han_su_dung, vattuExpiryFilterState);
+            if (!hasDetailMatch && !mainDateMatch) {
+                return false;
+            }
+            // Auto expand matching products so sub-rows are visible immediately!
+            expandedVatTuRows.add(String(item.id));
+        }
+
         // Apply Interdependent Column Filters
         for (const [colKey, selectedSet] of Object.entries(vattuColumnFilters)) {
             if (!selectedSet || selectedSet.size === 0) continue;
+            
+            if (colKey === 'date') {
+                const hasMatchingDateInDetails = (stats.details || []).some(d => {
+                    const fDate = formatDate(d.date_expiry);
+                    const val = (fDate && fDate !== '-') ? fDate : '(Trống)';
+                    return selectedSet.has(val);
+                });
+                const mainDateFormatted = formatDate(item.date || item.date_expiry || item.han_su_dung);
+                const mainVal = (mainDateFormatted && mainDateFormatted !== '-') ? mainDateFormatted : '(Trống)';
+                const hasMainMatch = selectedSet.has(mainVal);
+                if (!hasMatchingDateInDetails && !hasMainMatch) {
+                    return false;
+                }
+                expandedVatTuRows.add(String(item.id));
+                continue;
+            }
+
             let rawVal = item[colKey];
             if (['ton_dau', 'nhap', 'xuat', 'ton_cuoi'].includes(colKey)) {
                 rawVal = stats[colKey];
@@ -915,6 +1082,19 @@ function getAvailableOptionsForColumn(colKey) {
         for (const [otherCol, selectedSet] of Object.entries(vattuColumnFilters)) {
             if (otherCol === colKey) continue;
             if (!selectedSet || selectedSet.size === 0) continue;
+
+            if (otherCol === 'date') {
+                const hasMatchingDateInDetails = (stats.details || []).some(d => {
+                    const fDate = formatDate(d.date_expiry);
+                    const val = (fDate && fDate !== '-') ? fDate : '(Trống)';
+                    return selectedSet.has(val);
+                });
+                const mainDateFormatted = formatDate(item.date || item.date_expiry || item.han_su_dung);
+                const mainVal = (mainDateFormatted && mainDateFormatted !== '-') ? mainDateFormatted : '(Trống)';
+                if (!hasMatchingDateInDetails && !selectedSet.has(mainVal)) return false;
+                continue;
+            }
+
             let rawVal = item[otherCol];
             if (['ton_dau', 'nhap', 'xuat', 'ton_cuoi'].includes(otherCol)) {
                 rawVal = stats[otherCol];
@@ -928,9 +1108,32 @@ function getAvailableOptionsForColumn(colKey) {
 
     const countsMap = new Map();
     subset.forEach(item => {
+        const stats = computeProductBranchStats(item);
+
+        if (colKey === 'date') {
+            const dateSet = new Set();
+            if (stats.details && stats.details.length > 0) {
+                stats.details.forEach(d => {
+                    const fDate = formatDate(d.date_expiry);
+                    if (fDate && fDate !== '-') dateSet.add(fDate);
+                });
+            }
+            if (item.date || item.date_expiry || item.han_su_dung) {
+                const fDate = formatDate(item.date || item.date_expiry || item.han_su_dung);
+                if (fDate && fDate !== '-') dateSet.add(fDate);
+            }
+            if (dateSet.size === 0) {
+                dateSet.add('(Trống)');
+            }
+            dateSet.forEach(valStr => {
+                countsMap.set(valStr, (countsMap.get(valStr) || 0) + 1);
+            });
+            return;
+        }
+
         let rawVal = item[colKey];
         if (['ton_dau', 'nhap', 'xuat', 'ton_cuoi'].includes(colKey)) {
-            rawVal = computeProductBranchStats(item)[colKey];
+            rawVal = stats[colKey];
         }
         let valStr = (rawVal === null || rawVal === undefined || String(rawVal).trim() === '' || String(rawVal).trim() === '-') ? '(Trống)' : String(rawVal).trim();
         countsMap.set(valStr, (countsMap.get(valStr) || 0) + 1);
@@ -950,6 +1153,31 @@ function getAvailableOptionsForColumn(colKey) {
     return results;
 }
 
+window.setPopoverExpiryPreset = function (preset) {
+    if (vattuExpiryFilterState.mode === preset) {
+        window.handleVatTuExpiryFilterChange('all');
+    } else {
+        window.handleVatTuExpiryFilterChange(preset);
+    }
+    renderFilterPopoverListOptions();
+};
+
+window.setPopoverExpiryRange = function (fromVal, toVal) {
+    vattuExpiryFilterState.mode = 'range';
+    vattuExpiryFilterState.from = fromVal || '';
+    vattuExpiryFilterState.to = toVal || '';
+    const selectEl = document.getElementById('vattu-filter-expiry');
+    if (selectEl) selectEl.value = 'range';
+    const rangeWrap = document.getElementById('vattu-date-range-wrap');
+    if (rangeWrap) rangeWrap.style.display = 'inline-flex';
+    const dateFromInp = document.getElementById('vattu-filter-date-from');
+    if (dateFromInp) dateFromInp.value = fromVal || '';
+    const dateToInp = document.getElementById('vattu-filter-date-to');
+    if (dateToInp) dateToInp.value = toVal || '';
+    applyVatTuFilters();
+    renderFilterPopoverListOptions();
+};
+
 function renderFilterPopoverListOptions() {
     if (!activePopoverColKey) return;
 
@@ -962,8 +1190,36 @@ function renderFilterPopoverListOptions() {
 
     listContainer.innerHTML = '';
 
+    // If active column is 'date', inject 2-mode quick preset & range header inside the popover
+    if (activePopoverColKey === 'date') {
+        const curMode = vattuExpiryFilterState.mode || 'all';
+        const presetHeader = document.createElement('div');
+        presetHeader.className = 'popover-expiry-section';
+        presetHeader.style.cssText = 'padding: 10px 12px; border-bottom: 1px solid var(--card-border, #334155); background: rgba(245, 158, 11, 0.04);';
+        presetHeader.innerHTML = `
+            <div style="font-size: 11px; font-weight: 700; color: #f59e0b; margin-bottom: 6px; text-transform: uppercase;">⚡ Chọn nhanh trạng thái:</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 8px;">
+                <button type="button" class="btn-popover-preset" style="padding: 5px 8px; font-size: 11px; border-radius: 6px; border: 1px solid ${curMode === 'expired' ? '#ef4444' : 'var(--card-border, #334155)'}; background: ${curMode === 'expired' ? 'rgba(239, 68, 68, 0.2)' : 'var(--card-bg, rgba(30, 41, 59, 0.7))'}; color: ${curMode === 'expired' ? '#ef4444' : 'var(--text-primary)'}; cursor: pointer; text-align: left;" onclick="setPopoverExpiryPreset('expired')">🔴 Đã quá hạn</button>
+                <button type="button" class="btn-popover-preset" style="padding: 5px 8px; font-size: 11px; border-radius: 6px; border: 1px solid ${curMode === 'near_30' ? '#f59e0b' : 'var(--card-border, #334155)'}; background: ${curMode === 'near_30' ? 'rgba(245, 158, 11, 0.2)' : 'var(--card-bg, rgba(30, 41, 59, 0.7))'}; color: ${curMode === 'near_30' ? '#f59e0b' : 'var(--text-primary)'}; cursor: pointer; text-align: left;" onclick="setPopoverExpiryPreset('near_30')">🟡 Cận hạn ≤30d</button>
+                <button type="button" class="btn-popover-preset" style="padding: 5px 8px; font-size: 11px; border-radius: 6px; border: 1px solid ${curMode === 'near_60' ? '#fbbf24' : 'var(--card-border, #334155)'}; background: ${curMode === 'near_60' ? 'rgba(251, 191, 36, 0.2)' : 'var(--card-bg, rgba(30, 41, 59, 0.7))'}; color: ${curMode === 'near_60' ? '#fbbf24' : 'var(--text-primary)'}; cursor: pointer; text-align: left;" onclick="setPopoverExpiryPreset('near_60')">🟠 Cận hạn ≤60d</button>
+                <button type="button" class="btn-popover-preset" style="padding: 5px 8px; font-size: 11px; border-radius: 6px; border: 1px solid ${curMode === 'safe' ? '#10b981' : 'var(--card-border, #334155)'}; background: ${curMode === 'safe' ? 'rgba(16, 185, 129, 0.2)' : 'var(--card-bg, rgba(30, 41, 59, 0.7))'}; color: ${curMode === 'safe' ? '#10b981' : 'var(--text-primary)'}; cursor: pointer; text-align: left;" onclick="setPopoverExpiryPreset('safe')">🟢 An toàn >60d</button>
+            </div>
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">📆 Hoặc khoảng từ - đến:</div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+                <input type="date" id="popover-date-from" class="vattu-date-input" style="flex: 1; padding: 4px 6px; background: var(--card-bg, #0f172a); border: 1px solid var(--card-border, #334155); border-radius: 6px; color: var(--text-primary);" value="${vattuExpiryFilterState.from || ''}" onchange="setPopoverExpiryRange(this.value, document.getElementById('popover-date-to')?.value)">
+                <span style="color: var(--text-muted); font-size: 12px;">-</span>
+                <input type="date" id="popover-date-to" class="vattu-date-input" style="flex: 1; padding: 4px 6px; background: var(--card-bg, #0f172a); border: 1px solid var(--card-border, #334155); border-radius: 6px; color: var(--text-primary);" value="${vattuExpiryFilterState.to || ''}" onchange="setPopoverExpiryRange(document.getElementById('popover-date-from')?.value, this.value)">
+            </div>
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 10px; margin-bottom: 2px; text-transform: uppercase;">📋 Tick chọn ngày cụ thể:</div>
+        `;
+        listContainer.appendChild(presetHeader);
+    }
+
     if (filteredOptions.length === 0) {
-        listContainer.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px;">Không có giá trị trùng khớp</div>`;
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.cssText = 'padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px;';
+        emptyDiv.textContent = 'Không có giá trị trùng khớp';
+        listContainer.appendChild(emptyDiv);
     } else {
         filteredOptions.forEach(opt => {
             const isChecked = popoverTempSelectedValues.has(opt.valStr);
@@ -973,9 +1229,17 @@ function renderFilterPopoverListOptions() {
             const escValue = opt.valStr.replace(/"/g, '&quot;');
             const escText = opt.valStr.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+            let badgeHtml = '';
+            if (activePopoverColKey === 'date' && opt.valStr !== '(Trống)') {
+                const bInfo = getExpBadgeInfo(opt.valStr);
+                if (bInfo.className !== 'exp-none') {
+                    badgeHtml = `<span class="vattu-badge-exp ${bInfo.className}" style="font-size: 10px; padding: 1px 5px; margin-left: 4px;">${bInfo.className === 'exp-expired' ? 'Quá hạn' : (bInfo.className.includes('near') ? 'Cận' : 'An toàn')}</span>`;
+                }
+            }
+
             label.innerHTML = `
                 <input type="checkbox" value="${escValue}" ${isChecked ? 'checked' : ''}>
-                <span>${escText}</span>
+                <span>${escText}${badgeHtml}</span>
                 <span class="popover-item-count">${opt.count}</span>
             `;
 
@@ -1035,6 +1299,9 @@ function applyCurrentColumnFilter() {
 
 function clearCurrentColumnFilter() {
     if (!activePopoverColKey) return;
+    if (activePopoverColKey === 'date') {
+        window.handleVatTuExpiryFilterChange('all');
+    }
     delete vattuColumnFilters[activePopoverColKey];
     updateColumnFilterBadgesUI();
     closeColumnFilterDropdown();
@@ -1050,12 +1317,13 @@ function updateColumnFilterBadgesUI() {
         const colKey = btn.getAttribute('data-col');
         const badge = document.getElementById(`filter-badge-${colKey}`);
         const selectedSet = vattuColumnFilters[colKey];
+        const isDateFilterActive = (colKey === 'date' && vattuExpiryFilterState && vattuExpiryFilterState.mode !== 'all');
 
-        if (selectedSet && selectedSet.size > 0) {
+        if ((selectedSet && selectedSet.size > 0) || isDateFilterActive) {
             btn.classList.add('filter-active');
             hasActiveFilters = true;
             if (badge) {
-                badge.textContent = selectedSet.size;
+                badge.textContent = isDateFilterActive ? (vattuExpiryFilterState.mode === 'range' ? '📅' : '⚡') : selectedSet.size;
                 badge.style.display = 'inline-flex';
             }
         } else {
@@ -1065,6 +1333,15 @@ function updateColumnFilterBadgesUI() {
             }
         }
     });
+
+    if (vattuExpiryFilterState && vattuExpiryFilterState.mode !== 'all') {
+        hasActiveFilters = true;
+        const expirySelect = document.getElementById('vattu-filter-expiry');
+        if (expirySelect) expirySelect.classList.add('filter-active');
+    } else {
+        const expirySelect = document.getElementById('vattu-filter-expiry');
+        if (expirySelect) expirySelect.classList.remove('filter-active');
+    }
 
     const searchInput = document.getElementById('vattu-search-input');
     if (searchInput && searchInput.value.trim() !== '') {
@@ -1210,6 +1487,19 @@ function renderVatTuTable(items) {
                 cellContent = `<div style="display: flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; white-space: nowrap;">${toggleBtn}<code class="vattu-barcode-code" style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1;">${escapeHtml(item.ma_vach || '-')}</code>${gotoTheKhoBtn}</div>`;
             } else if (col.key === 'ten_mat_hang') {
                 cellContent = `<strong>${formatTruncateCell(item.ten_mat_hang, '-')}</strong>`;
+            } else if (col.key === 'date') {
+                let mainExpDate = item.date || item.date_expiry || item.han_su_dung || '';
+                if (hasDetails) {
+                    const validDetailDates = stats.details
+                        .map(d => ({ dateStr: d.date_expiry, diff: getExpiryDiffDays(d.date_expiry) }))
+                        .filter(d => d.diff !== null)
+                        .sort((a, b) => a.diff - b.diff);
+                    if (validDetailDates.length > 0) {
+                        mainExpDate = validDetailDates[0].dateStr;
+                    }
+                }
+                const expInfo = getExpBadgeInfo(mainExpDate);
+                cellContent = `<span class="vattu-badge-exp ${expInfo.className}">${expInfo.label}</span>`;
             } else if (col.key === 'danh_muc') {
                 cellContent = `<span class="vattu-cat-tag">${escapeHtml(item.danh_muc || 'Khác')}</span>`;
             } else if (col.key === 'don_vi') {
@@ -1320,8 +1610,11 @@ function renderVatTuTable(items) {
                             </button>
                         ` : '';
                         cellContent = `<div style="display: flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; white-space: nowrap;"><span class="subrow-label" style="flex-shrink: 0;">LOT: </span><strong class="subrow-value" style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1;">${escapeHtml(d.lot || '-')}</strong>${gotoTheKhoLotBtn}</div>`;
+                    } else if (col.key === 'date') {
+                        const expInfo = getExpBadgeInfo(d.date_expiry);
+                        cellContent = `<span class="vattu-badge-exp ${expInfo.className}">${expInfo.formatted}</span>`;
                     } else if (col.key === 'ten_hoa_don') {
-                        cellContent = `<span class="subrow-label">Hạn SD: <strong class="subrow-value">${escapeHtml(formatDate(d.date_expiry))}</strong></span>`;
+                        cellContent = `<span class="subrow-empty">-</span>`;
                     } else if (col.key === 'ton_dau') {
                         cellContent = `<span class="subrow-value">${dTonDau.toLocaleString('vi-VN')}</span>`;
                     } else if (col.key === 'nhap' || col.key === 'so_luong_nhap') {

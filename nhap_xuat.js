@@ -4638,6 +4638,7 @@ window.saveNxOrderToSystem = saveNxOrderToSystem;
 window.handleNhapXuatPdfUpload = handleNhapXuatPdfUpload;
 window.processPdfFilesBatch = processPdfFilesBatch;
 window.markNxOrderAsDone = markNxOrderAsDone;
+window.selectNxOrderForView = selectNxOrderForView;
 
 window.initNxFolderWatcher = initNxFolderWatcher;
 window.setupNxWatchFolder = setupNxWatchFolder;
