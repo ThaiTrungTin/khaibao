@@ -1031,13 +1031,21 @@ function renderRecentWarehouseTimeline(orders) {
 
 // --- 14. Render Branch Comparison Progress Bars ---
 function renderBranchComparisonBars(data) {
-    const totalIntakes = (data.cn1Intakes + data.cn2Intakes) || 1;
-    const cn1IntakePct = Math.round((data.cn1Intakes / totalIntakes) * 100);
-    const cn2IntakePct = 100 - cn1IntakePct;
+    const totalIntakes = (data.cn1Intakes || 0) + (data.cn2Intakes || 0);
+    let cn1IntakePct = 50;
+    let cn2IntakePct = 50;
+    if (totalIntakes > 0) {
+        cn1IntakePct = Math.round(((data.cn1Intakes || 0) / totalIntakes) * 100);
+        cn2IntakePct = 100 - cn1IntakePct;
+    }
 
-    const totalStock = (data.cn1Stock + data.cn2Stock) || 1;
-    const cn1StockPct = Math.round((data.cn1Stock / totalStock) * 100);
-    const cn2StockPct = 100 - cn1StockPct;
+    const totalStock = (data.cn1Stock || 0) + (data.cn2Stock || 0);
+    let cn1StockPct = 50;
+    let cn2StockPct = 50;
+    if (totalStock > 0) {
+        cn1StockPct = Math.round(((data.cn1Stock || 0) / totalStock) * 100);
+        cn2StockPct = 100 - cn1StockPct;
+    }
 
     const elIntakeCn1 = document.getElementById("tq-bar-intake-cn1");
     const elIntakeCn2 = document.getElementById("tq-bar-intake-cn2");
@@ -1046,8 +1054,8 @@ function renderBranchComparisonBars(data) {
 
     if (elIntakeCn1) elIntakeCn1.style.width = `${cn1IntakePct}%`;
     if (elIntakeCn2) elIntakeCn2.style.width = `${cn2IntakePct}%`;
-    if (elIntakeTxtCn1) elIntakeTxtCn1.textContent = `CN1: ${data.cn1Intakes} ca (${cn1IntakePct}%)`;
-    if (elIntakeTxtCn2) elIntakeTxtCn2.textContent = `CN2: ${data.cn2Intakes} ca (${cn2IntakePct}%)`;
+    if (elIntakeTxtCn1) elIntakeTxtCn1.textContent = `CN1: ${data.cn1Intakes || 0} ca (${cn1IntakePct}%)`;
+    if (elIntakeTxtCn2) elIntakeTxtCn2.textContent = `CN2: ${data.cn2Intakes || 0} ca (${cn2IntakePct}%)`;
 
     const elStockCn1 = document.getElementById("tq-bar-stock-cn1");
     const elStockCn2 = document.getElementById("tq-bar-stock-cn2");
@@ -1056,8 +1064,8 @@ function renderBranchComparisonBars(data) {
 
     if (elStockCn1) elStockCn1.style.width = `${cn1StockPct}%`;
     if (elStockCn2) elStockCn2.style.width = `${cn2StockPct}%`;
-    if (elStockTxtCn1) elStockTxtCn1.textContent = `CN1: ${data.cn1Stock.toLocaleString('vi-VN')} đv (${cn1StockPct}%)`;
-    if (elStockTxtCn2) elStockTxtCn2.textContent = `CN2: ${data.cn2Stock.toLocaleString('vi-VN')} đv (${cn2StockPct}%)`;
+    if (elStockTxtCn1) elStockTxtCn1.textContent = `CN1: ${(data.cn1Stock || 0).toLocaleString('vi-VN')} đv (${cn1StockPct}%)`;
+    if (elStockTxtCn2) elStockTxtCn2.textContent = `CN2: ${(data.cn2Stock || 0).toLocaleString('vi-VN')} đv (${cn2StockPct}%)`;
 }
 
 // --- Helper Functions for Navigation & Jump ---
