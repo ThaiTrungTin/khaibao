@@ -5,6 +5,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     initThemeManager();
     initNavigationManager();
+    initGlobalEscHandler();
 });
 
 /* --- 1. Theme Manager (Dark / Light Mode) --- */
@@ -108,4 +109,97 @@ function initNavigationManager() {
         // Scroll to top of main content on view switch
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+}
+
+/* --- 3. Global Escape Key Handler (Close All Modals, Overlays, Dropdowns) --- */
+function initGlobalEscHandler() {
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+
+        // 1. Close Global Search Dropdown if open
+        const gsDd = document.getElementById('gs-inline-dropdown');
+        const gsInp = document.getElementById('gs-header-input');
+        if (gsDd && gsDd.classList.contains('gs-dd-open')) {
+            gsDd.classList.remove('gs-dd-open');
+            if (gsInp) gsInp.blur();
+            return;
+        }
+
+        // 2. Close User Profile Dropdown if open
+        const userDd = document.getElementById('user-profile-dropdown');
+        if (userDd && userDd.classList.contains('show')) {
+            userDd.classList.remove('show');
+            return;
+        }
+
+        // 3. Close Column Filter Dropdowns if open
+        const openFilterDd = document.querySelector('.column-filter-dropdown.show, .th-filter-dropdown.show');
+        if (openFilterDd) {
+            openFilterDd.classList.remove('show');
+            return;
+        }
+
+        // 4. Close Image Lightbox / Fullscreen preview
+        const lightbox = document.getElementById('image-lightbox-overlay') || document.querySelector('.image-lightbox-overlay');
+        if (lightbox && window.getComputedStyle(lightbox).display !== 'none') {
+            lightbox.style.display = 'none';
+            return;
+        }
+
+        // 5. Close visible Modals / Overlays
+        const modalSelectors = [
+            '.modal-overlay',
+            '.custom-modal-overlay',
+            '.confirm-modal-overlay',
+            '.dialog-overlay',
+            '.modal',
+            '[id$="-modal"]',
+            '[id$="-modal-overlay"]'
+        ];
+
+        const allModals = Array.from(document.querySelectorAll(modalSelectors.join(',')))
+            .filter(el => {
+                if (!el || el.id === 'login-screen' || el.classList.contains('login-screen-overlay')) return false;
+                const style = window.getComputedStyle(el);
+                return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+            });
+
+        if (allModals.length > 0) {
+            // Pick the topmost modal in DOM order
+            const topModal = allModals[allModals.length - 1];
+
+            // A. Try clicking close / cancel button inside the modal
+            const closeBtn = topModal.querySelector(
+                '.modal-close-btn, .btn-close-modal, .btn-close, .btn-cancel, [data-dismiss="modal"], .btn-secondary, button[onclick*="close"], button[onclick*="Close"], button[onclick*="Hide"], button[onclick*="Cancel"]'
+            );
+
+            if (closeBtn) {
+                closeBtn.click();
+                return;
+            }
+
+            // B. Specific modal close function mappings
+            const mid = topModal.id || '';
+            if (mid === 'vattu-modal' && typeof window.closeVatTuModal === 'function') window.closeVatTuModal();
+            else if (mid === 'vattu-delete-modal' && typeof window.closeDeleteVatTuModal === 'function') window.closeDeleteVatTuModal();
+            else if (mid === 'vattu-excel-export-modal' && typeof window.closeVatTuExcelExportModal === 'function') window.closeVatTuExcelExportModal();
+            else if (mid === 'vattu-notice-modal' && typeof window.closeVatTuNoticeModal === 'function') window.closeVatTuNoticeModal();
+            else if (mid === 'vattu-column-config-modal' && typeof window.closeColumnConfigModal === 'function') window.closeColumnConfigModal();
+            else if (mid === 'vattu-qr-print-modal' && typeof window.closeVatTuQrPrintModal === 'function') window.closeVatTuQrPrintModal();
+            else if (mid === 'thekho-column-config-modal' && typeof window.closeTheKhoColumnConfigModal === 'function') window.closeTheKhoColumnConfigModal();
+            else if (mid === 'thekho-excel-export-modal' && typeof window.closeTheKhoExcelExportModal === 'function') window.closeTheKhoExcelExportModal();
+            else if (mid === 'staff-modal' && typeof window.closeStaffModal === 'function') window.closeStaffModal();
+            else if (mid === 'staff-delete-modal' && typeof window.closeDeleteStaffModal === 'function') window.closeDeleteStaffModal();
+            else if (mid === 'profile-edit-modal' && typeof window.closeProfileEditModal === 'function') window.closeProfileEditModal();
+            else if (mid === 'details-modal' && typeof window.closeDetailsModal === 'function') window.closeDetailsModal();
+            else if (mid === 'qr-modal' && typeof window.closeQrModal === 'function') window.closeQrModal();
+            else if (mid === 'kiemkho-item-logs-modal' && typeof window.closeKiemKhoItemLogsModal === 'function') window.closeKiemKhoItemLogsModal();
+            else if (mid === 'nx-history-log-modal' && typeof window.closeNxHistoryLogModal === 'function') window.closeNxHistoryLogModal();
+            else if (mid === 'generic-confirm-modal' && typeof window.closeGenericConfirmModal === 'function') window.closeGenericConfirmModal();
+            else {
+                topModal.style.display = 'none';
+                topModal.classList.remove('active', 'show', 'open');
+            }
+        }
+    });
 }
