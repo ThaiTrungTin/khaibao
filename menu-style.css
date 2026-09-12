@@ -614,14 +614,18 @@ html, body {
    VIEW 1: TỔNG QUAN (DASHBOARD OVERVIEW STYLES)
    ========================================================================== */
 
+#view-tong-quan {
+    padding: 10px 14px 20px;
+}
+
 .tq-dashboard-container {
-    padding: 12px 20px 20px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
     width: 100%;
-    max-width: 1600px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     box-sizing: border-box;
 }
 
