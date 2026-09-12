@@ -452,6 +452,8 @@ html, body {
     height: 74px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 16px;
     padding: 0 30px;
     background: rgba(10, 14, 23, 0.85);
     backdrop-filter: blur(20px);
@@ -6577,12 +6579,6 @@ mark.gs-highlight {
 /* ==========================================================================
    Inline Global Search Bar (header center)
    ========================================================================== */
-
-.app-global-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
 
 .gs-inline-wrap {
     flex: 1;
