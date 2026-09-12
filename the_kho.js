@@ -184,19 +184,17 @@ async function fetchTheKhoData() {
                 .order('created_at', { ascending: false });
 
             if (error) {
-                console.warn("TheKho: Supabase fetch error, using sample fallback:", error.message);
-                theKhoData = getSampleTheKhoData();
-            } else if (data && data.length > 0) {
-                theKhoData = data;
+                console.warn("TheKho: Supabase fetch error:", error.message);
+                theKhoData = [];
             } else {
-                theKhoData = getSampleTheKhoData();
+                theKhoData = data || [];
             }
         } else {
-            theKhoData = getSampleTheKhoData();
+            theKhoData = [];
         }
     } catch (err) {
         console.error("TheKho: Error fetching data:", err);
-        theKhoData = getSampleTheKhoData();
+        theKhoData = [];
     } finally {
         showTheKhoLoading(false);
         await initTheKhoBranchFilterForManager();
@@ -205,63 +203,9 @@ async function fetchTheKhoData() {
     }
 }
 
-// Sample Fallback Data
+// Sample Fallback Data (Cleaned - returns empty array by default)
 function getSampleTheKhoData() {
-    const now = new Date();
-    return [
-        {
-            id: 1,
-            ma_qr: 'QR-AMOX-500',
-            ma_vach: '8935001234567',
-            lot: 'LOT202601',
-            date_expiry: '2026-12-31',
-            ten_hang_hoa: 'Thuốc Kháng Sinh Amoxicillin 500mg',
-            loai: 'Nhập',
-            so_luong: 100,
-            muc_dich: 'Nhập kho định kỳ từ Mekophar',
-            user_name: 'Thái Trung Tín (Quản Lý)',
-            created_at: new Date(now - 48 * 3600 * 1000).toISOString()
-        },
-        {
-            id: 2,
-            ma_qr: 'QR-BIOFEL-PCH',
-            ma_vach: '8935007654321',
-            lot: 'LOT202602',
-            date_expiry: '2027-06-30',
-            ten_hang_hoa: 'Vắc xin Phòng 5 Bệnh Cho Mèo (Biofel PCH)',
-            loai: 'Nhập',
-            so_luong: 50,
-            muc_dich: 'Nhập bổ sung từ Bioveta',
-            user_name: 'Thái Trung Tín (Quản Lý)',
-            created_at: new Date(now - 24 * 3600 * 1000).toISOString()
-        },
-        {
-            id: 3,
-            ma_qr: 'QR-AMOX-500',
-            ma_vach: '8935001234567',
-            lot: 'LOT202601',
-            date_expiry: '2026-12-31',
-            ten_hang_hoa: 'Thuốc Kháng Sinh Amoxicillin 500mg',
-            loai: 'Xuất',
-            so_luong: 2,
-            muc_dich: 'Xuất sử dụng ca điều trị #1042',
-            user_name: 'Bác sĩ Thú y Hùng',
-            created_at: new Date(now - 5 * 3600 * 1000).toISOString()
-        },
-        {
-            id: 4,
-            ma_qr: 'QR-BIOFEL-PCH',
-            ma_vach: '8935007654321',
-            lot: 'LOT202602',
-            date_expiry: '2027-06-30',
-            ten_hang_hoa: 'Vắc xin Phòng 5 Bệnh Cho Mèo (Biofel PCH)',
-            loai: 'Xuất',
-            so_luong: 1,
-            muc_dich: 'Xuất tiêm phòng ca #1045',
-            user_name: 'Kỹ thuật viên Nam',
-            created_at: new Date(now - 2 * 3600 * 1000).toISOString()
-        }
-    ];
+    return [];
 }
 
 // Supabase Realtime Channel
