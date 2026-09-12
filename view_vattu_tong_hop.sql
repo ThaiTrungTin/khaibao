@@ -1,9 +1,3 @@
--- ==========================================================================
--- VIEW VẬT TƯ TỔNG HỢP (VIEW_VATTU_TONG_HOP)
--- Tự động tính toán Tồn Đầu, Nhập, Xuất, Tồn Cuối cho từng Vật Tư theo Chi Nhánh trên Supabase Server
--- ==========================================================================
-
--- Xóa View cũ nếu có để tránh lỗi PostgreSQL (cannot change name/position of view column)
 DROP VIEW IF EXISTS public.view_vattu_tong_hop CASCADE;
 
 CREATE OR REPLACE VIEW public.view_vattu_tong_hop AS
@@ -44,7 +38,4 @@ GROUP BY
     sp.gia_von_ton_kho_trung_binh,
     tk.chi_nhanh;
 
--- Cấp quyền SELECT công khai cho public.view_vattu_tong_hop
 GRANT SELECT ON public.view_vattu_tong_hop TO anon, authenticated, service_role;
-
-

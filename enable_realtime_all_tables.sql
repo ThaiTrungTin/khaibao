@@ -1,13 +1,3 @@
--- ==========================================================================
--- GAIA Animal Hospital - SQL KÍCH HOẠT REALTIME CHO TOÀN BỘ CÁC BẢNG SUPABASE
--- ==========================================================================
--- Chức năng:
--- 1. Đảm bảo publication 'supabase_realtime' đã tồn tại trên database.
--- 2. Đặt REPLICA IDENTITY FULL cho từng bảng (giúp gửi đầy đủ dữ liệu khi UPDATE/DELETE).
--- 3. Đưa tất cả các bảng chính vào publication Realtime để tự động phát sóng websocket.
--- ==========================================================================
-
--- 1. Bật REPLICA IDENTITY FULL cho các bảng (nếu bảng tồn tại)
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'pet_intakes' AND table_type = 'BASE TABLE') THEN
@@ -51,7 +41,6 @@ BEGIN
     END IF;
 END $$;
 
--- 2. Thêm từng bảng vào publication 'supabase_realtime'
 DO $$
 DECLARE
     t TEXT;
@@ -68,15 +57,12 @@ DECLARE
         'staff'
     ];
 BEGIN
-    -- Tạo publication nếu chưa có
     IF NOT EXISTS (SELECT FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
         CREATE PUBLICATION supabase_realtime;
     END IF;
 
     FOREACH t IN ARRAY tbls LOOP
-        -- Kiểm tra bảng có tồn tại là BASE TABLE không
         IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t AND table_type = 'BASE TABLE') THEN
-            -- Nếu bảng chưa có trong publication thì add vào
             IF NOT EXISTS (
                 SELECT 1 
                 FROM pg_publication_tables 
@@ -88,11 +74,8 @@ BEGIN
             END IF;
         END IF;
     END LOOP;
-
-    RAISE NOTICE '>>> ĐÃ KÍCH HOẠT REALTIME CHO TOÀN BỘ CÁC BẢNG THÀNH CÔNG! <<<';
 END $$;
 
--- 3. Danh sách các bảng đang được phát sóng Realtime
 SELECT 
     schemaname AS schema,
     tablename AS bang_da_bat_realtime

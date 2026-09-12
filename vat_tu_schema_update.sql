@@ -1,9 +1,3 @@
--- ==============================================================================
--- GAIA Animal Hospital - SQL Migration for public.san_pham Table & View Vật Tư
--- Updates: Adds Phòng Ban (TEXT), Tồn Đầu, Nhập, Xuất, Tồn Cuối (NUMERIC) & updates view_vattu_tong_hop
--- ==============================================================================
-
--- 1. Thêm cột phòng ban và các cột tồn kho mới kiểu NUMERIC
 ALTER TABLE public.san_pham 
 ADD COLUMN IF NOT EXISTS phong_ban TEXT,
 ADD COLUMN IF NOT EXISTS ton_dau NUMERIC DEFAULT 0,
@@ -11,7 +5,6 @@ ADD COLUMN IF NOT EXISTS nhap NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS xuat NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS ton_cuoi NUMERIC DEFAULT 0;
 
--- 2. Chuyển đổi dữ liệu tồn kho hiện có từ các cột cũ sang cột mới (nếu các cột cũ còn tồn tại)
 DO $$ 
 BEGIN 
     IF EXISTS (
@@ -29,20 +22,11 @@ BEGIN
     END IF;
 END $$;
 
--- 3. Xóa vĩnh viễn các cột cũ (tong_ton_kho, so_luong_nhap, so_luong_ton)
 ALTER TABLE public.san_pham 
 DROP COLUMN IF EXISTS tong_ton_kho,
 DROP COLUMN IF EXISTS so_luong_nhap,
 DROP COLUMN IF EXISTS so_luong_ton;
 
--- 4. Chú thích tài liệu cho các cột mới
-COMMENT ON COLUMN public.san_pham.phong_ban IS 'Phòng ban quản lý / phụ trách vật tư (Kiểu TEXT)';
-COMMENT ON COLUMN public.san_pham.ton_dau IS 'Số lượng tồn đầu kỳ (Kiểu NUMERIC)';
-COMMENT ON COLUMN public.san_pham.nhap IS 'Số lượng nhập trong kỳ (Kiểu NUMERIC)';
-COMMENT ON COLUMN public.san_pham.xuat IS 'Số lượng xuất trong kỳ (Kiểu NUMERIC)';
-COMMENT ON COLUMN public.san_pham.ton_cuoi IS 'Số lượng tồn cuối kỳ (Kiểu NUMERIC)';
-
--- 5. Cập nhật lại View public.view_vattu_tong_hop bao gồm cột phong_ban
 DROP VIEW IF EXISTS public.view_vattu_tong_hop CASCADE;
 
 CREATE OR REPLACE VIEW public.view_vattu_tong_hop AS
@@ -83,6 +67,4 @@ GROUP BY
     sp.gia_von_ton_kho_trung_binh,
     tk.chi_nhanh;
 
--- Cấp quyền SELECT công khai cho public.view_vattu_tong_hop
 GRANT SELECT ON public.view_vattu_tong_hop TO anon, authenticated, service_role;
-
