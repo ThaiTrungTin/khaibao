@@ -6117,11 +6117,18 @@ select.vattu-select-branch:focus,
 .kiemkho-stat-card.card-match .stat-value { color: #059669; }
 .kiemkho-stat-card.card-excess .stat-value { color: #d97706; }
 .kiemkho-stat-card.card-missing .stat-value { color: #2563eb; }
+.kiemkho-stat-card.card-unscanned .stat-value { color: #475569; }
 
-.dark-mode .kiemkho-stat-card.card-total .stat-value { color: #38bdf8; }
-.dark-mode .kiemkho-stat-card.card-match .stat-value { color: #34d399; }
-.dark-mode .kiemkho-stat-card.card-excess .stat-value { color: #fbbf24; }
-.dark-mode .kiemkho-stat-card.card-missing .stat-value { color: #60a5fa; }
+.dark-mode .kiemkho-stat-card.card-total .stat-value,
+[data-theme="dark"] .kiemkho-stat-card.card-total .stat-value { color: #38bdf8; }
+.dark-mode .kiemkho-stat-card.card-match .stat-value,
+[data-theme="dark"] .kiemkho-stat-card.card-match .stat-value { color: #34d399; }
+.dark-mode .kiemkho-stat-card.card-excess .stat-value,
+[data-theme="dark"] .kiemkho-stat-card.card-excess .stat-value { color: #fbbf24; }
+.dark-mode .kiemkho-stat-card.card-missing .stat-value,
+[data-theme="dark"] .kiemkho-stat-card.card-missing .stat-value { color: #60a5fa; }
+.dark-mode .kiemkho-stat-card.card-unscanned .stat-value,
+[data-theme="dark"] .kiemkho-stat-card.card-unscanned .stat-value { color: #94a3b8; }
 
 /* Live Monitoring System Stock Change Red Pulse Highlight */
 @keyframes kiemkhoRedPulse {
@@ -6142,34 +6149,79 @@ select.vattu-select-branch:focus,
 }
 
 .canbang-input-gpet {
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 6px;
     color: #38bdf8;
     font-weight: 700;
-    font-size: 13px;
+    font-size: 13.5px;
     text-align: center;
     width: 70px;
-    padding: 3px 6px;
+    padding: 4px 6px;
     outline: none;
     transition: all 0.2s ease;
 }
 
 .canbang-input-gpet:focus {
     border-color: #38bdf8;
-    background: rgba(56, 189, 248, 0.1);
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    background: rgba(56, 189, 248, 0.12);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
 }
 
 [data-theme="light"] .canbang-input-gpet {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-    color: #0284c7;
+    background: #ffffff;
+    border: 1.5px solid #94a3b8;
+    color: #0369a1;
+    font-weight: 800;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 [data-theme="light"] .canbang-input-gpet:focus {
     border-color: #0284c7;
     background: #ffffff;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25);
+}
+
+.cell-qty-ton-kho {
+    font-weight: 700;
+    color: #60a5fa;
+}
+[data-theme="light"] .cell-qty-ton-kho {
+    color: #2563eb;
+    font-weight: 800;
+}
+
+.cell-qty-thuc-te {
+    font-weight: 700;
+    color: #f59e0b;
+}
+[data-theme="light"] .cell-qty-thuc-te {
+    color: #d97706;
+    font-weight: 800;
+}
+
+.cell-diff-pos {
+    font-weight: 800;
+    color: #10b981;
+}
+[data-theme="light"] .cell-diff-pos {
+    color: #059669;
+}
+
+.cell-diff-neg {
+    font-weight: 800;
+    color: #ef4444;
+}
+[data-theme="light"] .cell-diff-neg {
+    color: #dc2626;
+}
+
+.cell-diff-zero {
+    font-weight: 700;
+    color: #94a3b8;
+}
+[data-theme="light"] .cell-diff-zero {
+    color: #64748b;
 }
 
 .badge-canbang-match {
@@ -6181,6 +6233,11 @@ select.vattu-select-branch:focus,
     font-size: 11px;
     font-weight: 700;
 }
+[data-theme="light"] .badge-canbang-match {
+    background: rgba(16, 185, 129, 0.12);
+    color: #047857;
+    border-color: rgba(16, 185, 129, 0.35);
+}
 
 .badge-canbang-excess {
     background: rgba(245, 158, 11, 0.15);
@@ -6191,6 +6248,11 @@ select.vattu-select-branch:focus,
     font-size: 11px;
     font-weight: 700;
 }
+[data-theme="light"] .badge-canbang-excess {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.35);
+}
 
 .badge-canbang-missing {
     background: rgba(239, 68, 68, 0.15);
@@ -6200,6 +6262,11 @@ select.vattu-select-branch:focus,
     border-radius: 6px;
     font-size: 11px;
     font-weight: 700;
+}
+[data-theme="light"] .badge-canbang-missing {
+    background: rgba(239, 68, 68, 0.12);
+    color: #b91c1c;
+    border-color: rgba(239, 68, 68, 0.35);
 }
 
 .tr-system-changed {

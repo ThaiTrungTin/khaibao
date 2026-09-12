@@ -3218,21 +3218,21 @@ function renderCanBangKhoTable() {
             badgeHtml = `<span class="canbang-badge badge-canbang-missing">🔻 Thiếu (${item.chenh_lech})</span>`;
         }
 
-        let diffColor = '#94a3b8';
-        if (item.chenh_lech > 0) diffColor = '#10b981';
-        else if (item.chenh_lech < 0) diffColor = '#ef4444';
+        let diffClass = 'cell-diff-zero';
+        if (item.chenh_lech > 0) diffClass = 'cell-diff-pos';
+        else if (item.chenh_lech < 0) diffClass = 'cell-diff-neg';
 
         html += `
             <tr>
-                <td style="text-align: center; color: #94a3b8; font-size: 12px;">${globalIdx + 1}</td>
-                <td><strong style="color: var(--text-color); font-family: monospace; font-size: 13px;">${escapeHtml(item.ma_vach)}</strong></td>
+                <td style="text-align: center; color: var(--text-muted, #94a3b8); font-size: 12px;">${globalIdx + 1}</td>
+                <td><strong style="color: var(--text-primary, #f9fafb); font-family: monospace; font-size: 13px;">${escapeHtml(item.ma_vach)}</strong></td>
                 <td><div class="cell-truncate-wrap" title="${escapeHtml(item.ten_hang_hoa)}"><span class="cell-truncate-text" style="font-weight: 600; font-size: 12.5px;">${escapeHtml(item.ten_hang_hoa || 'Chưa có tên')}</span></div></td>
                 <td style="text-align: center;">
-                    <input type="number" min="0" class="canbang-input-gpet" value="${item.ton_gpet !== undefined ? item.ton_gpet : 0}" onchange="handleCanBangGpetQtyChange('${encodeURIComponent(key)}', this.value)" style="width: 70px; text-align: center; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #38bdf8; font-weight: 700; padding: 2px 4px;" />
+                    <input type="number" min="0" class="canbang-input-gpet" value="${item.ton_gpet !== undefined ? item.ton_gpet : 0}" onchange="handleCanBangGpetQtyChange('${encodeURIComponent(key)}', this.value)" />
                 </td>
-                <td style="text-align: center; font-weight: 700; color: #60a5fa;">${item.ton_kho}</td>
-                <td style="text-align: center; font-weight: 700; color: #f59e0b;">${item.thuc_te}</td>
-                <td style="text-align: center; font-weight: 800; color: ${diffColor};">${item.chenh_lech > 0 ? '+' : ''}${item.chenh_lech}</td>
+                <td style="text-align: center;" class="cell-qty-ton-kho">${item.ton_kho}</td>
+                <td style="text-align: center;" class="cell-qty-thuc-te">${item.thuc_te}</td>
+                <td style="text-align: center;" class="${diffClass}">${item.chenh_lech > 0 ? '+' : ''}${item.chenh_lech}</td>
                 <td style="text-align: center;">${badgeHtml}</td>
                 <td style="text-align: center;">
                     <button type="button" onclick="deleteCanBangKhoRow('${encodeURIComponent(key)}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 14px; opacity: 0.8;" title="Xóa dòng này">🗑️</button>
