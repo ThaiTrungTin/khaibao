@@ -1026,9 +1026,10 @@ function renderRecentWarehouseTimeline(orders) {
         const code = escapeHtml(ord.ma_don || 'ĐƠN-KHO');
         const creator = escapeHtml(ord.user_name || 'Kho GAIA');
         const branch = extractOrderBranchCode(ord) || 'CN1';
+        const orderRef = String(ord.id || ord.ma_don || '');
 
         html += `
-            <div class="tq-timeline-item" onclick="jumpToNxOrder('${escapeHtml(ord.id || ord.ma_don)}')">
+            <div class="tq-timeline-item" data-order-id="${escapeHtml(orderRef)}">
                 <div class="tq-timeline-icon-wrap ${isNhap ? 'is-nhap' : 'is-xuat'}">${iconSvg}</div>
                 <div class="tq-timeline-content">
                     <div class="tq-timeline-header">
@@ -1047,6 +1048,20 @@ function renderRecentWarehouseTimeline(orders) {
 
     html += `</div>`;
     container.innerHTML = html;
+
+    if (!container.dataset.timelineClickBound) {
+        container.addEventListener('click', (e) => {
+            const card = e.target.closest('.tq-timeline-item');
+            if (!card) return;
+            const orderId = card.getAttribute('data-order-id') || '';
+            if (orderId) {
+                if (typeof window.jumpToNxOrder === 'function') {
+                    window.jumpToNxOrder(orderId);
+                }
+            }
+        });
+        container.dataset.timelineClickBound = '1';
+    }
 }
 
 const BRANCH_PALETTES = [

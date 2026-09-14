@@ -2213,7 +2213,7 @@ function renderKiemKhoTable() {
         if (emptyState) emptyState.style.display = 'flex';
         const resetBtn = document.getElementById('btn-reset-kiem-kho');
         if (resetBtn) resetBtn.style.display = 'inline-flex';
-        renderKiemKhoPagination(0, 0);
+        renderKiemKhoPaginationControls(0, 1, 0, 0);
         return;
     }
 
@@ -2352,6 +2352,16 @@ function changeKiemKhoPageSize(val) {
     kiemKhoPageSize = val === 'all' ? Infinity : (parseInt(val, 10) || 25);
     kiemKhoCurrentPage = 1;
     renderKiemKhoTable();
+}
+
+// Compatibility wrapper for the older Kiểm Kho pagination call name.
+function renderKiemKhoPagination(totalFiltered, totalPages, startIdx = 0, endIdx = totalFiltered || 0) {
+    renderKiemKhoPaginationControls(totalFiltered, Math.max(1, Number(totalPages) || 1), startIdx, endIdx);
+}
+
+// Old UI/HTML reference sometimes hit the typo-ish combined name directly.
+function KhoPagnation(totalFiltered, totalPages, startIdx = 0, endIdx = totalFiltered || 0) {
+    renderKiemKhoPaginationControls(totalFiltered, Math.max(1, Number(totalPages) || 1), startIdx, endIdx);
 }
 
 // Render Pagination Bar for Kiểm Kho (Matches View Vật Tư UX)
@@ -2867,7 +2877,9 @@ window.showKiemKhoItemScanLogsModal = showKiemKhoItemScanLogsModal;
 window.closeKiemKhoItemLogsModal = closeKiemKhoItemLogsModal;
 window.deleteSingleQuetChiTietLog = deleteSingleQuetChiTietLog;
 window.changeKiemKhoPageSize = changeKiemKhoPageSize;
+window.renderKiemKhoPagination = renderKiemKhoPagination;
 window.renderKiemKhoPaginationControls = renderKiemKhoPaginationControls;
+window.KhoPagnation = KhoPagnation;
 window.clearAllKiemKhoFilters = clearAllKiemKhoFilters;
 
 // Open AppSheet-Style Scan Logs Detail Modal
