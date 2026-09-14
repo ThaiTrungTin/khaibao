@@ -1,8 +1,3 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Kiểm Kho Vật Tư (kiem_kho.js)
-   Quét mã QR/Vạch, Tự động cộng dồn, Âm thanh Đủ/Dư, Lưu CSDL & Xuất Excel
-   ========================================================================== */
-
 let kiemKhoItemsMap = new Map();
 let kiemKhoTotalScans = 0;
 let kiemKhoSelectedBranch = '';
@@ -11,15 +6,13 @@ let currentKiemKhoPhieuId = null;
 let currentKiemKhoMaPhieu = null;
 const kiemKhoClientSessionId = 'cli_' + Math.random().toString(36).substring(2, 11);
 
-// Cân Bằng Kho (GPET Audit) State
 let canBangKhoMap = new Map();
 let canBangSearchQuery = '';
 
-// Column Filters & Resizing State
 let kiemKhoColumnFilters = {};
 let canBangColumnFilters = {};
 let activeKiemKhoFilterCol = null;
-let activeKiemKhoFilterTable = 'kiemkho'; // 'kiemkho' or 'canbang'
+let activeKiemKhoFilterTable = 'kiemkho'; 
 let kiemKhoPopoverTempSelectedValues = new Set();
 
 const kiemKhoColTitles = {
@@ -47,14 +40,12 @@ const canBangColTitles = {
     trang_thai: 'Trạng Thái'
 };
 
-// Pagination state
 let kiemKhoCurrentPage = 1;
 let kiemKhoPageSize = 25;
 let canBangCurrentPage = 1;
 let canBangPageSize = 25;
 let kiemKhoSearchQuery = '';
 
-// Debounced DOM Render for 500+ items to prevent UI stutter/lag
 let renderKiemKhoTableTimer = null;
 function debouncedRenderKiemKhoTable(delay = 100) {
     if (renderKiemKhoTableTimer) clearTimeout(renderKiemKhoTableTimer);
@@ -64,7 +55,6 @@ function debouncedRenderKiemKhoTable(delay = 100) {
     }, delay);
 }
 
-// Generate Mã Phiếu: PKK-CN1-02/09/2026_01
 async function generateKiemKhoMaPhieu(branch) {
     const now = new Date();
     const dd = String(now.getDate()).padStart(2, '0');
@@ -78,7 +68,6 @@ async function generateKiemKhoMaPhieu(branch) {
     const branchCode = (!targetBranch || targetBranch === 'all') ? 'ALL' : targetBranch.toUpperCase();
     const prefix = `PKK-${branchCode}-${dateStr}_`;
 
-    // Count today's existing phieus to get sequence
     let seq = 1;
     const client = getVatTuSupabaseClient();
     if (client) {
@@ -92,7 +81,6 @@ async function generateKiemKhoMaPhieu(branch) {
     return `${prefix}${String(seq).padStart(2, '0')}`;
 }
 
-// Initialize Web Audio API Synthesizer Context
 function getKiemKhoAudioContext() {
     if (!kiemKhoAudioCtx) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -106,10 +94,6 @@ function getKiemKhoAudioContext() {
     return kiemKhoAudioCtx;
 }
 
-// Play Audio Feedback (Web Audio API Synthesizer)
-// 'match' -> Âm báo ĐỦ (Chime 2 nốt cao E5 -> G5)
-// 'excess' -> Âm báo DƯ (Cảnh báo F4 -> C4)
-// 'scan' -> Âm beep quét mã vạch
 function playKiemKhoAudio(type) {
     try {
         const ctx = getKiemKhoAudioContext();
@@ -118,12 +102,12 @@ function playKiemKhoAudio(type) {
         const now = ctx.currentTime;
 
         if (type === 'match') {
-            // Âm báo KHỐP / ĐỦ: 2 nốt ngân cao dịu ngọt (659Hz - E5, 784Hz - G5)
+
             const osc1 = ctx.createOscillator();
             const gain1 = ctx.createGain();
             osc1.type = 'sine';
-            osc1.frequency.setValueAtTime(659.25, now); // E5
-            osc1.frequency.setValueAtTime(783.99, now + 0.1); // G5
+            osc1.frequency.setValueAtTime(659.25, now); 
+            osc1.frequency.setValueAtTime(783.99, now + 0.1); 
             gain1.gain.setValueAtTime(0.3, now);
             gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
             osc1.connect(gain1);
@@ -131,12 +115,12 @@ function playKiemKhoAudio(type) {
             osc1.start(now);
             osc1.stop(now + 0.4);
         } else if (type === 'excess') {
-            // Âm báo DƯ / VƯỢT: Tiếng còi cảnh báo gấp đôi (349Hz - F4, 261Hz - C4)
+
             const osc1 = ctx.createOscillator();
             const gain1 = ctx.createGain();
             osc1.type = 'sawtooth';
-            osc1.frequency.setValueAtTime(349.23, now); // F4
-            osc1.frequency.setValueAtTime(261.63, now + 0.15); // C4
+            osc1.frequency.setValueAtTime(349.23, now); 
+            osc1.frequency.setValueAtTime(261.63, now + 0.15); 
             gain1.gain.setValueAtTime(0.35, now);
             gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
             osc1.connect(gain1);
@@ -144,7 +128,7 @@ function playKiemKhoAudio(type) {
             osc1.start(now);
             osc1.stop(now + 0.45);
         } else {
-            // Standard Scan Beep: 880Hz (A5)
+
             const osc1 = ctx.createOscillator();
             const gain1 = ctx.createGain();
             osc1.type = 'sine';
@@ -161,7 +145,6 @@ function playKiemKhoAudio(type) {
     }
 }
 
-// Get current logged-in user name & branch with fallback
 function getKiemKhoLoggedUserName() {
     let u = null;
     if (typeof window.getCurrentLoggedUser === 'function') {
@@ -196,7 +179,6 @@ function getKiemKhoLoggedBranch() {
     return userObj.code || 'CN1';
 }
 
-// Helper to normalize scanner object
 function normalizeScanner(user_name, branch) {
     let name = user_name;
     let br = branch;
@@ -209,7 +191,6 @@ function normalizeScanner(user_name, branch) {
     name = (name && String(name).trim()) ? String(name).trim() : 'Nhân viên';
     br = (br && String(br).trim()) ? String(br).trim() : 'CN1';
 
-    // Safety: If name is a JSON string like '[{"user_name":"Thái Trung Tín","branch":"CN2"}]'
     if (name.includes('{') || name.includes('[')) {
         try {
             const parsed = JSON.parse(name);
@@ -227,7 +208,6 @@ function normalizeScanner(user_name, branch) {
     return { user_name: name, branch: br };
 }
 
-// Helper to parse user_name string into array of scanner objects
 function parseKiemKhoScanners(userNameStr, defaultBranch = 'CN1', phieuUserName = '') {
     if (Array.isArray(userNameStr)) {
         return userNameStr.map(s => normalizeScanner(s && (s.user_name || s.name || s.user || s), s && (s.branch || defaultBranch)));
@@ -244,7 +224,6 @@ function parseKiemKhoScanners(userNameStr, defaultBranch = 'CN1', phieuUserName 
 
     const str = String(userNameStr).trim();
 
-    // Check if JSON array or JSON object string
     if (str.includes('[') || str.includes('{')) {
         try {
             const arr = JSON.parse(str);
@@ -256,7 +235,6 @@ function parseKiemKhoScanners(userNameStr, defaultBranch = 'CN1', phieuUserName 
         } catch (e) {}
     }
 
-    // Check if comma separated: "A - CN1, B - CN2" or "A, B"
     if (str.includes(',')) {
         const parts = str.split(',');
         const list = [];
@@ -274,7 +252,6 @@ function parseKiemKhoScanners(userNameStr, defaultBranch = 'CN1', phieuUserName 
         if (list.length > 0) return list;
     }
 
-    // Single scanner string
     if (str.includes(' - ')) {
         const [n, b] = str.split(' - ');
         return [normalizeScanner(n, b || defaultBranch)];
@@ -283,7 +260,6 @@ function parseKiemKhoScanners(userNameStr, defaultBranch = 'CN1', phieuUserName 
     return [normalizeScanner(str, defaultBranch)];
 }
 
-// Helper to add/merge a scanner into an item's scanner list
 function addKiemKhoItemScanner(item, userName, branch) {
     if (!item) return;
     if (!item.scanners || !Array.isArray(item.scanners)) {
@@ -297,14 +273,13 @@ function addKiemKhoItemScanner(item, userName, branch) {
     if (!exists) {
         item.scanners.push(newScanner);
     }
-    // Sync item.user_name serialized string for DB storage
+
     item.user_name = JSON.stringify(item.scanners);
     if (item.scanners.length === 1) {
         item.branch = item.scanners[0].branch;
     }
 }
 
-// Toggle Scanners Dropdown Popover Card
 function toggleKiemKhoScannersPopover(event, key) {
     if (event) {
         event.stopPropagation();
@@ -381,7 +356,7 @@ function showKiemKhoConfirmModal(title, message, confirmText = 'Đồng ý', can
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay show';
         overlay.style.cssText = 'display: flex !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: rgba(0,0,0,0.65) !important; backdrop-filter: blur(4px) !important; z-index: 999999 !important; align-items: center !important; justify-content: center !important; opacity: 0; pointer-events: auto !important; transition: opacity 0.2s ease;';
-        
+
         // Use a safe wrapper to avoid ID conflicts
         overlay.innerHTML = `
             <div style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 14px; max-width: 440px; width: 90%; padding: 22px 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); color: #fff; transform: translateY(-10px); transition: transform 0.2s ease; pointer-events: auto !important;">
@@ -814,7 +789,7 @@ function getKiemKhoUserBranchCode() {
     }
     const rawB = u ? (u.branch || u.chi_nhanh || '') : '';
     let code = extractKiemKhoCNCode(rawB);
-    
+
     // MANAGERS (quản lý) HAVE ALL-BRANCH PERMISSION EVERYWHERE!
     const isManager = (typeof window.isManagerRole === 'function') ? window.isManagerRole(u) : false;
     const roleLower = u ? String(u.role || '').toLowerCase().trim() : '';
@@ -2926,7 +2901,7 @@ async function showKiemKhoItemScanLogsModal(rawKey) {
 
     try {
         let query = client.from('quet_chi_tiet').select('*').eq('ma_vach', item.ma_vach);
-        
+
         if (currentKiemKhoMaPhieu) {
             query = query.eq('ma_phieu', currentKiemKhoMaPhieu);
         }
@@ -2996,10 +2971,6 @@ async function deleteSingleQuetChiTietLog(logId, itemKey) {
         console.error("deleteSingleQuetChiTietLog error:", e);
     }
 }
-
-/* ==========================================================================
-   CÂN BẰNG KHO (GPET STOCK RECONCILIATION) MODULE
-   ========================================================================== */
 
 // Helper to look up master product name by barcode
 function getProductNameByBarcode(barcode) {
@@ -3487,7 +3458,7 @@ async function handleCanBangExcelImportFile(event) {
 
         for (let i = 0; i < rawJson.length; i++) {
             const row = rawJson[i];
-            
+
             // 1. Mã Vạch / Mã VT
             let rawBarcodeVal = getColValue(
                 row,
@@ -3521,7 +3492,7 @@ async function handleCanBangExcelImportFile(event) {
                 'slgpet', 'sl gpet', 'soluong', 'số lượng', 'sl', 'tonkho', 'tồn kho', 'ton', 'tồn',
                 'quantity', 'qty', 'stock'
             );
-            
+
             let gpetQty = 0;
             if (typeof rawGpetVal === 'number') {
                 gpetQty = Math.max(0, rawGpetVal);
@@ -3599,7 +3570,6 @@ function downloadCanBangExcelTemplate() {
     downloadExcelWorkbook(workbook, "Mau_Nhap_Ton_GPET_Can_Bang_Kho.xlsx");
 }
 
-// Export Cân Bằng Kho comparison to Excel
 function exportCanBangKhoToExcel() {
     if (canBangKhoMap.size === 0) {
         showKiemKhoToast('warning', 'Bảng Dữ Liệu Trống', 'Chưa có sản phẩm nào trong bảng Cân Bằng Kho để xuất Excel!');
@@ -3650,7 +3620,6 @@ function exportCanBangKhoToExcel() {
     }
 }
 
-// Sync Cân Bằng Kho rows to Supabase table `kiem_kho_can_bang`
 async function syncCanBangKhoToDB() {
     const client = getVatTuSupabaseClient();
     if (!client) return;
@@ -3686,7 +3655,7 @@ async function syncCanBangKhoToDB() {
         const { error } = await client.from('kiem_kho_can_bang').insert(payload);
         if (error) {
             console.error("❌ GAIA KiemKho: syncCanBangKhoToDB Error:", error.message || error);
-            // Fallback without stt/trang_thai if columns not yet added to table
+
             if (error.message && error.message.includes('column')) {
                 const fallbackPayload = items.map(item => ({
                     phieu_id: phieuId || null,
@@ -3713,7 +3682,6 @@ async function syncCanBangKhoToDB() {
     }
 }
 
-// Global Window Exports for Cân Bằng Kho
 window.initCanBangKhoView = initCanBangKhoView;
 window.handleCanBangExcelImportFile = handleCanBangExcelImportFile;
 window.downloadCanBangExcelTemplate = downloadCanBangExcelTemplate;
@@ -3723,18 +3691,12 @@ window.clearCanBangKhoTable = clearCanBangKhoTable;
 window.filterCanBangKhoTable = filterCanBangKhoTable;
 window.handleCanBangGpetQtyChange = handleCanBangGpetQtyChange;
 window.deleteCanBangKhoRow = deleteCanBangKhoRow;
-window.loadCanBangPhieuByInput = loadCanBangPhieuByInput;
 window.saveCanBangKhoDataToDB = saveCanBangKhoDataToDB;
 window.showOrHideCanBangKhoSection = showOrHideCanBangKhoSection;
 window.changeCanBangPageSize = changeCanBangPageSize;
 window.renderCanBangPaginationControls = renderCanBangPaginationControls;
 window.clearAllCanBangFilters = clearAllCanBangFilters;
 
-/* ==========================================================================
-   PER-COLUMN FUNNEL FILTERING & COLUMN RESIZING ENGINE (Kiểm Kho & Cân Bằng)
-   ========================================================================== */
-
-// Helper to extract string representation of a cell value for Kiểm Kho table
 function getKiemKhoItemColValueStr(item, colKey) {
     if (!item) return '(Trống)';
     let raw = '';
@@ -3789,7 +3751,6 @@ function getKiemKhoItemColValueStr(item, colKey) {
     return String(raw).trim();
 }
 
-// Helper to extract string representation of a cell value for Cân Bằng Kho table
 function getCanBangItemColValueStr(item, colKey) {
     if (!item) return '(Trống)';
     let raw = '';
@@ -3824,7 +3785,6 @@ function getCanBangItemColValueStr(item, colKey) {
     return String(raw).trim();
 }
 
-// Calculate unique available options & counts for a column (respecting other active column filters)
 function getAvailableOptionsForKiemKhoCol(colKey, tableType) {
     if (tableType === 'canbang') {
         let items = Array.from(canBangKhoMap.values());
@@ -3894,7 +3854,6 @@ function getAvailableOptionsForKiemKhoCol(colKey, tableType) {
     }
 }
 
-// Toggle column filter popover dropdown
 function toggleKiemKhoColumnFilter(event, colKey, tableType = 'kiemkho') {
     if (event) {
         event.stopPropagation();
@@ -3951,14 +3910,12 @@ function toggleKiemKhoColumnFilter(event, colKey, tableType = 'kiemkho') {
     renderKiemKhoFilterPopoverListOptions();
 }
 
-// Close column filter popover
 function closeKiemKhoColumnFilterDropdown() {
     const popover = document.getElementById('kiemkho-col-filter-popover');
     if (popover) popover.style.display = 'none';
     activeKiemKhoFilterCol = null;
 }
 
-// Render options list with search
 function renderKiemKhoFilterPopoverListOptions() {
     if (!activeKiemKhoFilterCol) return;
 
@@ -4069,7 +4026,6 @@ function clearCurrentKiemKhoColumnFilter() {
     }
 }
 
-// Clear all column filters and search query for Kiểm Kho
 function clearAllKiemKhoFilters() {
     kiemKhoColumnFilters = {};
     kiemKhoSearchQuery = '';
@@ -4082,7 +4038,6 @@ function clearAllKiemKhoFilters() {
     renderKiemKhoTable();
 }
 
-// Clear all column filters and search query for Cân Bằng Kho
 function clearAllCanBangFilters() {
     canBangColumnFilters = {};
     canBangSearchQuery = '';
@@ -4163,7 +4118,6 @@ function updateKiemKhoColumnFilterBadgesUI(tableType = 'all') {
     }
 }
 
-// Column Resizing Handlers (Identical to Vật Tư)
 function initKiemKhoColumnResizing() {
     initGenericTableResizing('#kiemkho-table', 'gaia_kiemkho_column_widths');
     initGenericTableResizing('#canbang-table', 'gaia_canbang_column_widths');
@@ -4173,7 +4127,6 @@ function initGenericTableResizing(tableSelector, storageKey) {
     const table = document.querySelector(tableSelector);
     if (!table) return;
 
-    // Restore saved widths from localStorage
     if (storageKey) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
@@ -4241,7 +4194,6 @@ function initGenericTableResizing(tableSelector, storageKey) {
     });
 }
 
-// Global click listener to close popover when clicking outside
 document.addEventListener('click', (e) => {
     const popover = document.getElementById('kiemkho-col-filter-popover');
     if (!popover || popover.style.display === 'none') return;
@@ -4249,7 +4201,6 @@ document.addEventListener('click', (e) => {
     closeKiemKhoColumnFilterDropdown();
 });
 
-// Window Exports
 window.toggleKiemKhoColumnFilter = toggleKiemKhoColumnFilter;
 window.closeKiemKhoColumnFilterDropdown = closeKiemKhoColumnFilterDropdown;
 window.renderKiemKhoFilterPopoverListOptions = renderKiemKhoFilterPopoverListOptions;
@@ -4259,4 +4210,3 @@ window.clearCurrentKiemKhoColumnFilter = clearCurrentKiemKhoColumnFilter;
 window.initKiemKhoColumnResizing = initKiemKhoColumnResizing;
 window.changeKiemKhoPageSize = changeKiemKhoPageSize;
 window.changeCanBangPageSize = changeCanBangPageSize;
-

@@ -1,19 +1,13 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Multi-Functional Parent App Logic (menu.js)
-   ========================================================================== */
-
 document.addEventListener('DOMContentLoaded', () => {
     initThemeManager();
     initNavigationManager();
     initGlobalEscHandler();
 });
 
-/* --- 1. Theme Manager (Dark / Light Mode) --- */
 function initThemeManager() {
     const themeBtn = document.getElementById('theme-toggle-btn');
     const themeLabel = document.getElementById('theme-toggle-label');
-    
-    // Read saved preference or default to 'dark'
+
     const savedTheme = localStorage.getItem('gaia_theme') || 'dark';
     applyTheme(savedTheme);
 
@@ -35,18 +29,14 @@ function initThemeManager() {
     }
 }
 
-/* --- 2. Navigation Manager (Sidebar Tabs & Hash Routing) --- */
 function initNavigationManager() {
     const navItems = document.querySelectorAll('.sidebar-nav-item, .sidebar-sub-item');
     const viewPanels = document.querySelectorAll('.view-panel, .app-view');
 
-    // Handle hash change from URL
     window.addEventListener('hashchange', handleRoute);
 
-    // Initial route load
     handleRoute();
 
-    // Add click listeners to nav items
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             const targetView = item.getAttribute('data-view');
@@ -58,33 +48,62 @@ function initNavigationManager() {
     });
 
     function handleRoute() {
-        // Default view is 'lich-kham'
+
         let currentHash = window.location.hash.replace('#', '');
 
-        // Allowed views
-        const validViews = ['tong-quan', 'lich-kham', 'vat-tu', 'nhan-su', 'nhap-xuat', 'the-kho', 'kiem-kho', 'can-bang-kho'];
-        if (!validViews.includes(currentHash)) {
-            currentHash = 'lich-kham'; // Default to Lịch Khám (Quản lý ca)
+        // Map nhan-su and thong-tin to cai-dat view container
+        let routeView = currentHash;
+        if (currentHash === 'nhan-su' || currentHash === 'thong-tin') {
+            routeView = 'cai-dat';
         }
 
-        // Update active class on nav items
+        const validViews = ['tong-quan', 'lich-kham', 'vat-tu', 'nhan-su', 'thong-tin', 'cai-dat', 'nhap-xuat', 'the-kho', 'kiem-kho', 'can-bang-kho'];
+        if (!validViews.includes(currentHash)) {
+            currentHash = 'lich-kham'; 
+            routeView = 'lich-kham';
+        }
+
+        // If directly navigating to cai-dat, default sub-view to nhan-su
+        let activeSubView = currentHash;
+        if (currentHash === 'cai-dat') {
+            activeSubView = 'nhan-su';
+        }
+
         navItems.forEach(item => {
             const viewAttr = item.getAttribute('data-view');
-            if (viewAttr === currentHash) {
+            const isCaiDatGroup = (currentHash === 'nhan-su' || currentHash === 'thong-tin' || currentHash === 'cai-dat');
+            const isVatTuGroup = (currentHash === 'nhap-xuat' || currentHash === 'the-kho' || currentHash === 'kiem-kho' || currentHash === 'can-bang-kho' || currentHash === 'vat-tu');
+
+            if (viewAttr === currentHash || 
+                (viewAttr === 'cai-dat' && isCaiDatGroup) || 
+                (viewAttr === 'vat-tu' && isVatTuGroup) ||
+                (viewAttr === activeSubView && isCaiDatGroup)) {
                 item.classList.add('active');
             } else {
                 item.classList.remove('active');
             }
         });
 
-        // Update active class on view panels
         viewPanels.forEach(panel => {
-            if (panel.id === `view-${currentHash}`) {
+            if (panel.id === `view-${routeView}`) {
                 panel.classList.add('active');
             } else {
                 panel.classList.remove('active');
             }
         });
+
+        if (currentHash === 'nhan-su' && typeof window.switchCaiDatTab === 'function') {
+            window.switchCaiDatTab('nhan-su');
+        } else if (currentHash === 'thong-tin' && typeof window.switchCaiDatTab === 'function') {
+            window.switchCaiDatTab('thong-tin');
+        } else if (currentHash === 'cai-dat') {
+            if (typeof window.switchCaiDatTab === 'function') {
+                window.switchCaiDatTab('nhan-su');
+            }
+            if (typeof window.fetchAllCaiDatSettings === 'function') {
+                window.fetchAllCaiDatSettings();
+            }
+        }
 
         if (currentHash === 'tong-quan' && typeof window.initTongQuanDashboard === 'function') {
             window.initTongQuanDashboard();
@@ -106,17 +125,14 @@ function initNavigationManager() {
             window.initCanBangKhoView();
         }
 
-        // Scroll to top of main content on view switch
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
 
-/* --- 3. Global Escape Key Handler (Close All Modals, Overlays, Dropdowns) --- */
 function initGlobalEscHandler() {
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
 
-        // 1. Close Global Search Dropdown if open
         const gsDd = document.getElementById('gs-inline-dropdown');
         const gsInp = document.getElementById('gs-header-input');
         if (gsDd && gsDd.classList.contains('gs-dd-open')) {
@@ -125,28 +141,24 @@ function initGlobalEscHandler() {
             return;
         }
 
-        // 2. Close User Profile Dropdown if open
         const userDd = document.getElementById('user-profile-dropdown');
         if (userDd && userDd.classList.contains('show')) {
             userDd.classList.remove('show');
             return;
         }
 
-        // 3. Close Column Filter Dropdowns if open
         const openFilterDd = document.querySelector('.column-filter-dropdown.show, .th-filter-dropdown.show');
         if (openFilterDd) {
             openFilterDd.classList.remove('show');
             return;
         }
 
-        // 4. Close Image Lightbox / Fullscreen preview
         const lightbox = document.getElementById('image-lightbox-overlay') || document.querySelector('.image-lightbox-overlay');
         if (lightbox && window.getComputedStyle(lightbox).display !== 'none') {
             lightbox.style.display = 'none';
             return;
         }
 
-        // 5. Close visible Modals / Overlays
         const modalSelectors = [
             '.modal-overlay',
             '.custom-modal-overlay',
@@ -165,10 +177,9 @@ function initGlobalEscHandler() {
             });
 
         if (allModals.length > 0) {
-            // Pick the topmost modal in DOM order
+
             const topModal = allModals[allModals.length - 1];
 
-            // A. Try clicking close / cancel button inside the modal
             const closeBtn = topModal.querySelector(
                 '.modal-close-btn, .btn-close-modal, .btn-close, .btn-cancel, [data-dismiss="modal"], .btn-secondary, button[onclick*="close"], button[onclick*="Close"], button[onclick*="Hide"], button[onclick*="Cancel"]'
             );
@@ -178,7 +189,6 @@ function initGlobalEscHandler() {
                 return;
             }
 
-            // B. Specific modal close function mappings
             const mid = topModal.id || '';
             if (mid === 'vattu-modal' && typeof window.closeVatTuModal === 'function') window.closeVatTuModal();
             else if (mid === 'vattu-delete-modal' && typeof window.closeDeleteVatTuModal === 'function') window.closeDeleteVatTuModal();

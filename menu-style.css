@@ -1,14 +1,9 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Multi-Functional Parent App Stylesheet (menu-style.css)
-   ========================================================================== */
-
-/* --- Theme CSS Variables & Design Tokens --- */
 :root {
-    /* Color Tokens (Default Dark Theme) */
+
     --app-bg: #090d16;
     --app-bg-gradient: radial-gradient(at 10% 10%, rgba(16, 185, 129, 0.07) 0px, transparent 50%),
                        radial-gradient(at 90% 90%, rgba(99, 102, 241, 0.07) 0px, transparent 50%);
-    
+
     --sidebar-bg: #111827;
     --sidebar-border: rgba(255, 255, 255, 0.08);
     --sidebar-text: #e5e7eb;
@@ -41,7 +36,6 @@
     --sidebar-width: 270px;
 }
 
-/* Light Theme Overrides */
 [data-theme="light"] {
     --app-bg: #f1f5f9;
     --app-bg-gradient: radial-gradient(at 10% 10%, rgba(16, 185, 129, 0.06) 0px, transparent 50%),
@@ -68,7 +62,6 @@
     --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
-/* --- Base Layout --- */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -92,7 +85,6 @@ html, body {
     width: 100%;
 }
 
-/* --- Sidebar Taskbar (Left Side) --- */
 .app-sidebar {
     width: var(--sidebar-width);
     background: var(--sidebar-bg);
@@ -108,7 +100,6 @@ html, body {
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
 }
 
-/* Sidebar Brand Header */
 .sidebar-brand {
     height: 74px;
     padding: 0 20px;
@@ -160,7 +151,6 @@ html, body {
     letter-spacing: 0.5px;
 }
 
-/* Sidebar Navigation Menu */
 .sidebar-nav-container {
     flex: 1;
     padding: 20px 14px;
@@ -218,7 +208,6 @@ html, body {
     flex-shrink: 0;
 }
 
-/* Sidebar Nav Sub-Branches (Luôn luôn hiển thị) */
 .sidebar-nav-group {
     display: flex;
     flex-direction: column;
@@ -235,7 +224,6 @@ html, body {
     position: relative;
 }
 
-/* Connector line showing branch hierarchy */
 .sidebar-sub-nav::before {
     content: '';
     position: absolute;
@@ -366,7 +354,6 @@ html, body {
     50% { opacity: 0.5; }
 }
 
-/* Sidebar Footer & Dark Mode Switch */
 .sidebar-footer {
     padding: 18px 16px;
     border-top: 1px solid var(--sidebar-border);
@@ -438,7 +425,6 @@ html, body {
     background: var(--accent-emerald);
 }
 
-/* --- Main Content Area --- */
 .app-main-content {
     margin-left: var(--sidebar-width);
     flex: 1;
@@ -447,7 +433,6 @@ html, body {
     width: calc(100% - var(--sidebar-width));
 }
 
-/* Global App Top Header Bar (Parent Shell) */
 .app-global-header {
     height: 74px;
     display: flex;
@@ -551,7 +536,6 @@ html, body {
     color: rgba(255, 255, 255, 0.2);
 }
 
-/* View Panels */
 .view-panel {
     display: none;
     padding: 24px 30px;
@@ -573,7 +557,6 @@ html, body {
     }
 }
 
-/* --- Shared Placeholder View Cards --- */
 .placeholder-container {
     display: flex;
     flex-direction: column;
@@ -610,10 +593,6 @@ html, body {
     margin-top: 4px;
 }
 
-/* ==========================================================================
-   VIEW 1: TỔNG QUAN (DASHBOARD OVERVIEW STYLES)
-   ========================================================================== */
-
 #view-tong-quan {
     padding: 10px 14px 20px;
 }
@@ -629,7 +608,6 @@ html, body {
     box-sizing: border-box;
 }
 
-/* 1. Header Bar */
 .tq-header-bar {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -781,7 +759,6 @@ html, body {
     animation: tqSpin 0.7s linear infinite;
 }
 
-/* 2. KPI Cards Grid */
 .tq-kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -916,7 +893,6 @@ html, body {
     color: var(--text-muted);
 }
 
-/* 3. Quick Actions Ribbon */
 .tq-quick-actions-bar {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -979,7 +955,6 @@ html, body {
     transform: translateY(0);
 }
 
-/* 4. Main 2-Column Split Content */
 .tq-main-layout {
     display: grid;
     grid-template-columns: 1.4fr 1fr;
@@ -999,7 +974,6 @@ html, body {
     gap: 20px;
 }
 
-/* 5. Generic Widget Card */
 .tq-widget-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -1072,7 +1046,6 @@ html, body {
     padding: 12px 16px;
 }
 
-/* 6. Dashboard Tables */
 .tq-table-responsive {
     width: 100%;
     overflow-x: auto;
@@ -1119,7 +1092,6 @@ html, body {
     background: rgba(0, 0, 0, 0.03);
 }
 
-/* Pet Cell */
 .tq-pet-cell {
     display: flex;
     align-items: center;
@@ -1209,7 +1181,6 @@ html, body {
     color: var(--accent-amber);
 }
 
-/* Item Cell */
 .tq-item-title {
     font-weight: 700;
     font-size: 13px;
@@ -1242,7 +1213,6 @@ html, body {
     border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-/* 7. Expiry Watchlist */
 .tq-expiry-list {
     display: flex;
     flex-direction: column;
@@ -1318,7 +1288,6 @@ html, body {
     color: var(--text-muted);
 }
 
-/* 8. Recent Orders Timeline */
 .tq-timeline-list {
     display: flex;
     flex-direction: column;
@@ -1398,7 +1367,6 @@ html, body {
     color: var(--text-muted);
 }
 
-/* 9. Branch Comparison Progress Bars */
 .tq-branch-comparison-wrap {
     display: flex;
     flex-direction: column;
@@ -1437,7 +1405,6 @@ html, body {
 .tq-bar-segment.is-cn1 { background: linear-gradient(90deg, #10b981, #059669); }
 .tq-bar-segment.is-cn2 { background: linear-gradient(90deg, #6366f1, #4f46e5); }
 
-/* 10. States: Loading & Empty */
 .tq-loading-state, .tq-empty-state {
     padding: 30px 16px;
     display: flex;
@@ -1459,7 +1426,6 @@ html, body {
     animation: tqSpin 0.7s linear infinite;
 }
 
-/* Keyframes */
 @keyframes tqSpin {
     to { transform: rotate(360deg); }
 }
@@ -1468,7 +1434,6 @@ html, body {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.6; transform: scale(0.95); }
 }
-
 
 .empty-placeholder-box h3 {
     font-family: var(--font-outfit);
@@ -1503,7 +1468,6 @@ html, body {
     box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4);
 }
 
-/* Responsive sidebar */
 @media (max-width: 1024px) {
     :root {
         --sidebar-width: 220px;
@@ -1527,9 +1491,6 @@ html, body {
     }
 }
 
-/* ============================================================
-   STAFF MANAGEMENT MODULE (VIEW NHÂN SỰ)
-   ============================================================ */
 .staff-module-container {
     display: flex;
     flex-direction: column;
@@ -1885,7 +1846,6 @@ html, body {
     height: 16px;
 }
 
-/* Staff Modal Form Styles */
 .staff-modal-card {
     max-width: 520px;
     width: 100%;
@@ -1967,7 +1927,6 @@ html, body {
     box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
 }
 
-/* Inline Error Messages */
 .form-error-msg {
     color: #ef4444;
     font-size: 12px;
@@ -1980,7 +1939,6 @@ html, body {
     display: block;
 }
 
-/* Custom App Delete Modal */
 .staff-delete-modal-card {
     max-width: 440px;
     width: 90%;
@@ -2062,11 +2020,6 @@ html, body {
     box-shadow: 0 6px 18px rgba(239, 68, 68, 0.4);
 }
 
-/* ============================================================
-   AUTHENTICATION & USER PROFILE WIDGET STYLES
-   ============================================================ */
-
-/* Fullscreen Login Overlay */
 .login-screen-overlay {
     position: fixed;
     top: 0;
@@ -2215,7 +2168,6 @@ html, body {
     color: var(--text-muted);
 }
 
-/* Header User Profile Widget & Dropdown */
 .header-user-area {
     position: relative;
     margin-left: auto;
@@ -2401,7 +2353,6 @@ html, body {
     color: #ef4444;
 }
 
-/* Access Denied Card for "Nhân viên" in Staff View */
 .no-access-card {
     background: rgba(10, 14, 23, 0.7);
     backdrop-filter: blur(16px);
@@ -2466,7 +2417,6 @@ html, body {
     margin-top: 12px !important;
 }
 
-/* Interactive Links in Global Header Sub-row */
 .header-interactive-link {
     text-decoration: none;
     color: var(--text-muted);
@@ -2495,7 +2445,6 @@ html, body {
     background: rgba(5, 150, 105, 0.1);
 }
 
-/* Dedicated High-Fidelity Print Rules (PDF Isolation) */
 @media print {
     html, body {
         background: #ffffff !important;
@@ -2506,7 +2455,6 @@ html, body {
         overflow: visible !important;
     }
 
-    /* Hide sidebar, app layout containers, modals, and screen headers */
     .app-wrapper,
     .app-sidebar,
     .app-main-content,
@@ -2525,7 +2473,6 @@ html, body {
         padding: 0 !important;
     }
 
-    /* Display ONLY the print layout container */
     #print-form-container,
     .print-only-layout {
         display: block !important;
@@ -2547,7 +2494,6 @@ html, body {
     }
 }
 
-/* Branch Filter Select Styles */
 .form-select-branch {
     background: transparent;
     border: none;
@@ -2571,10 +2517,6 @@ html, body {
     color: #0f172a !important;
 }
 
-/* ==========================================================================
-   GAIA Supplies & Inventory (Vật Tư) Styles
-   ========================================================================== */
-
 .vattu-module-container {
     display: flex;
     flex-direction: column;
@@ -2584,7 +2526,6 @@ html, body {
     height: calc(100vh - 110px);
 }
 
-/* Header Card */
 .vattu-header-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -2636,7 +2577,6 @@ html, body {
     gap: 10px;
 }
 
-/* Stats Cards Grid */
 .vattu-stats-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -2715,7 +2655,6 @@ html, body {
     color: var(--text-muted);
 }
 
-/* Filter Bar */
 .vattu-filter-bar {
     display: flex;
     align-items: center;
@@ -2766,7 +2705,6 @@ html, body {
     flex-wrap: wrap;
 }
 
-/* Expiry Date Filter Elements in Toolbar */
 .vattu-select-pill {
     padding: 8px 12px;
     border-radius: 10px;
@@ -2811,7 +2749,6 @@ html, body {
     font-weight: bold;
 }
 
-/* Expiry Status Badges in Vat Tu Table */
 .vattu-badge-exp {
     display: inline-flex;
     align-items: center;
@@ -2852,7 +2789,6 @@ html, body {
     color: var(--text-muted);
 }
 
-/* Toolbar Buttons Base */
 .btn-toolbar-secondary,
 .btn-toolbar-excel,
 .btn-toolbar-outline,
@@ -2912,7 +2848,6 @@ html, body {
     border-color: #cbd5e1;
 }
 
-/* Clear Filter Button */
 .btn-clear-filter:hover {
     background: rgba(239, 68, 68, 0.12) !important;
     border-color: rgba(239, 68, 68, 0.4) !important;
@@ -2933,7 +2868,6 @@ html, body {
     color: #dc2626 !important;
 }
 
-/* Premium Excel Buttons (Green Accent + Sleek Badge) */
 .btn-toolbar-excel {
     background: rgba(16, 185, 129, 0.1);
     border: 1px solid rgba(16, 185, 129, 0.3);
@@ -2961,7 +2895,6 @@ html, body {
     flex-shrink: 0;
 }
 
-/* Primary Action Button (+ Thêm Mới) */
 .btn-toolbar-primary {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     border: none;
@@ -2975,7 +2908,6 @@ html, body {
     transform: translateY(-1.5px);
 }
 
-/* Data Table Card & Wrapper */
 .vattu-table-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -3079,7 +3011,6 @@ html, body {
     white-space: nowrap;
 }
 
-/* Badges & Cell Formats */
 .vattu-barcode-code {
     font-family: monospace;
     font-size: 12px;
@@ -3180,7 +3111,6 @@ html, body {
     color: #f59e0b;
 }
 
-/* Action Buttons */
 .vattu-action-btns {
     display: flex;
     align-items: center;
@@ -3287,7 +3217,6 @@ html, body {
     pointer-events: none;
 }
 
-/* Hide number input spinners on QR quantity */
 input.vattu-qr-input-qty::-webkit-outer-spin-button,
 input.vattu-qr-input-qty::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -3297,7 +3226,6 @@ input.vattu-qr-input-qty {
     -moz-appearance: textfield;
 }
 
-/* Modal Form Grids */
 .vattu-modal-card {
     max-width: 920px !important;
     width: 92% !important;
@@ -3336,7 +3264,6 @@ input.vattu-qr-input-qty {
     }
 }
 
-/* Quick Navigation Button to Thẻ Kho */
 .btn-goto-thekho {
     display: inline-flex;
     align-items: center;
@@ -3379,11 +3306,6 @@ input.vattu-qr-input-qty {
     border-color: #2563eb;
 }
 
-/* ==========================================================================
-   Column Resizing, Sticky Action Column, Text Truncate & Pagination Styles
-   ========================================================================== */
-
-/* 1. Resizable Columns (AppSheet Style with Visible Dividers) */
 .vattu-table th {
     position: relative;
     user-select: none;
@@ -3402,7 +3324,6 @@ input.vattu-qr-input-qty {
     border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Hide number input spinners inside table */
 .vattu-table input[type="number"]::-webkit-outer-spin-button,
 .vattu-table input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -3420,7 +3341,6 @@ input.vattu-qr-input-qty {
     border-right: 1px solid #e2e8f0;
 }
 
-/* Visible Drag Resizer Handle with vertical line indicator */
 .col-resizer {
     position: absolute;
     top: 0;
@@ -3462,7 +3382,6 @@ input.vattu-qr-input-qty {
     background: rgba(16, 185, 129, 0.2);
 }
 
-/* 2. Sticky Action Column on Right Edge */
 .vattu-table th:last-child,
 .sticky-action-th {
     position: sticky !important;
@@ -3515,14 +3434,12 @@ input.vattu-qr-input-qty {
     background: #f1f5f9 !important;
 }
 
-/* 3. Empty Dash Badge */
 .vattu-dash {
     color: var(--text-muted);
     font-weight: 700;
     opacity: 0.6;
 }
 
-/* 4. AppSheet Style Dynamic Text Truncation (Expands / Contracts seamlessly with resized column width) */
 .cell-truncate-wrap {
     width: 100%;
     max-width: 100%;
@@ -3534,7 +3451,6 @@ input.vattu-qr-input-qty {
     cursor: default;
 }
 
-/* 4b. Multi-Scanner Dropdown Button & Popover Card (Kiểm Kho View) */
 .btn-kiemkho-scanners-dropdown {
     background: transparent;
     border: none;
@@ -3632,7 +3548,6 @@ input.vattu-qr-input-qty {
     border-radius: 4px;
 }
 
-/* 5. Pagination Bar & Controls */
 .vattu-pagination-bar {
     display: flex;
     align-items: center;
@@ -3715,7 +3630,6 @@ input.vattu-qr-input-qty {
     cursor: not-allowed;
 }
 
-/* 6. 3-State Header Column Sorting Styles */
 .sortable-th {
     cursor: pointer;
     user-select: none;
@@ -3756,7 +3670,6 @@ input.vattu-qr-input-qty {
     display: none !important;
 }
 
-/* State 0: Neutral / Default - Only show Up/Down neutral arrow ↕ */
 .sortable-th .icon-neutral {
     display: inline-block !important;
 }
@@ -3772,7 +3685,6 @@ input.vattu-qr-input-qty {
     color: #10b981;
 }
 
-/* State 1: Ascending (Click 1) - Only show Up arrow ↑ */
 .sortable-th.sort-active-asc .icon-neutral,
 .sortable-th.sort-active-asc .icon-desc {
     display: none !important;
@@ -3782,7 +3694,6 @@ input.vattu-qr-input-qty {
     display: inline-block !important;
 }
 
-/* State 2: Descending (Click 2) - Only show Down arrow ↓ */
 .sortable-th.sort-active-desc .icon-neutral,
 .sortable-th.sort-active-desc .icon-asc {
     display: none !important;
@@ -3792,7 +3703,6 @@ input.vattu-qr-input-qty {
     display: inline-block !important;
 }
 
-/* 7. Column Header Funnel Filter & Popover Styles */
 .th-actions {
     display: inline-flex;
     align-items: center;
@@ -3807,7 +3717,6 @@ input.vattu-qr-input-qty {
     white-space: nowrap;
 }
 
-/* Funnel Filter Button */
 .col-filter-btn {
     background: transparent;
     border: none;
@@ -3834,7 +3743,6 @@ input.vattu-qr-input-qty {
     height: 13px;
 }
 
-/* Clear Filter Active State (Red Glow when filtering) */
 .btn-clear-filter.btn-clear-active {
     background: rgba(239, 68, 68, 0.2) !important;
     border-color: #ef4444 !important;
@@ -3847,7 +3755,6 @@ input.vattu-qr-input-qty {
     stroke: #ef4444 !important;
 }
 
-/* Active Glowing Funnel Button (Red Glow) */
 .col-filter-btn.filter-active {
     opacity: 1 !important;
     color: #ef4444 !important;
@@ -3860,7 +3767,6 @@ input.vattu-qr-input-qty {
     fill: #ef4444;
 }
 
-/* Badge Count on Active Funnel Icon (Red Gradient) */
 .filter-badge {
     position: absolute;
     top: -5px;
@@ -3876,7 +3782,6 @@ input.vattu-qr-input-qty {
     border: 1px solid #ffffff;
 }
 
-/* Floating Column Filter Popover */
 .col-filter-popover {
     position: fixed;
     z-index: 10000;
@@ -4051,7 +3956,6 @@ input.vattu-qr-input-qty {
     border: none;
 }
 
-/* Modal Overlay Base (Fixed Fullscreen Backdrop) */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -4075,7 +3979,6 @@ input.vattu-qr-input-qty {
     pointer-events: auto !important;
 }
 
-/* Modal Card Container */
 .modal-card,
 .vattu-modal-card {
     background: #1e293b;
@@ -4133,7 +4036,6 @@ input.vattu-qr-input-qty {
     color: #ef4444;
 }
 
-/* Modal Form Body & Grid Rows */
 .staff-form-body {
     padding: 24px;
     display: flex;
@@ -4221,7 +4123,6 @@ input.vattu-qr-input-qty {
     min-height: 14px;
 }
 
-/* Modal Form Actions */
 .form-actions {
     display: flex;
     align-items: center;
@@ -4266,7 +4167,6 @@ input.vattu-qr-input-qty {
     box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
 }
 
-/* Delete Modal Styling */
 .delete-modal-card {
     max-width: 440px;
     padding: 24px;
@@ -4345,7 +4245,6 @@ input.vattu-qr-input-qty {
     box-shadow: 0 6px 18px rgba(239, 68, 68, 0.5);
 }
 
-/* Custom App Notice / Dialog Modal Window */
 .notice-modal-card {
     max-width: 480px;
     width: 90%;
@@ -4531,7 +4430,6 @@ input.vattu-qr-input-qty {
     }
 }
 
-/* Custom Red Filter Styles requested by User */
 .btn-clear-active {
     background-color: #ef4444 !important;
     color: #ffffff !important;
@@ -4541,13 +4439,11 @@ input.vattu-qr-input-qty {
     color: #ffffff !important;
 }
 
-/* Make filter badges red */
 .filter-badge {
     background-color: #ef4444 !important;
     color: #ffffff !important;
 }
 
-/* Custom Combobox UI */
 .custom-combobox-wrap {
     position: relative;
     width: 100%;
@@ -4594,7 +4490,6 @@ input.vattu-qr-input-qty {
     color: var(--accent-emerald);
 }
 
-/* ====== Column Configuration UI ====== */
 .column-config-list {
     display: flex;
     flex-direction: column;
@@ -4688,7 +4583,6 @@ input.vattu-qr-input-qty {
     cursor: not-allowed;
 }
 
-/* ====== Thẻ Kho Custom Elements ====== */
 .badge-type {
     display: inline-flex;
     align-items: center;
@@ -4749,7 +4643,6 @@ input.vattu-qr-input-qty {
     color: #38bdf8;
 }
 
-/* Pagination Styling */
 .vattu-pagination {
     display: flex;
     align-items: center;
@@ -4823,7 +4716,6 @@ input.vattu-qr-input-qty {
     color: var(--text-primary);
 }
 
-/* Fix Thẻ Kho Table Cell Overlapping */
 .thekho-table {
     table-layout: fixed !important;
     width: 100% !important;
@@ -4841,9 +4733,6 @@ input.vattu-qr-input-qty {
     white-space: nowrap !important;
 }
 
-/* ==========================================================================
-   Nhập Xuất (Stock Import/Export Module Split 3-Part View Styles)
-   ========================================================================== */
 #view-nhap-xuat {
     padding: 8px 18px 8px 18px !important;
     height: calc(100vh - 74px) !important;
@@ -5068,7 +4957,6 @@ input.vattu-qr-input-qty {
     color: var(--text-muted);
 }
 
-/* Folder Watcher Auto Import Inline Header Badge */
 .nx-folder-watcher-bar {
     display: inline-flex;
     align-items: center;
@@ -5290,13 +5178,12 @@ input.vattu-qr-input-qty {
     border-radius: 4px;
 }
 
-/* Autocomplete Dropdown for Scanner Input */
 .nx-scanner-dropdown {
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
     right: 0;
-    background: #0f172a !important; /* 100% Đậm đặc không trong suốt */
+    background: #0f172a !important; 
     border: 1.5px solid #334155 !important;
     border-radius: 10px;
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -5314,7 +5201,7 @@ input.vattu-qr-input-qty {
 .nx-search-item {
     border-radius: 8px;
     padding: 10px 14px;
-    background: #1e293b !important; /* Khối nền đặc, tách biệt hoàn toàn với bảng bên dưới */
+    background: #1e293b !important; 
     border: 1px solid #334155 !important;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
     transition: all 0.15s ease;
@@ -5329,9 +5216,56 @@ input.vattu-qr-input-qty {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 12px;
     cursor: pointer;
     padding: 2px 0;
+}
+
+.nx-search-item-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.nx-search-item-img-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nx-search-item-img-wrap:hover {
+    transform: scale(1.18);
+    border-color: #38bdf8;
+    box-shadow: 0 4px 14px rgba(56, 189, 248, 0.45);
+    z-index: 10;
+}
+
+.nx-search-item-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.nx-search-item-no-img {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .nx-search-item-header:hover strong {
@@ -5350,7 +5284,7 @@ input.vattu-qr-input-qty {
     padding: 8px 12px 8px 16px;
     margin-top: 6px;
     border-radius: 6px;
-    background: #0b1120 !important; /* Khối con nền đặc tối tương phản cao */
+    background: #0b1120 !important; 
     border: 1px solid #334155 !important;
     cursor: pointer;
     font-size: 12px;
@@ -5443,9 +5377,6 @@ input.vattu-qr-input-qty {
     font-size: 15px;
 }
 
-/* ============================================================
-   TOAST NOTIFICATION SYSTEM (góc trên bên phải)
-   ============================================================ */
 #toast-container {
     position: fixed;
     top: 20px;
@@ -5581,7 +5512,6 @@ input.vattu-qr-input-qty {
     to   { width: 0%; }
 }
 
-/* --- Manager Branch Selectors (Dark & Light Theme Synchronized) --- */
 .manager-branch-select {
     font-weight: 700;
     color: #f59e0b;
@@ -5653,7 +5583,6 @@ input.vattu-qr-input-qty {
     color: #0f172a !important;
 }
 
-/* Sub-row Tree Expand & Sub-table Styles for View Vật Tư */
 .btn-subrow-toggle {
     display: inline-flex;
     align-items: center;
@@ -5724,7 +5653,6 @@ input.vattu-qr-input-qty {
     border-color: #bfdbfe;
 }
 
-/* Child Detail Row directly aligned with main table columns */
 .vattu-child-detail-row {
     background: rgba(15, 23, 42, 0.55) !important;
     font-size: 12px;
@@ -5737,7 +5665,7 @@ input.vattu-qr-input-qty {
 }
 
 [data-theme="light"] .vattu-child-detail-row {
-    background: #f0f7ff !important; /* Soft blue tint highlight */
+    background: #f0f7ff !important; 
 }
 
 [data-theme="light"] .vattu-child-detail-row td {
@@ -5745,7 +5673,6 @@ input.vattu-qr-input-qty {
     color: #1e293b !important;
 }
 
-/* Label & Value classes for contrast in both themes */
 .subrow-label {
     font-size: 12px;
     color: #94a3b8;
@@ -5774,7 +5701,6 @@ input.vattu-qr-input-qty {
     color: #94a3b8;
 }
 
-/* Sticky Table Column Freeze Classes */
 .vattu-table th.is-sticky-col,
 .thekho-table th.is-sticky-col {
     position: sticky !important;
@@ -5897,9 +5823,6 @@ input.vattu-qr-input-qty {
     background: transparent;
 }
 
-/* ==========================================================================
-   Kiểm Kho (Inventory Audit Module Styles)
-   ========================================================================== */
 .kiemkho-scanner-dashboard {
     display: flex;
     flex-direction: column;
@@ -5967,7 +5890,6 @@ input.vattu-qr-input-qty {
     color: #94a3b8;
 }
 
-/* Branch Filter Select Dropdown Premium Styling */
 select.vattu-select-branch,
 #kiemkho-filter-branch {
     appearance: none;
@@ -6013,7 +5935,6 @@ select.vattu-select-branch:focus,
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* Counter Stats Cards - High Contrast & Premium Styling */
 .kiemkho-stats-cards {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
@@ -6130,16 +6051,12 @@ select.vattu-select-branch:focus,
 .dark-mode .kiemkho-stat-card.card-unscanned .stat-value,
 [data-theme="dark"] .kiemkho-stat-card.card-unscanned .stat-value { color: #94a3b8; }
 
-/* Live Monitoring System Stock Change Red Pulse Highlight */
 @keyframes kiemkhoRedPulse {
     0% { background-color: rgba(239, 68, 68, 0.1); }
     50% { background-color: rgba(239, 68, 68, 0.3); }
     100% { background-color: rgba(239, 68, 68, 0.1); }
 }
 
-/* ==========================================================================
-   Cân Bằng Kho (Stock Balance / GPET Audit Sub-view) Styles
-   ========================================================================== */
 .kiemkho-canbang-container {
     background: var(--card-bg, rgba(30, 41, 59, 0.5));
     border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
@@ -6274,9 +6191,6 @@ select.vattu-select-branch:focus,
     border-left: 4px solid #ef4444 !important;
 }
 
-/* ==========================================================================
-   Dashboard Tổng Quan - Rank Badges & Export Count Badges
-   ========================================================================== */
 .tq-rank-badge {
     display: inline-flex;
     align-items: center;
@@ -6378,11 +6292,6 @@ select.vattu-select-branch:focus,
     border-color: #818cf8;
 }
 
-
-/* ==========================================================================
-   Global Search (Spotlight) Styles
-   ========================================================================== */
-
 .gs-modal {
     display: none;
     position: fixed;
@@ -6428,7 +6337,6 @@ select.vattu-select-branch:focus,
     box-shadow: 0 25px 80px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.05);
 }
 
-/* Input Row */
 .gs-input-wrap {
     display: flex;
     align-items: center;
@@ -6487,7 +6395,6 @@ select.vattu-select-branch:focus,
 .gs-close-btn:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #ef4444; }
 .gs-close-btn svg { width: 14px; height: 14px; }
 
-/* Results Area */
 .gs-results {
     max-height: 560px;
     overflow-y: auto;
@@ -6573,7 +6480,6 @@ mark.gs-highlight {
     padding: 0 1px;
 }
 
-/* Footer */
 .gs-footer {
     display: flex;
     align-items: center;
@@ -6601,7 +6507,6 @@ mark.gs-highlight {
 }
 .gs-footer-sep { flex: 1; }
 
-/* Header Search Trigger Button */
 .gs-trigger-btn {
     display: flex;
     align-items: center;
@@ -6646,10 +6551,6 @@ mark.gs-highlight {
     .gs-panel { max-width: calc(100vw - 32px); margin: 0 16px; }
     .gs-modal { padding-top: 20px; }
 }
-
-/* ==========================================================================
-   Inline Global Search Bar (header center)
-   ========================================================================== */
 
 .gs-inline-wrap {
     flex: 1;
@@ -6712,7 +6613,6 @@ mark.gs-highlight {
     border-color: rgba(0,0,0,0.12);
 }
 
-/* Inline Dropdown */
 .gs-inline-dropdown {
     display: none;
     position: absolute;
@@ -6815,3 +6715,855 @@ mark.gs-hl {
 @media (max-width: 650px) {
     .gs-inline-wrap { display: none; }
 }
+
+/* ==========================================================================
+   VẬT TƯ IMAGE COLUMN, DROPZONE, LIGHTBOX & THUMBNAILS
+   ========================================================================== */
+
+/* Thumbnail trong bảng Vật Tư */
+.vattu-table th[data-sort-col="anh"],
+.vattu-table td.is-sticky-col:first-child,
+.vattu-table td:first-child {
+    padding: 3px 4px !important;
+    text-align: center !important;
+}
+
+.vattu-img-cell-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 54px;
+    padding: 1px 0;
+}
+
+.vattu-img-thumb-wrap {
+    width: 54px;
+    height: 54px;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1.5px solid var(--card-border, rgba(255, 255, 255, 0.15));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    position: relative;
+}
+
+.vattu-img-thumb-wrap:hover {
+    transform: scale(1.12);
+    border-color: #3b82f6;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45);
+    z-index: 20;
+}
+
+.vattu-img-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.2s ease;
+}
+
+/* Ô trống dấu + trong bảng khi chưa có ảnh */
+.vattu-img-empty-cell {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    border: 1.5px dashed var(--card-border, #334155);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-muted, #64748b);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    outline: none;
+}
+
+.vattu-img-empty-cell:hover,
+.vattu-img-empty-cell:focus,
+.vattu-img-empty-cell.is-hovered {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.15);
+    color: #38bdf8;
+    transform: scale(1.06);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+[data-theme="light"] .vattu-img-thumb-wrap {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+[data-theme="light"] .vattu-img-empty-cell {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #94a3b8;
+}
+
+[data-theme="light"] .vattu-img-empty-cell:hover,
+[data-theme="light"] .vattu-img-empty-cell:focus {
+    border-color: #2563eb;
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+/* Khung upload / dán ảnh trong Modal Thêm/Sửa */
+.vattu-modal-image-dropzone {
+    border: 2px dashed var(--card-border, #334155);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.4);
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vattu-modal-image-dropzone:hover,
+.vattu-modal-image-dropzone:focus,
+.vattu-modal-image-dropzone.dragover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.08);
+}
+
+[data-theme="light"] .vattu-modal-image-dropzone {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.vattu-modal-img-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted, #94a3b8);
+}
+
+.vattu-upload-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.vattu-upload-main {
+    font-size: 13px;
+    color: var(--text-primary, #f8fafc);
+}
+
+.vattu-upload-main b {
+    color: #38bdf8;
+}
+
+[data-theme="light"] .vattu-upload-main b {
+    color: #0284c7;
+}
+
+.vattu-upload-sub {
+    font-size: 11px;
+    color: var(--text-muted, #64748b);
+}
+
+.vattu-modal-img-preview-box {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    text-align: left;
+    padding: 4px;
+}
+
+.vattu-modal-img-preview-box img {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1.5px solid var(--card-border, rgba(255, 255, 255, 0.15));
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
+}
+
+.vattu-preview-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.btn-preview-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.btn-change-img {
+    background: rgba(59, 130, 246, 0.18);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.btn-change-img:hover {
+    background: rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+}
+
+.btn-remove-img {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn-remove-img:hover {
+    background: rgba(239, 68, 68, 0.28);
+    color: #fca5a5;
+}
+
+/* Table Image Thumbnail & Empty Button */
+.vattu-img-cell-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+}
+
+.vattu-img-thumb-wrap {
+    width: 58px;
+    height: 58px;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1.5px solid var(--card-border, rgba(255, 255, 255, 0.15));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.vattu-img-thumb-wrap:hover {
+    transform: scale(1.12);
+    border-color: #38bdf8;
+    box-shadow: 0 6px 16px rgba(56, 189, 248, 0.4);
+    z-index: 5;
+}
+
+.vattu-img-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.vattu-img-empty-cell {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    border: 1.5px dashed rgba(255, 255, 255, 0.22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted, #94a3b8);
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.02);
+    transition: all 0.2s ease;
+}
+
+[data-theme="light"] .vattu-img-empty-cell {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #64748b;
+}
+
+.vattu-img-empty-cell:hover {
+    border-color: #38bdf8;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    transform: scale(1.08);
+}
+
+/* Lightbox phóng to ảnh vật tư (To rõ, sát viền) */
+.vattu-lightbox-overlay {
+    backdrop-filter: blur(14px);
+    background: rgba(4, 6, 14, 0.94);
+    z-index: 1000000;
+}
+
+.vattu-lightbox-container {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    max-width: 96vw;
+    max-height: 96vh;
+    width: auto;
+    overflow: hidden;
+    box-shadow: 0 30px 90px -10px rgba(0, 0, 0, 0.95);
+    display: flex;
+    flex-direction: column;
+    animation: vatTuLightboxPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes vatTuLightboxPop {
+    from {
+        opacity: 0;
+        transform: scale(0.94);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.vattu-lightbox-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(15, 23, 42, 0.95);
+    gap: 16px;
+    flex-shrink: 0;
+}
+
+.vattu-lightbox-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+}
+
+.vattu-lightbox-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vattu-lightbox-barcode {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    font-family: monospace;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.vattu-lightbox-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-lightbox-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.16);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-lightbox-delete:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+    box-shadow: 0 3px 12px rgba(239, 68, 68, 0.45);
+    transform: translateY(-1px);
+}
+
+.vattu-lightbox-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: color 0.15s ease;
+}
+
+.vattu-lightbox-close:hover {
+    color: #ef4444;
+}
+
+.vattu-lightbox-body {
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #020408;
+    overflow: hidden;
+    max-height: calc(94vh - 54px);
+    max-width: 96vw;
+}
+
+.vattu-lightbox-body img {
+    max-width: 96vw;
+    max-height: calc(94vh - 54px);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+/* ==========================================
+   MODULE CÀI ĐẶT & THÔNG TIN CHI NHÁNH
+   ========================================== */
+#view-cai-dat {
+    width: 100%;
+}
+
+.cai-dat-module-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+/* Tab Switcher Header */
+.cai-dat-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-bottom: 4px;
+}
+
+.cai-dat-tab-nav {
+    display: inline-flex;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
+    border-radius: 12px;
+    padding: 4px;
+    gap: 4px;
+}
+
+[data-theme="light"] .cai-dat-tab-nav {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+}
+
+.cai-dat-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 9px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted, #94a3b8);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cai-dat-tab-btn:hover {
+    color: var(--text-primary, #ffffff);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.cai-dat-tab-btn.active {
+    background: #3b82f6;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
+/* Banner Top in Settings Form */
+.cai-dat-top-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.12));
+    border-radius: 14px;
+    padding: 16px 22px;
+    gap: 16px;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] .cai-dat-top-banner {
+    background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+    border-color: #cbd5e1;
+}
+
+.cai-dat-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.cai-dat-banner-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.cai-dat-banner-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary, #ffffff);
+    margin: 0;
+}
+
+.cai-dat-banner-sub {
+    font-size: 12.5px;
+    color: var(--text-muted, #94a3b8);
+    margin: 2px 0 0 0;
+}
+
+.cai-dat-branch-selector-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cai-dat-branch-selector-wrap label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted, #94a3b8);
+}
+
+.cai-dat-select {
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: var(--input-bg, #0f172a);
+    border: 1.5px solid #3b82f6;
+    color: var(--text-primary, #f8fafc);
+    font-size: 13.5px;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+/* Grid layout for Branding settings */
+.cai-dat-form-grid {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 20px;
+    margin-top: 16px;
+}
+
+@media (max-width: 960px) {
+    .cai-dat-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.cai-dat-card {
+    background: var(--card-bg, #1e293b);
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.cai-dat-card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(15, 23, 42, 0.4);
+    color: #38bdf8;
+}
+
+.cai-dat-card-header h3 {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--text-primary, #f8fafc);
+}
+
+.cai-dat-card-body {
+    padding: 18px;
+}
+
+/* Logo Preview & Upload Box */
+.cai-dat-logo-preview-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+    margin-bottom: 14px;
+}
+
+.cai-dat-logo-preview-box img {
+    width: 90px;
+    height: 90px;
+    border-radius: 14px;
+    object-fit: contain;
+    background: #ffffff;
+    padding: 6px;
+    border: 2px solid #3b82f6;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+}
+
+.btn-reset-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-muted, #94a3b8);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-reset-logo:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.cai-dat-logo-dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 14px;
+    border-radius: 12px;
+    border: 1.5px dashed rgba(59, 130, 246, 0.4);
+    background: rgba(59, 130, 246, 0.05);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    gap: 4px;
+}
+
+.cai-dat-logo-dropzone:hover, .cai-dat-logo-dropzone.dragover {
+    border-color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    transform: translateY(-1px);
+}
+
+.cai-dat-upload-icon {
+    width: 28px;
+    height: 28px;
+    color: #38bdf8;
+    margin-bottom: 4px;
+}
+
+.upload-title {
+    font-size: 12.5px;
+    color: var(--text-primary, #f8fafc);
+}
+
+.upload-title b {
+    color: #38bdf8;
+}
+
+.upload-sub {
+    font-size: 11.5px;
+    color: var(--text-muted, #94a3b8);
+}
+
+/* Fields & Groups */
+.cai-dat-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cai-dat-form-group label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-muted, #cbd5e1);
+}
+
+.cai-dat-form-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--input-bg, #0f172a);
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.15));
+    color: var(--text-primary, #ffffff);
+    font-size: 13.5px;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.cai-dat-form-group input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.cai-dat-input-icon-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.cai-dat-input-icon-wrap svg {
+    position: absolute;
+    left: 10px;
+    color: var(--text-muted, #94a3b8);
+    pointer-events: none;
+}
+
+.cai-dat-input-icon-wrap input {
+    padding-left: 34px !important;
+}
+
+.cai-dat-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+@media (max-width: 600px) {
+    .cai-dat-row-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.cai-dat-section-divider {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.cai-dat-section-divider span {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #60a5fa;
+    letter-spacing: 0.5px;
+}
+
+/* Action buttons */
+.cai-dat-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+}
+
+.btn-cai-dat-save {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 22px;
+    border-radius: 9px;
+    background: #10b981;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    transition: all 0.2s ease;
+}
+
+.btn-cai-dat-save:hover {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+}
+
+.btn-cai-dat-reset {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted, #94a3b8);
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.12));
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-cai-dat-reset:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary, #ffffff);
+}
+
+/* Live Edit Visual Indicator & Glowing Pulse */
+@keyframes gaiaEditPulse {
+    0% {
+        outline-color: rgba(16, 185, 129, 0.95);
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4), 0 0 25px rgba(16, 185, 129, 0.7);
+        background-color: rgba(16, 185, 129, 0.18);
+    }
+    50% {
+        outline-color: rgba(59, 130, 246, 0.95);
+        box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.45), 0 0 30px rgba(59, 130, 246, 0.75);
+        background-color: rgba(59, 130, 246, 0.22);
+    }
+    100% {
+        outline-color: rgba(16, 185, 129, 0.95);
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4), 0 0 25px rgba(16, 185, 129, 0.7);
+        background-color: rgba(16, 185, 129, 0.18);
+    }
+}
+
+.gaia-live-edit-active {
+    outline: 2.5px solid #10b981 !important;
+    border-radius: 8px !important;
+    animation: gaiaEditPulse 1.6s infinite ease-in-out !important;
+    position: relative !important;
+    z-index: 1000 !important;
+    transition: all 0.25s ease !important;
+}
+
+.cai-dat-form-group.is-focused label {
+    color: #10b981 !important;
+    font-weight: 700;
+}
+
+.cai-dat-form-group.is-focused input {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25) !important;
+}
+
+
+

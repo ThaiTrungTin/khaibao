@@ -1,15 +1,3 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Supplies & Inventory Management Module (vattu.js)
-   NO FAKE DATA: Starts completely empty until user adds or imports items.
-   Full CRUD + Excel Import (.xlsx, .csv) & Excel Export (.xlsx)
-   Features:
-   - Resizable Columns (AppSheet Style Drag Handles)
-   - Sticky Actions Column (Pinned on Right Side)
-   - Fallback '-' for Lot & Date when empty
-   - Text Truncation with '...' + Hover Scroll for long text
-   - Full Pagination (10, 25, 50, 100 per page)
-   ========================================================================== */
-
 let vatTuData = [];
 let tonKhoDetailData = [];
 let filteredVatTuData = [];
@@ -17,23 +5,26 @@ let editingVatTuId = null;
 let deletingVatTuId = null;
 let expandedVatTuRows = new Set();
 
-// Pagination State
 let vattuCurrentPage = 1;
 let vattuPageSize = 25;
 
-// 3-State Sorting State ('asc' | 'desc' | 'none')
 let vattuSortColumn = null;
 let vattuSortDirection = 'none';
 
-// Per-Column Interdependent Filter State
-let vattuColumnFilters = {}; // { colKey: Set([...selectedValues]) }
+let vattuColumnFilters = {}; 
 let activePopoverColKey = null;
 let popoverTempSelectedValues = new Set();
 
-// Dedicated Expiry Date Filter State (2 Dạng: Trạng thái & Khoảng ngày)
 let vattuExpiryFilterState = { mode: 'all', from: '', to: '' };
 
+// Variables for quick image upload & paste
+let currentQuickUploadVatTuId = null;
+let hoveredVatTuId = null;
+let modalPendingImageFile = null;
+let currentLightboxItemId = null;
+
 const vattuColTitles = {
+    anh: 'Ảnh',
     ma_vach: 'Mã Vạch',
     lot: 'LOT',
     date: 'Hạn SD',
@@ -53,7 +44,6 @@ const vattuColTitles = {
     gia_von_ton_kho_trung_binh: 'Giá Vốn TB'
 };
 
-// Expiry Date Helper Functions
 function parseDateObj(dateStr) {
     if (!dateStr || dateStr === '-' || dateStr === 'null' || dateStr === 'undefined') return null;
     const str = String(dateStr).trim();
@@ -134,8 +124,8 @@ function isDateMatchingExpiryFilter(dateStr, filterState) {
     return true;
 }
 
-// Dynamic Column Configuration State
 const defaultVatTuCols = [
+    { key: 'anh', title: 'Ảnh', visible: true, width: '68px', align: 'center', minWidth: '60px' },
     { key: 'ma_vach', title: 'Mã Vạch', visible: true, width: '165px', align: 'left', minWidth: '70px' },
     { key: 'ten_mat_hang', title: 'Tên Mặt Hàng', visible: true, width: '210px', align: 'left', minWidth: '80px' },
     { key: 'ten_hoa_don', title: 'Tên Hóa Đơn', visible: true, width: '190px', align: 'left', minWidth: '80px' },
@@ -156,7 +146,7 @@ const defaultVatTuCols = [
 
 let currentVatTuCols = [];
 let pendingVatTuColsConfig = [];
-let vattuFixedColsCount = 2; // Default 2 pinned columns (Mã Vạch & Tên Mặt Hàng)
+let vattuFixedColsCount = 2; 
 
 function initVatTuFixedColsConfig() {
     try {
@@ -192,15 +182,23 @@ function getStickyColMeta(visIdx, visibleCols, isHeader = false) {
 
 function initVatTuColumnsConfig() {
     try {
-        const saved = localStorage.getItem('gaia_vattu_columns_v7');
+        const saved = localStorage.getItem('gaia_vattu_columns_v8');
         if (saved) {
             currentVatTuCols = JSON.parse(saved);
-            // Handle newly added columns (if any) missing from saved config
+
             defaultVatTuCols.forEach(defCol => {
                 if (!currentVatTuCols.find(c => c.key === defCol.key)) {
                     currentVatTuCols.push(defCol);
                 }
             });
+            // Ensure 'anh' is at index 0 and visible
+            const anhIdx = currentVatTuCols.findIndex(c => c.key === 'anh');
+            if (anhIdx > 0) {
+                const [anhCol] = currentVatTuCols.splice(anhIdx, 1);
+                currentVatTuCols.unshift(anhCol);
+            } else if (anhIdx === -1) {
+                currentVatTuCols.unshift({ key: 'anh', title: 'Ảnh', visible: true, width: '68px', align: 'center', minWidth: '60px' });
+            }
         } else {
             currentVatTuCols = JSON.parse(JSON.stringify(defaultVatTuCols));
         }
@@ -211,7 +209,6 @@ function initVatTuColumnsConfig() {
 }
 initVatTuColumnsConfig();
 
-// Get or Initialize Supabase Client
 function getVatTuSupabaseClient() {
     if (window.supabaseClient) return window.supabaseClient;
     if (typeof supabaseClient !== 'undefined' && supabaseClient) {
@@ -229,7 +226,6 @@ function getVatTuSupabaseClient() {
     return null;
 }
 
-// DOM Loaded / Immediate Script Initialization
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initVatTuModule);
 } else {
@@ -239,7 +235,6 @@ if (document.readyState === 'loading') {
 function initVatTuModule() {
     console.log("GAIA VatTu: Initializing Supplies Management Module...");
 
-    // Bind Action Buttons
     const btnAdd = document.getElementById('btn-add-vattu');
     console.log("GAIA VatTu DEBUG: btn-add-vattu found =", btnAdd);
     if (btnAdd) {
@@ -260,7 +255,6 @@ function initVatTuModule() {
         inputExcel.addEventListener('change', handleExcelImportFile);
     }
 
-    // Filter & Search Listeners
     const searchInput = document.getElementById('vattu-search-input');
     if (searchInput) searchInput.addEventListener('input', () => {
         vattuCurrentPage = 1;
@@ -279,7 +273,6 @@ function initVatTuModule() {
         applyVatTuFilters();
     });
 
-    // Page Size Selector Listener
     const pageSizeSelect = document.getElementById('vattu-page-size-select');
     if (pageSizeSelect) {
         pageSizeSelect.addEventListener('change', (e) => {
@@ -289,7 +282,6 @@ function initVatTuModule() {
         });
     }
 
-    // Header Column Sorting Listeners (3-State: A-Z -> Z-A -> Original)
     const sortHeaders = document.querySelectorAll('.vattu-table th[data-sort-col]');
     sortHeaders.forEach(th => {
         th.addEventListener('click', (e) => {
@@ -303,7 +295,6 @@ function initVatTuModule() {
         });
     });
 
-    // Close Column Filter Popover when clicking outside
     document.addEventListener('click', (e) => {
         const popover = document.getElementById('vattu-col-filter-popover');
         if (!popover || popover.style.display === 'none') return;
@@ -311,14 +302,12 @@ function initVatTuModule() {
         closeColumnFilterDropdown();
     });
 
-    // Form Submission Listener
     const vattuForm = document.getElementById('vattu-form');
     if (vattuForm) vattuForm.addEventListener('submit', handleSaveVatTuForm);
 
     const btnConfirmDelete = document.getElementById('btn-confirm-delete-vattu');
     if (btnConfirmDelete) btnConfirmDelete.addEventListener('click', executeDeleteVatTu);
 
-    // Auto-calculate Total Value in Modal Form
     const inputQtyTon = document.getElementById('input-vattu-so-luong-ton');
     const inputGiaVon = document.getElementById('input-vattu-gia-von');
     if (inputQtyTon && inputGiaVon) {
@@ -332,7 +321,6 @@ function initVatTuModule() {
         inputGiaVon.addEventListener('input', updateAutoTotal);
     }
 
-    // Realtime Barcode Duplicate Validation
     const inputMaVach = document.getElementById('input-vattu-ma-vach');
     if (inputMaVach) {
         inputMaVach.addEventListener('input', () => {
@@ -353,7 +341,6 @@ function initVatTuModule() {
         });
     }
 
-    // Realtime Item Name Duplicate Validation (Unique)
     const inputTenMatHang = document.getElementById('input-vattu-ten-mat-hang');
     if (inputTenMatHang) {
         inputTenMatHang.addEventListener('input', () => {
@@ -374,10 +361,45 @@ function initVatTuModule() {
         });
     }
 
-    // Initialize Column Resizing Event Dragging
     initColumnResizing();
 
-    // Bind Column Config Button
+    // Image upload and paste listeners
+    const quickFileInput = document.getElementById('vattu-table-quick-file-input');
+    if (quickFileInput) {
+        quickFileInput.addEventListener('change', handleTableQuickFileInputChange);
+    }
+
+    const modalFileInput = document.getElementById('input-vattu-anh-file');
+    if (modalFileInput) {
+        modalFileInput.addEventListener('change', handleModalFileInputChange);
+    }
+
+    const modalDropzone = document.getElementById('vattu-modal-image-dropzone');
+    if (modalDropzone) {
+        modalDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            modalDropzone.classList.add('dragover');
+        });
+        modalDropzone.addEventListener('dragleave', () => {
+            modalDropzone.classList.remove('dragover');
+        });
+        modalDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            modalDropzone.classList.remove('dragover');
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleModalSelectedImageFile(file);
+            }
+        });
+    }
+
+    window.addEventListener('paste', handleGlobalVatTuPaste);
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeVatTuImageLightbox();
+        }
+    });
+
     const btnConfigCols = document.getElementById('btn-config-columns');
     if (btnConfigCols) {
         btnConfigCols.addEventListener('click', function() {
@@ -385,12 +407,10 @@ function initVatTuModule() {
         });
     }
 
-    // Initial Fetch & Supabase Realtime Subscription
     fetchVatTuData();
     setupVatTuRealtimeSubscription();
 }
 
-// Populate Manager Branch Filter Select Dropdown
 async function initVatTuBranchFilterForManager() {
     const filterBranchSelect = document.getElementById('vattu-filter-branch');
     if (!filterBranchSelect) return;
@@ -403,50 +423,54 @@ async function initVatTuBranchFilterForManager() {
         return;
     }
 
-    let branches = [];
-    const client = getVatTuSupabaseClient();
-    if (client) {
-        try {
-            const { data } = await client.from('staff').select('branch');
-            if (data && data.length > 0) {
-                data.forEach(s => {
-                    if (s.branch && s.branch !== 'Toàn hệ thống') branches.push(s.branch.trim());
-                });
+    const currentVal = filterBranchSelect.value || 'all';
+
+    // 1. Lấy danh sách chi nhánh từ bảng cài đặt hệ thống (cai_dat_he_thong)
+    let branchList = [];
+    if (typeof window.getSystemBranchesDetailed === 'function') {
+        branchList = window.getSystemBranchesDetailed();
+    }
+
+    // 2. Dự phòng lấy từ bảng staff nếu chưa có
+    if (branchList.length === 0) {
+        const client = getVatTuSupabaseClient();
+        if (client) {
+            try {
+                const { data } = await client.from('staff').select('branch');
+                if (data && data.length > 0) {
+                    const seen = new Set();
+                    data.forEach(s => {
+                        if (s.branch && s.branch !== 'Toàn hệ thống' && !seen.has(s.branch.trim())) {
+                            seen.add(s.branch.trim());
+                            branchList.push({
+                                code: (typeof window.extractCNCodeFromBranchString === 'function') ? window.extractCNCodeFromBranchString(s.branch) : s.branch,
+                                name: s.branch.trim()
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn('Could not fetch staff branches for VatTu filter', e);
             }
-        } catch (e) {
-            console.warn('Could not fetch staff branches for VatTu filter', e);
         }
     }
 
-    if (branches.length === 0) {
-        branches = ['Chi Nhánh TP.HCM', 'Chi Nhánh Hà Nội'];
-    }
-
-    const uniqueBranches = Array.from(new Set(branches));
     filterBranchSelect.innerHTML = `<option value="all">🏢 Tất cả chi nhánh</option>`;
-    uniqueBranches.forEach(bStr => {
-        let code = bStr;
-        if (typeof window.extractCNCodeFromBranchString === 'function') {
-            code = window.extractCNCodeFromBranchString(bStr);
-        } else if (typeof window.extractCNCode === 'function') {
-            code = window.extractCNCode(bStr);
-        }
-
-        let labelText = bStr.trim();
-        if (code) {
-            const doublePrefixRegex = new RegExp(`^(${code}\\s*-\\s*)+`, 'i');
-            labelText = labelText.replace(doublePrefixRegex, `${code} - `);
-            if (!labelText.toUpperCase().startsWith(code.toUpperCase())) {
-                labelText = `${code} - ${labelText}`;
-            }
-        }
-
+    branchList.forEach(item => {
+        const code = item.code || item.name;
+        const name = item.name || item.code;
         const optionEl = document.createElement('option');
         optionEl.value = code;
-        optionEl.textContent = `📍 ${labelText}`;
-        optionEl.title = bStr;
+        optionEl.textContent = `📍 ${name} (${code})`;
+        optionEl.title = name;
         filterBranchSelect.appendChild(optionEl);
     });
+
+    if (currentVal && (currentVal === 'all' || branchList.some(b => b.code === currentVal))) {
+        filterBranchSelect.value = currentVal;
+    } else {
+        filterBranchSelect.value = 'all';
+    }
 
     filterBranchSelect.style.display = 'inline-block';
     filterBranchSelect.removeEventListener('change', handleVatTuBranchFilterChange);
@@ -544,8 +568,6 @@ function toggleVatTuSubRow(itemId, event) {
     renderCurrentPageData();
 }
 
-// Fetch Data from Supabase table 'san_pham' & view 'ton_kho_detail'
-// Helper to deduplicate master product records by ID or barcode
 function deduplicateVatTuData(rawList) {
     if (!Array.isArray(rawList) || rawList.length === 0) return [];
     const map = new Map();
@@ -574,7 +596,7 @@ async function fetchVatTuData() {
     }
 
     try {
-        // Query view_vattu_tong_hop (with fallback to san_pham) and ton_kho_detail concurrently
+
         const [resView, resDetail] = await Promise.all([
             client.from('view_vattu_tong_hop').select('*'),
             client.from('ton_kho_detail').select('*')
@@ -609,7 +631,6 @@ async function fetchVatTuData() {
     }
 }
 
-// Supabase Realtime Subscription for 100% Realtime Updates on tables 'san_pham' & 'nhap_xuat'
 let vattuRealtimeChannel = null;
 
 function setupVatTuRealtimeSubscription() {
@@ -674,7 +695,6 @@ async function fetchVatTuDataSilently() {
     }
 }
 
-// Render Table and Stats
 function renderVatTuView(dataList) {
     renderVatTuStats(dataList);
     applyVatTuFilters();
@@ -720,7 +740,6 @@ function renderVatTuStats(allData) {
     if (warningCountEl) warningCountEl.textContent = warningCount.toLocaleString('vi-VN');
 }
 
-// Handle Expiry Preset Change (from Toolbar or Popover)
 window.handleVatTuExpiryFilterChange = function (mode) {
     const rangeWrap = document.getElementById('vattu-date-range-wrap');
     if (rangeWrap) {
@@ -763,7 +782,6 @@ window.handleVatTuDateRangeChange = function () {
     applyVatTuFilters();
 };
 
-// Clear All Filters & Search Input
 function clearAllVatTuFilters() {
     const searchInput = document.getElementById('vattu-search-input');
     if (searchInput) searchInput.value = '';
@@ -774,7 +792,6 @@ function clearAllVatTuFilters() {
     const statusFilter = document.getElementById('vattu-status-filter');
     if (statusFilter) statusFilter.value = 'all';
 
-    // Reset Expiry Filter State & Controls
     vattuExpiryFilterState = { mode: 'all', from: '', to: '' };
     const expirySelect = document.getElementById('vattu-filter-expiry');
     if (expirySelect) expirySelect.value = 'all';
@@ -797,7 +814,6 @@ function clearAllVatTuFilters() {
     applyVatTuFilters();
 }
 
-// Filter Out of Stock (Tồn Cuối = 0)
 window.filterVatTuOutOfStock = function () {
     const searchInput = document.getElementById('vattu-search-input');
     if (searchInput) searchInput.value = '';
@@ -810,7 +826,6 @@ window.filterVatTuOutOfStock = function () {
 
     vattuColumnFilters = {};
 
-    // Collect all zero / negative / empty values for ton_cuoi in current dataset
     const zeroSet = new Set();
     (vatTuData || []).forEach(item => {
         const stats = computeProductBranchStats(item);
@@ -835,7 +850,6 @@ window.filterVatTuOutOfStock = function () {
     applyVatTuFilters();
 };
 
-// Filter & Sort Function
 function applyVatTuFilters() {
     const searchVal = (document.getElementById('vattu-search-input')?.value || '').toLowerCase().trim();
     const catVal = document.getElementById('vattu-category-filter')?.value || 'all';
@@ -862,21 +876,19 @@ function applyVatTuFilters() {
 
         if (!matchSearch || !matchCat || !matchStatus) return false;
 
-        // Expiry Date Filter: checks across all subrows in stats.details & main product date
         if (vattuExpiryFilterState && vattuExpiryFilterState.mode !== 'all') {
             const hasDetailMatch = (stats.details || []).some(d => isDateMatchingExpiryFilter(d.date_expiry, vattuExpiryFilterState));
             const mainDateMatch = isDateMatchingExpiryFilter(item.date || item.date_expiry || item.han_su_dung, vattuExpiryFilterState);
             if (!hasDetailMatch && !mainDateMatch) {
                 return false;
             }
-            // Auto expand matching products so sub-rows are visible immediately!
+
             expandedVatTuRows.add(String(item.id));
         }
 
-        // Apply Interdependent Column Filters
         for (const [colKey, selectedSet] of Object.entries(vattuColumnFilters)) {
             if (!selectedSet || selectedSet.size === 0) continue;
-            
+
             if (colKey === 'date') {
                 const hasMatchingDateInDetails = (stats.details || []).some(d => {
                     const fDate = formatDate(d.date_expiry);
@@ -906,7 +918,6 @@ function applyVatTuFilters() {
         return true;
     });
 
-    // Apply 3-State Sorting if active
     if (vattuSortColumn && vattuSortDirection !== 'none') {
         const dir = vattuSortDirection === 'asc' ? 1 : -1;
         filteredVatTuData.sort((a, b) => {
@@ -944,7 +955,6 @@ function applyVatTuFilters() {
 
 let isResizingColumn = false;
 
-// 3-State Column Header Sort Click Handler (A-Z -> Z-A -> Ban đầu)
 function handleHeaderSortClick(colKey, event) {
     if (isResizingColumn) return;
     if (event) {
@@ -987,10 +997,6 @@ function updateSortHeaderUI() {
         }
     });
 }
-
-// ==========================================================================
-// Per-Column Funnel Filter Handlers (Interdependent / Phụ thuộc lẫn nhau)
-// ==========================================================================
 
 function toggleColumnFilterDropdown(event, colKey) {
     if (event) {
@@ -1051,7 +1057,6 @@ function closeColumnFilterDropdown() {
     activePopoverColKey = null;
 }
 
-// Calculate available options & counts for colKey (Interdependent across all other column filters)
 function getAvailableOptionsForColumn(colKey) {
     const searchVal = (document.getElementById('vattu-search-input')?.value || '').toLowerCase().trim();
     const catVal = document.getElementById('vattu-category-filter')?.value || 'all';
@@ -1078,7 +1083,6 @@ function getAvailableOptionsForColumn(colKey) {
 
         if (!matchSearch || !matchCat || !matchStatus) return false;
 
-        // Check other active column filters (except current colKey)
         for (const [otherCol, selectedSet] of Object.entries(vattuColumnFilters)) {
             if (otherCol === colKey) continue;
             if (!selectedSet || selectedSet.size === 0) continue;
@@ -1190,7 +1194,6 @@ function renderFilterPopoverListOptions() {
 
     listContainer.innerHTML = '';
 
-    // If active column is 'date', inject 2-mode quick preset & range header inside the popover
     if (activePopoverColKey === 'date') {
         const curMode = vattuExpiryFilterState.mode || 'all';
         const presetHeader = document.createElement('div');
@@ -1225,7 +1228,7 @@ function renderFilterPopoverListOptions() {
             const isChecked = popoverTempSelectedValues.has(opt.valStr);
             const label = document.createElement('label');
             label.className = 'popover-checkbox-label';
-            
+
             const escValue = opt.valStr.replace(/"/g, '&quot;');
             const escText = opt.valStr.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -1358,7 +1361,6 @@ function updateColumnFilterBadgesUI() {
     }
 }
 
-// Render Current Page Data (Pagination)
 function renderCurrentPageData() {
     const totalItems = filteredVatTuData.length;
     const totalPages = Math.ceil(totalItems / vattuPageSize) || 1;
@@ -1375,7 +1377,6 @@ function renderCurrentPageData() {
     renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx);
 }
 
-// Render Table Header dynamically
 function renderVatTuTableHeader() {
     const thead = document.getElementById('vattu-table-head');
     if (!thead) return;
@@ -1386,9 +1387,21 @@ function renderVatTuTableHeader() {
     visibleCols.forEach((col, visIdx) => {
         const { style: stickyStyle, className: stickyClass } = getStickyColMeta(visIdx, visibleCols, true);
 
+        if (col.key === 'anh') {
+            trHtml += `
+                <th data-sort-col="anh" class="sortable-th ${stickyClass}" style="width: ${col.width}; min-width: ${col.minWidth}; text-align: center; ${stickyStyle}">
+                    <div class="th-content" style="justify-content: center; pointer-events: none;">
+                        <span class="th-title-text">Ảnh</span>
+                    </div>
+                    <div class="col-resizer"></div>
+                </th>
+            `;
+            return;
+        }
+
         const sortActiveAsc = vattuSortColumn === col.key && vattuSortDirection === 'asc' ? 'sort-active-asc' : '';
         const sortActiveDesc = vattuSortColumn === col.key && vattuSortDirection === 'desc' ? 'sort-active-desc' : '';
-        
+
         let filterBadgeHtml = `<span class="filter-badge" id="filter-badge-${col.key}" style="display:none;">0</span>`;
 
         trHtml += `
@@ -1411,17 +1424,15 @@ function renderVatTuTableHeader() {
             </th>
         `;
     });
-    
-    // Always append Actions column
+
     trHtml += `<th style="width: 110px; min-width: 90px; text-align: center;" class="sticky-action-th">Thao Tác</th>`;
     trHtml += '</tr>';
-    
+
     thead.innerHTML = trHtml;
     updateColumnFilterBadgesUI();
-    initColumnResizing(); // Re-bind resizers for dynamic headers
+    initColumnResizing(); 
 }
 
-// Render Table Rows
 function renderVatTuTable(items) {
     const tbody = document.getElementById('vattu-table-body');
     const emptyState = document.getElementById('vattu-empty-state');
@@ -1449,6 +1460,10 @@ function renderVatTuTable(items) {
         const hasDetails = stats.details && stats.details.length > 0;
         const giaVon = Number(item.gia_von_ton_kho_trung_binh) || 0;
 
+        tr.setAttribute('data-vattu-id', String(item.id));
+        tr.onmouseenter = () => { hoveredVatTuId = String(item.id); };
+        tr.onmouseleave = () => { if (hoveredVatTuId === String(item.id)) hoveredVatTuId = null; };
+
         if (isExpanded) tr.classList.add('is-expanded');
 
         let trHtml = '';
@@ -1460,7 +1475,25 @@ function renderVatTuTable(items) {
 
             let cellContent = '';
 
-            if (col.key === 'ma_vach') {
+            if (col.key === 'anh') {
+                if (item.anh) {
+                    cellContent = `
+                        <div class="vattu-img-cell-wrap">
+                            <div class="vattu-img-thumb-wrap" onclick="event.stopPropagation(); openVatTuImageLightbox('${escapeHtml(item.anh)}', '${escapeHtml(item.ten_mat_hang)}', '${escapeHtml(item.ma_vach)}', '${item.id}')" title="Click để xem ảnh lớn">
+                                <img src="${escapeHtml(item.anh)}" alt="" class="vattu-img-thumb" loading="lazy" />
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    cellContent = `
+                        <div class="vattu-img-cell-wrap">
+                            <div class="vattu-img-empty-cell" tabindex="0" data-vattu-id="${item.id}" onclick="event.stopPropagation(); triggerQuickUploadVatTuImage('${item.id}')" title="Click để chọn file hoặc rê chuột vào bấm Ctrl+V để dán ảnh">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else if (col.key === 'ma_vach') {
                 let toggleBtn = '';
                 if (hasDetails) {
                     toggleBtn = `
@@ -1549,7 +1582,6 @@ function renderVatTuTable(items) {
             </button>
         `;
 
-        // Add sticky actions
         trHtml += `
             <td style="text-align: center;" class="sticky-action-td">
                 <div class="vattu-action-btns">
@@ -1567,7 +1599,6 @@ function renderVatTuTable(items) {
         tr.innerHTML = trHtml;
         tbody.appendChild(tr);
 
-        // Render Expanded Child Rows directly aligned with main table columns if active & details exist
         if (isExpanded && hasDetails) {
             stats.details.forEach((d, idx) => {
                 const isLast = idx === stats.details.length - 1;
@@ -1586,7 +1617,10 @@ function renderVatTuTable(items) {
                     const cBarcode = (d.ma_vach || item.ma_vach || '').trim();
                     const cLot = (d.lot && d.lot !== '-') ? d.lot.trim() : '';
 
-                    if (col.key === 'ma_vach') {
+                    if (col.key === 'anh') {
+                        // Nhánh con (LOT / Chi nhánh) để trống hoàn toàn
+                        cellContent = '';
+                    } else if (col.key === 'ma_vach') {
                         const gotoTheKhoSubrowBtn = cBarcode ? `
                             <button type="button" class="btn-goto-thekho" title="Xem Thẻ Kho LOT ${escapeHtml(cLot || '-')} (${escapeHtml(d.chi_nhanh || '')})" onclick="event.stopPropagation(); navigateToTheKhoFilter('${escapeHtml(cBarcode)}', '${escapeHtml(cLot)}', '${escapeHtml(d.chi_nhanh || '')}')">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1630,7 +1664,6 @@ function renderVatTuTable(items) {
                     childTrHtml += `<td style="text-align: ${col.align}; ${stickyStyle}" class="${stickyClass}">${cellContent}</td>`;
                 });
 
-                // QR print button for child row
                 const cBarcode = (d.ma_vach || item.ma_vach || '').trim();
                 const cLot = (d.lot && d.lot !== '-') ? d.lot.trim() : '';
                 const cExp = (formatDate(d.date_expiry) === '-' ? '' : formatDate(d.date_expiry));
@@ -1681,7 +1714,6 @@ function renderVatTuTable(items) {
     }
 }
 
-// Requirement 1: Render Pagination Buttons & Range Info
 function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx) {
     const rangeTextEl = document.getElementById('vattu-page-range-text');
     const totalTextEl = document.getElementById('vattu-page-total-text');
@@ -1700,7 +1732,6 @@ function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx)
     if (!btnsContainer) return;
     btnsContainer.innerHTML = '';
 
-    // Prev Button
     const btnPrev = document.createElement('button');
     btnPrev.type = 'button';
     btnPrev.className = `vattu-page-btn ${vattuCurrentPage <= 1 ? 'disabled' : ''}`;
@@ -1714,7 +1745,6 @@ function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx)
     };
     btnsContainer.appendChild(btnPrev);
 
-    // Page Number Buttons (Limit to max 5 page numbers around current)
     let startPage = Math.max(1, vattuCurrentPage - 2);
     let endPage = Math.min(totalPages, startPage + 4);
     if (endPage - startPage < 4) {
@@ -1733,7 +1763,6 @@ function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx)
         btnsContainer.appendChild(pageBtn);
     }
 
-    // Next Button
     const btnNext = document.createElement('button');
     btnNext.type = 'button';
     btnNext.className = `vattu-page-btn ${vattuCurrentPage >= totalPages ? 'disabled' : ''}`;
@@ -1748,7 +1777,6 @@ function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx)
     btnsContainer.appendChild(btnNext);
 }
 
-// Function to dynamically sync sticky column left offsets across headers and rows during/after resize
 function syncVatTuStickyColumnPositions() {
     const visibleCols = currentVatTuCols.filter(c => c.visible);
     let leftOffset = 0;
@@ -1764,7 +1792,6 @@ function syncVatTuStickyColumnPositions() {
             }
         }
 
-        // Update all td cells in this column across all rows
         const rows = document.querySelectorAll('#vattu-table-body tr');
         rows.forEach(tr => {
             const td = tr.children[visIdx];
@@ -1783,7 +1810,6 @@ function syncVatTuStickyColumnPositions() {
     });
 }
 
-// Requirement 5: Resizable Columns Dragging Handler (AppSheet Style - Fixed persistence & Realtime Sticky Sync)
 function initColumnResizing() {
     const resizers = document.querySelectorAll('.vattu-table .col-resizer, #vattu-table .col-resizer, .col-resizer');
     resizers.forEach(resizer => {
@@ -1827,10 +1853,8 @@ function initColumnResizing() {
                 } catch (err) {}
             }
 
-            // Clean re-render ensures 100% synchronization of all subrows, sticky cells and dividers
             renderCurrentPageData();
 
-            // Keep flag active briefly so mouseup click event does not trigger A-Z sorting
             setTimeout(() => {
                 isResizingColumn = false;
             }, 250);
@@ -1904,8 +1928,7 @@ function initVatTuComboboxes() {
                     dropdown.classList.remove('show');
                 }
             });
-            
-            // Also toggle on arrow click
+
             wrap.querySelector('.custom-combobox-arrow').parentElement.addEventListener('click', toggleDropdown);
         }
     });
@@ -1916,7 +1939,7 @@ function renderComboboxOptions(field, input, dropdown, filterText = '') {
     if (field.key === 'danh_muc' && uniqueVals.length === 0) {
         uniqueVals = ['Thuốc', 'Vắc-xin', 'Vật tư phẫu thuật', 'Vật tư tiêu hao', 'Khác'];
     }
-    
+
     if (filterText) {
         uniqueVals = uniqueVals.filter(val => val.toLowerCase().includes(filterText.toLowerCase()));
     }
@@ -1927,7 +1950,7 @@ function renderComboboxOptions(field, input, dropdown, filterText = '') {
     }
 
     dropdown.innerHTML = uniqueVals.map(val => `<div class="custom-combobox-option">${val}</div>`).join('');
-    
+
     dropdown.querySelectorAll('.custom-combobox-option').forEach(opt => {
         opt.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1937,9 +1960,9 @@ function renderComboboxOptions(field, input, dropdown, filterText = '') {
     });
 }
 
-// Modal Handlers (Add / Edit)
 function openAddVatTuModal() {
     editingVatTuId = null;
+    modalPendingImageFile = null;
     const modal = document.getElementById('vattu-modal');
     const titleEl = document.getElementById('vattu-modal-title');
     const form = document.getElementById('vattu-form');
@@ -1947,6 +1970,19 @@ function openAddVatTuModal() {
     if (form) form.reset();
     clearVatTuFormErrors();
     initVatTuComboboxes();
+
+    // Reset image preview state
+    const urlInput = document.getElementById('input-vattu-anh-url');
+    const fileInput = document.getElementById('input-vattu-anh-file');
+    const previewBox = document.getElementById('vattu-modal-image-preview');
+    const emptyBox = document.getElementById('vattu-modal-image-empty');
+    const previewImg = document.getElementById('vattu-modal-preview-img');
+
+    if (urlInput) urlInput.value = '';
+    if (fileInput) fileInput.value = '';
+    if (previewImg) previewImg.src = '';
+    if (previewBox) previewBox.style.display = 'none';
+    if (emptyBox) emptyBox.style.display = 'flex';
 
     if (titleEl) titleEl.textContent = "Thêm Mới Vật Tư / Thuốc Y Tế";
 
@@ -1958,6 +1994,7 @@ function openEditVatTuModal(id) {
     if (!item) return;
 
     editingVatTuId = item.id;
+    modalPendingImageFile = null;
     const modal = document.getElementById('vattu-modal');
     const titleEl = document.getElementById('vattu-modal-title');
 
@@ -1982,6 +2019,26 @@ function openEditVatTuModal(id) {
     if (document.getElementById('input-vattu-ton-cuoi')) document.getElementById('input-vattu-ton-cuoi').value = item.ton_cuoi ?? item.so_luong_ton ?? 0;
     if (document.getElementById('input-vattu-gia-von')) document.getElementById('input-vattu-gia-von').value = item.gia_von_ton_kho_trung_binh ?? 0;
 
+    // Load existing image state
+    const urlInput = document.getElementById('input-vattu-anh-url');
+    const fileInput = document.getElementById('input-vattu-anh-file');
+    const previewBox = document.getElementById('vattu-modal-image-preview');
+    const emptyBox = document.getElementById('vattu-modal-image-empty');
+    const previewImg = document.getElementById('vattu-modal-preview-img');
+
+    if (fileInput) fileInput.value = '';
+    if (item.anh) {
+        if (urlInput) urlInput.value = item.anh;
+        if (previewImg) previewImg.src = item.anh;
+        if (previewBox) previewBox.style.display = 'flex';
+        if (emptyBox) emptyBox.style.display = 'none';
+    } else {
+        if (urlInput) urlInput.value = '';
+        if (previewImg) previewImg.src = '';
+        if (previewBox) previewBox.style.display = 'none';
+        if (emptyBox) emptyBox.style.display = 'flex';
+    }
+
     if (modal) modal.classList.add('show');
 }
 
@@ -1989,9 +2046,25 @@ function closeVatTuModal() {
     const modal = document.getElementById('vattu-modal');
     if (modal) modal.classList.remove('show');
     editingVatTuId = null;
+    modalPendingImageFile = null;
 }
 
-// Form Submission Save Logic
+function removeVatTuModalImage(event) {
+    if (event) event.stopPropagation();
+    modalPendingImageFile = null;
+    const urlInput = document.getElementById('input-vattu-anh-url');
+    const fileInput = document.getElementById('input-vattu-anh-file');
+    const previewBox = document.getElementById('vattu-modal-image-preview');
+    const emptyBox = document.getElementById('vattu-modal-image-empty');
+    const previewImg = document.getElementById('vattu-modal-preview-img');
+
+    if (urlInput) urlInput.value = '';
+    if (fileInput) fileInput.value = '';
+    if (previewImg) previewImg.src = '';
+    if (previewBox) previewBox.style.display = 'none';
+    if (emptyBox) emptyBox.style.display = 'flex';
+}
+
 async function handleSaveVatTuForm(e) {
     e.preventDefault();
     clearVatTuFormErrors();
@@ -2006,7 +2079,7 @@ async function handleSaveVatTuForm(e) {
     const phongBan = document.getElementById('input-vattu-phong-ban')?.value.trim() || null;
     const donVi = document.getElementById('input-vattu-don-vi').value.trim();
     const cachDung = document.getElementById('input-vattu-cach-dung').value.trim();
-    
+
     const tonDau = parseFloat(document.getElementById('input-vattu-ton-dau')?.value) || 0;
     const nhapVal = parseFloat(document.getElementById('input-vattu-nhap')?.value) || 0;
     const xuatVal = parseFloat(document.getElementById('input-vattu-xuat')?.value) || 0;
@@ -2050,7 +2123,24 @@ async function handleSaveVatTuForm(e) {
 
     if (!isValid) return;
 
+    const btnSubmit = document.getElementById('btn-submit-vattu');
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Đang lưu...";
+    }
+
+    // Process image upload if new file was selected or pasted
+    let finalImageUrl = document.getElementById('input-vattu-anh-url')?.value?.trim() || null;
+    if (modalPendingImageFile) {
+        btnSubmit.textContent = "Đang tải ảnh...";
+        const uploadedUrl = await uploadVatTuImageFile(modalPendingImageFile, editingVatTuId);
+        if (uploadedUrl) {
+            finalImageUrl = uploadedUrl;
+        }
+    }
+
     const payload = {
+        anh: finalImageUrl,
         ma_vach: maVach || null,
         ten_mat_hang: tenMatHang || null,
         ten_hoa_don: tenHoaDon || tenMatHang || null,
@@ -2069,11 +2159,7 @@ async function handleSaveVatTuForm(e) {
     };
 
     const client = getVatTuSupabaseClient();
-    const btnSubmit = document.getElementById('btn-submit-vattu');
-    if (btnSubmit) {
-        btnSubmit.disabled = true;
-        btnSubmit.textContent = "Đang lưu...";
-    }
+    btnSubmit.textContent = "Đang lưu...";
 
     try {
         if (client) {
@@ -2124,7 +2210,6 @@ async function handleSaveVatTuForm(e) {
     }
 }
 
-// Delete Handlers
 function confirmDeleteVatTu(id) {
     const item = vatTuData.find(x => String(x.id) === String(id));
     if (!item) return;
@@ -2193,11 +2278,6 @@ async function executeDeleteVatTu() {
     }
 }
 
-// ==========================================================================
-// EXCEL EXPORT & IMPORT FUNCTIONALITY
-// ==========================================================================
-
-// Helper to download Excel workbook with explicit .xlsx MIME type & filename
 function downloadExcelWorkbook(workbook, fileName) {
     try {
         const b64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
@@ -2216,7 +2296,6 @@ function downloadExcelWorkbook(workbook, fileName) {
     }
 }
 
-// Download Excel Sample Template (.xlsx) - Form mới nhất kèm các cột tiêu đề & 2 dòng mẫu
 function downloadVatTuExcelTemplate() {
     if (typeof XLSX === 'undefined') {
         showVatTuNoticeModal('warning', 'Chưa Sẵn Sàng', 'Thư viện SheetJS chưa sẵn sàng. Vui lòng kiểm tra kết nối mạng!');
@@ -2283,22 +2362,22 @@ function downloadVatTuExcelTemplate() {
     const worksheet = XLSX.utils.aoa_to_sheet(templateRows);
 
     const colWidths = [
-        { wch: 6 },  // STT
-        { wch: 18 }, // Mã Vạch
-        { wch: 38 }, // Tên Mặt Hàng
-        { wch: 28 }, // Tên Hóa Đơn
-        { wch: 20 }, // Nhà Sản Xuất
-        { wch: 16 }, // Danh Mục
-        { wch: 18 }, // Nhóm Hàng
-        { wch: 16 }, // Phân Loại
-        { wch: 18 }, // Phòng Ban
-        { wch: 10 }, // Đơn Vị
-        { wch: 34 }, // Cách Dùng
-        { wch: 10 }, // Đầu
-        { wch: 10 }, // Nhập
-        { wch: 10 }, // Xuất
-        { wch: 10 }, // Cuối
-        { wch: 18 }  // Giá Vốn TB
+        { wch: 6 },  
+        { wch: 18 }, 
+        { wch: 38 }, 
+        { wch: 28 }, 
+        { wch: 20 }, 
+        { wch: 16 }, 
+        { wch: 18 }, 
+        { wch: 16 }, 
+        { wch: 18 }, 
+        { wch: 10 }, 
+        { wch: 34 }, 
+        { wch: 10 }, 
+        { wch: 10 }, 
+        { wch: 10 }, 
+        { wch: 10 }, 
+        { wch: 18 }  
     ];
     worksheet['!cols'] = colWidths;
 
@@ -2315,7 +2394,6 @@ function downloadVatTuExcelTemplate() {
     );
 }
 
-// Open Export Choice Modal
 function exportVatTuToExcel() {
     console.log("GAIA VatTu: exportVatTuToExcel triggered!");
     if (!vatTuData || vatTuData.length === 0) {
@@ -2335,7 +2413,6 @@ function exportVatTuToExcel() {
         return;
     }
 
-    // Update count badges inside modal
     const filteredCountEl = document.getElementById('export-filtered-count-badge');
     if (filteredCountEl) filteredCountEl.textContent = `${filteredVatTuData ? filteredVatTuData.length : 0} dòng`;
 
@@ -2350,7 +2427,6 @@ function closeVatTuExcelExportModal() {
     if (modal) modal.classList.remove('show');
 }
 
-// Execute Export based on selected mode ('filtered' or 'all')
 function executeVatTuExcelExport(type) {
     closeVatTuExcelExportModal();
 
@@ -2397,23 +2473,23 @@ function executeVatTuExcelExport(type) {
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
 
     const colWidths = [
-        { wch: 6 },  // STT
-        { wch: 18 }, // Chi Nhánh
-        { wch: 16 }, // Mã Vạch
-        { wch: 32 }, // Tên Mặt Hàng
-        { wch: 24 }, // Tên Hóa Đơn
-        { wch: 12 }, // Đầu
-        { wch: 12 }, // Nhập
-        { wch: 12 }, // Xuất
-        { wch: 12 }, // Cuối
-        { wch: 22 }, // Nhà Sản Xuất
-        { wch: 16 }, // Danh Mục
-        { wch: 18 }, // Nhóm Hàng
-        { wch: 15 }, // Phân Loại
-        { wch: 18 }, // Phòng Ban
-        { wch: 10 }, // Đơn Vị
-        { wch: 26 }, // Cách Dùng
-        { wch: 18 }  // Giá Vốn TB
+        { wch: 6 },  
+        { wch: 18 }, 
+        { wch: 16 }, 
+        { wch: 32 }, 
+        { wch: 24 }, 
+        { wch: 12 }, 
+        { wch: 12 }, 
+        { wch: 12 }, 
+        { wch: 12 }, 
+        { wch: 22 }, 
+        { wch: 16 }, 
+        { wch: 18 }, 
+        { wch: 15 }, 
+        { wch: 18 }, 
+        { wch: 10 }, 
+        { wch: 26 }, 
+        { wch: 18 }  
     ];
     worksheet['!cols'] = colWidths;
 
@@ -2428,7 +2504,6 @@ function executeVatTuExcelExport(type) {
     console.log(`GAIA VatTu: Exported ${exportRows.length} items (${type}) to ${fileName}`);
 }
 
-// Import Excel / CSV File
 function handleExcelImportFile(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -2458,7 +2533,6 @@ function handleExcelImportFile(e) {
                 return;
             }
 
-            // --- 1. Structure Validation (Cấu trúc file khác với dữ liệu trên app) ---
             const sampleRowKeys = Object.keys(validRawRows[0]).map(k => k.trim().toLowerCase());
             const hasMaVachHeader = sampleRowKeys.some(k => ['mã vạch', 'mã vach', 'ma vach', 'ma_vach', 'barcode', 'sku'].includes(k));
             const hasTenHeader = sampleRowKeys.some(k => ['tên mặt hàng', 'tên sản phẩm', 'ten mat hang', 'ten_mat_hang', 'name'].includes(k));
@@ -2516,7 +2590,7 @@ function handleExcelImportFile(e) {
                 const gia_von_ton_kho_trung_binh = getNum('Giá vốn trung bình (đ)', 'Giá vốn trung bình', 'Giá vốn TB', 'Gia von', 'gia_von_ton_kho_trung_binh');
 
                 return {
-                    _excelRowNumber: idx + 2, // 1-indexed Excel row (row 1 is header)
+                    _excelRowNumber: idx + 2, 
                     item: {
                         ma_vach: ma_vach || null,
                         ten_mat_hang: ten_mat_hang || null,
@@ -2537,7 +2611,6 @@ function handleExcelImportFile(e) {
                 };
             });
 
-            // --- 2. Required Fields Row Check (Ngăn thêm nếu dòng có dữ liệu nhưng thiếu Mã Vạch hoặc Tên Mặt Hàng) ---
             const invalidRowsInfo = [];
             newItemsWithRow.forEach(({ _excelRowNumber, item }) => {
                 const hasMaVach = item.ma_vach && item.ma_vach.trim() !== '';
@@ -2573,24 +2646,21 @@ function handleExcelImportFile(e) {
 
             const newItems = newItemsWithRow.map(x => x.item);
 
-            // --- 3. Duplicate Validation (Trùng Mã Vạch) ---
             const excelBarcodes = new Set();
             const excelDuplicates = new Set();
             const appDuplicates = new Set();
 
             for (const item of newItems) {
                 if (!item.ma_vach) continue;
-                
+
                 const barcode = String(item.ma_vach).trim().toLowerCase();
 
-                // Check duplicate inside the Excel file
                 if (excelBarcodes.has(barcode)) {
                     excelDuplicates.add(item.ma_vach);
                 } else {
                     excelBarcodes.add(barcode);
                 }
 
-                // Check duplicate compared to app data (vatTuData)
                 const isDupInApp = vatTuData.some(existing => 
                     existing.ma_vach && String(existing.ma_vach).trim().toLowerCase() === barcode
                 );
@@ -2607,12 +2677,11 @@ function handleExcelImportFile(e) {
                 if (appDuplicates.size > 0) {
                     errorMsg += `<b style="color: #ef4444;">Đã tồn tại trên phần mềm:</b><br>${Array.from(appDuplicates).join(', ')}`;
                 }
-                
+
                 showVatTuNoticeModal('error', 'Phát Hiện Mã Vạch Trùng Lặp', `Không thể nạp file do có mã vạch bị trùng:<br><br>${errorMsg}`);
                 showVatTuLoading(false);
                 return;
             }
-            // --- End Validation ---
 
             const client = getVatTuSupabaseClient();
             if (client && newItems.length > 0) {
@@ -2655,7 +2724,6 @@ function handleExcelImportFile(e) {
     reader.readAsArrayBuffer(file);
 }
 
-// Helper Utilities
 function formatTruncateCell(text, fallback = '-') {
     const cleanText = (text !== null && text !== undefined && String(text).trim() !== '' && String(text).trim() !== '-') 
         ? String(text).trim() 
@@ -2702,7 +2770,6 @@ function formatDate(dateStr) {
     const str = String(dateStr).trim();
     if (!str || str === '-') return '-';
 
-    // 1. Already in DD/MM/YYYY or DD/MM/YY format
     const ddMmYyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (ddMmYyyyMatch) {
         const d = ddMmYyyyMatch[1].padStart(2, '0');
@@ -2711,7 +2778,6 @@ function formatDate(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 2. In YYYY-MM-DD or YYYY/MM/DD format (ISO date)
     const yyyyMmDdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (yyyyMmDdMatch) {
         const y = yyyyMmDdMatch[1];
@@ -2720,7 +2786,6 @@ function formatDate(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 3. In DD-MM-YYYY format
     const ddMmYyyyDashMatch = str.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
     if (ddMmYyyyDashMatch) {
         const d = ddMmYyyyDashMatch[1].padStart(2, '0');
@@ -2729,7 +2794,6 @@ function formatDate(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 4. Standard JS Date parsing for ISO timestamps
     try {
         const dt = new Date(str);
         if (!isNaN(dt.getTime())) {
@@ -2746,7 +2810,7 @@ function formatDate(dateStr) {
 function formatQrStringWithStandardDate(qrStr, dateExpiry) {
     if (!qrStr) return '';
     let str = String(qrStr).trim();
-    // Clean legacy trailing empty delimiters like `;-;` or `;-`
+
     str = str.replace(/;-;?$/g, '').replace(/;-$/g, '');
     if (!str.includes(';')) return str;
     const parts = str.split(';');
@@ -2770,18 +2834,16 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-// Custom App Notification Router
 function showVatTuNoticeModal(type, title, message, codeSnippet = '', secondaryAction = null) {
-    // ONLY show Modal Window Pop-up Overlay if secondaryAction is explicitly requested (e.g. Invalid Excel Structure error with "Tải Template Mẫu" button)
+
     if (secondaryAction && secondaryAction.show) {
         showVatTuNoticeModalWindow(type, title, message, codeSnippet, secondaryAction);
     } else {
-        // ALL OTHER notifications slide in as sleek Toast Notifications!
+
         showToast(type, title, message);
     }
 }
 
-// Custom App Dialog Modal Window (Displays real confirmation modal overlay for Excel template downloads)
 function showVatTuNoticeModalWindow(type, title, message, codeSnippet = '', secondaryAction = null) {
     let dialogOverlay = document.getElementById('vattu-notice-dialog-overlay');
     if (!dialogOverlay) {
@@ -2849,7 +2911,7 @@ function closeVatTuNoticeDialogModal() {
 window.closeVatTuNoticeDialogModal = closeVatTuNoticeDialogModal;
 
 function showToast(type, title, message, duration = 4500) {
-    // Ensure container exists
+
     let container = document.getElementById('toast-container');
     if (!container) {
         container = document.createElement('div');
@@ -2868,7 +2930,6 @@ function showToast(type, title, message, duration = 4500) {
     const toastType = ['success','error','warning','info'].includes(type) ? type : 'info';
     const icon = icons[toastType] || icons.info;
 
-    // Strip HTML tags from message for plain display
     const plainMsg = typeof message === 'string' ? message.replace(/<[^>]*>/g, '') : '';
 
     const toast = document.createElement('div');
@@ -2885,20 +2946,17 @@ function showToast(type, title, message, duration = 4500) {
 
     container.appendChild(toast);
 
-    // Slide in
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
             toast.classList.add('toast-show');
         });
     });
 
-    // Close button
     const closeBtn = toast.querySelector('.toast-close');
     if (closeBtn) {
         closeBtn.addEventListener('click', () => dismissToast(toast));
     }
 
-    // Auto dismiss
     const timer = setTimeout(() => dismissToast(toast), duration);
     toast._dismissTimer = timer;
 }
@@ -2917,9 +2975,8 @@ function dismissToast(toast) {
 window.showToast = showToast;
 
 function closeVatTuNoticeModal() {
-    // No-op: old modal replaced by toast
-}
 
+}
 
 function copyVatTuCodeSnippet() {
     const codeText = document.getElementById('vattu-notice-code-text');
@@ -2934,10 +2991,228 @@ function copyVatTuCodeSnippet() {
     }
 }
 
-// Expose All Global Functions to Window
+/* ==========================================================================
+   IMAGE UPLOAD, CLIPBOARD PASTE & LIGHTBOX HANDLERS
+   ========================================================================== */
+
+async function uploadVatTuImageFile(file, itemId = null) {
+    const client = getVatTuSupabaseClient();
+    if (!client) {
+        showToast('error', 'Lỗi Kết Nối', 'Không tìm thấy kết nối Supabase để tải ảnh!');
+        return null;
+    }
+
+    const ext = file.name ? file.name.split('.').pop() : 'png';
+    const cleanExt = (ext && ext.length < 5) ? ext.toLowerCase() : 'png';
+    const fileName = `sp_${itemId || 'new'}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${cleanExt}`;
+
+    try {
+        const { data, error } = await client.storage
+            .from('vattu_images')
+            .upload(fileName, file, { cacheControl: '3600', upsert: true });
+
+        if (error) {
+            console.error("GAIA VatTu: Upload to vattu_images bucket error:", error);
+            if (error.message && (error.message.includes('Bucket not found') || error.message.includes('bucket'))) {
+                showVatTuNoticeModal(
+                    'error',
+                    'Chưa Tạo Bucket "vattu_images"',
+                    'Bucket "vattu_images" chưa được tạo trên Supabase Storage.<br><br>Vui lòng mở SQL Editor trên Supabase và chạy file <b>vattu_image_schema.sql</b> để tạo bucket và cấp quyền!',
+                    'INSERT INTO storage.buckets (id, name, public) VALUES (\'vattu_images\', \'vattu_images\', true) ON CONFLICT (id) DO UPDATE SET public = true;'
+                );
+            } else {
+                showToast('error', 'Lỗi Tải Ảnh', error.message || 'Không thể tải ảnh lên máy chủ!');
+            }
+            return null;
+        }
+
+        const { data: pubData } = client.storage.from('vattu_images').getPublicUrl(fileName);
+        return pubData?.publicUrl || null;
+    } catch (e) {
+        console.error("GAIA VatTu: Exception uploading image:", e);
+        showToast('error', 'Lỗi Tải Ảnh', e.message || 'Lỗi không xác định khi tải ảnh');
+        return null;
+    }
+}
+
+function triggerQuickUploadVatTuImage(itemId) {
+    currentQuickUploadVatTuId = itemId;
+    const fileInput = document.getElementById('vattu-table-quick-file-input');
+    if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+    }
+}
+
+async function handleTableQuickFileInputChange(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !currentQuickUploadVatTuId) return;
+
+    const itemId = currentQuickUploadVatTuId;
+    const item = vatTuData.find(x => String(x.id) === String(itemId));
+    const itemName = item ? (item.ten_mat_hang || item.ma_vach) : 'vật tư';
+
+    showToast('info', 'Đang Tải Ảnh', `Đang tải ảnh cho ${itemName}...`, 3500);
+
+    const imageUrl = await uploadVatTuImageFile(file, itemId);
+    if (!imageUrl) return;
+
+    await saveVatTuImageToDatabase(itemId, imageUrl);
+}
+
+function handleModalFileInputChange(e) {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+        handleModalSelectedImageFile(file);
+    }
+}
+
+function handleModalSelectedImageFile(file) {
+    modalPendingImageFile = file;
+    const reader = new FileReader();
+    reader.onload = (re) => {
+        const previewImg = document.getElementById('vattu-modal-preview-img');
+        const previewBox = document.getElementById('vattu-modal-image-preview');
+        const emptyBox = document.getElementById('vattu-modal-image-empty');
+        if (previewImg) previewImg.src = re.target.result;
+        if (previewBox) previewBox.style.display = 'flex';
+        if (emptyBox) emptyBox.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function saveVatTuImageToDatabase(itemId, imageUrl) {
+    const client = getVatTuSupabaseClient();
+    try {
+        if (client) {
+            const { error } = await client
+                .from('san_pham')
+                .update({ anh: imageUrl })
+                .eq('id', itemId);
+
+            if (error) throw error;
+        }
+
+        // Cập nhật dữ liệu trong bộ nhớ
+        const idx = vatTuData.findIndex(x => String(x.id) === String(itemId));
+        if (idx !== -1) {
+            vatTuData[idx].anh = imageUrl;
+        }
+        const fIdx = filteredVatTuData.findIndex(x => String(x.id) === String(itemId));
+        if (fIdx !== -1) {
+            filteredVatTuData[fIdx].anh = imageUrl;
+        }
+
+        showToast('success', 'Đã Lưu Ảnh', 'Cập nhật ảnh cho mặt hàng thành công!');
+        renderCurrentPageData();
+    } catch (err) {
+        console.error("GAIA VatTu: Error updating image on san_pham:", err);
+        showToast('error', 'Lỗi Lưu Database', err.message || 'Không thể lưu link ảnh vào database');
+    }
+}
+
+async function handleGlobalVatTuPaste(e) {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+
+    let imageFile = null;
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            imageFile = items[i].getAsFile();
+            break;
+        }
+    }
+
+    if (!imageFile) return;
+
+    const modal = document.getElementById('vattu-modal');
+    const isModalOpen = modal && modal.classList.contains('show');
+
+    if (isModalOpen) {
+        // Dán ảnh bên trong modal Thêm/Sửa
+        e.preventDefault();
+        handleModalSelectedImageFile(imageFile);
+        showToast('info', 'Đã Dán Ảnh', 'Ảnh đã được nạp vào form. Bấm "Lưu Dữ Liệu" để hoàn tất!', 2500);
+        return;
+    }
+
+    // Dán ảnh khi đang rê chuột vào ô/dòng của bảng Vật tư
+    if (hoveredVatTuId) {
+        e.preventDefault();
+        const targetId = hoveredVatTuId;
+        const item = vatTuData.find(x => String(x.id) === String(targetId));
+        const itemName = item ? (item.ten_mat_hang || item.ma_vach) : 'mặt hàng';
+
+        showToast('info', 'Đang Tải Ảnh Dán', `Đang tải ảnh từ clipboard cho "${itemName}"...`, 3500);
+
+        const imageUrl = await uploadVatTuImageFile(imageFile, targetId);
+        if (imageUrl) {
+            await saveVatTuImageToDatabase(targetId, imageUrl);
+        }
+    }
+}
+
+function openVatTuImageLightbox(imgUrl, itemName = '', barcode = '', itemId = null) {
+    const modal = document.getElementById('vattu-image-lightbox-modal');
+    const imgEl = document.getElementById('vattu-lightbox-img');
+    const titleEl = document.getElementById('vattu-lightbox-title');
+    const barcodeEl = document.getElementById('vattu-lightbox-barcode');
+    const deleteBtn = document.getElementById('btn-lightbox-delete-img');
+
+    if (!modal || !imgEl) return;
+
+    currentLightboxItemId = itemId;
+    imgEl.src = imgUrl || '';
+    if (titleEl) titleEl.textContent = itemName || 'Ảnh Mặt Hàng';
+    if (barcodeEl) {
+        barcodeEl.textContent = barcode ? `Mã: ${barcode}` : '';
+        barcodeEl.style.display = barcode ? 'inline-block' : 'none';
+    }
+    if (deleteBtn) {
+        deleteBtn.style.display = itemId ? 'inline-flex' : 'none';
+    }
+
+    modal.classList.add('show');
+}
+
+function closeVatTuImageLightbox(event) {
+    if (event && event.target && event.target.closest('.vattu-lightbox-container') && !event.target.classList.contains('vattu-lightbox-close')) {
+        return;
+    }
+    currentLightboxItemId = null;
+    const modal = document.getElementById('vattu-image-lightbox-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+async function deleteCurrentLightboxImage() {
+    if (!currentLightboxItemId) {
+        showToast('warning', 'Không Có ID', 'Không tìm thấy thông tin mặt hàng để xóa ảnh.');
+        return;
+    }
+
+    const item = vatTuData.find(x => String(x.id) === String(currentLightboxItemId));
+    const itemName = item ? (item.ten_mat_hang || item.ma_vach) : 'mặt hàng';
+
+    const confirmed = confirm(`Bạn có chắc chắn muốn xóa ảnh của "${itemName}" không?`);
+    if (!confirmed) return;
+
+    showToast('info', 'Đang Xóa Ảnh', `Đang xóa ảnh cho "${itemName}"...`, 2500);
+
+    const success = await saveVatTuImageToDatabase(currentLightboxItemId, null);
+    if (success) {
+        closeVatTuImageLightbox();
+        showToast('success', 'Đã Xóa Ảnh', `Đã xóa ảnh của "${itemName}" thành công!`, 3000);
+    }
+}
+
 window.openAddVatTuModal = openAddVatTuModal;
 window.openEditVatTuModal = openEditVatTuModal;
 window.closeVatTuModal = closeVatTuModal;
+window.removeVatTuModalImage = removeVatTuModalImage;
+window.triggerQuickUploadVatTuImage = triggerQuickUploadVatTuImage;
+window.openVatTuImageLightbox = openVatTuImageLightbox;
+window.closeVatTuImageLightbox = closeVatTuImageLightbox;
+window.deleteCurrentLightboxImage = deleteCurrentLightboxImage;
 window.confirmDeleteVatTu = confirmDeleteVatTu;
 window.closeDeleteVatTuModal = closeDeleteVatTuModal;
 window.executeDeleteVatTu = executeDeleteVatTu;
@@ -2956,7 +3231,6 @@ window.handleSaveVatTuForm = handleSaveVatTuForm;
 window.handleHeaderSortClick = handleHeaderSortClick;
 window.navigateToTheKhoFilter = navigateToTheKhoFilter;
 
-// Function to smoothly navigate to Thẻ Kho and apply quick filter
 function navigateToTheKhoFilter(maVach, lot = '', branch = '') {
     window.location.hash = 'the-kho';
     const theKhoNav = document.querySelector('[data-view="the-kho"]');
@@ -2975,8 +3249,6 @@ function navigateToTheKhoFilter(maVach, lot = '', branch = '') {
     }, 60);
 }
 
-// ====== Column Configuration UI Logic ======
-// Define as local functions first so they can call each other
 function openColumnConfigModal() {
     pendingVatTuColsConfig = JSON.parse(JSON.stringify(currentVatTuCols));
     const modal = document.getElementById('vattu-column-config-modal');
@@ -2998,10 +3270,9 @@ function closeColumnConfigModal() {
 function renderColConfigList() {
     const listEl = document.getElementById('vattu-column-list');
     if (!listEl) return;
-    
+
     listEl.innerHTML = '';
-    
-    // Add Fixed Column Freeze control section at top of modal list
+
     const freezeHeader = document.createElement('div');
     freezeHeader.style.cssText = 'margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--card-border); display: flex; align-items: center; justify-content: space-between;';
     freezeHeader.innerHTML = `
@@ -3019,10 +3290,10 @@ function renderColConfigList() {
     pendingVatTuColsConfig.forEach((col, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === pendingVatTuColsConfig.length - 1;
-        
+
         const eyeIconVisible = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
         const eyeIconHidden = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
-        
+
         const item = document.createElement('div');
         item.className = `col-config-item${col.visible ? '' : ' hidden-col'}`;
         item.innerHTML = `
@@ -3039,14 +3310,12 @@ function renderColConfigList() {
                 </button>
             </div>
         `;
-        
-        // Bind toggle visibility
+
         item.querySelector('.col-visibility-toggle').addEventListener('click', function() {
             pendingVatTuColsConfig[idx].visible = !pendingVatTuColsConfig[idx].visible;
             renderColConfigList();
         });
-        
-        // Bind move up
+
         const moveUpBtn = item.querySelector('[data-move="up"]');
         if (moveUpBtn && !isFirst) {
             moveUpBtn.addEventListener('click', function() {
@@ -3056,8 +3325,7 @@ function renderColConfigList() {
                 renderColConfigList();
             });
         }
-        
-        // Bind move down
+
         const moveDwnBtn = item.querySelector('[data-move="down"]');
         if (moveDwnBtn && !isLast) {
             moveDwnBtn.addEventListener('click', function() {
@@ -3067,7 +3335,7 @@ function renderColConfigList() {
                 renderColConfigList();
             });
         }
-        
+
         listEl.appendChild(item);
     });
 }
@@ -3086,10 +3354,6 @@ function saveColumnConfig() {
     vattuCurrentPage = 1;
     applyVatTuFilters();
 }
-
-// ==========================================================================
-// BATCH QR CODE LABEL PRINTING (Excel Grid Style + Auto Lookup + Paste Support)
-// ==========================================================================
 
 let vattuQrRows = [];
 
@@ -3272,7 +3536,6 @@ function openVatTuQrPrintModal() {
     renderVatTuQrPrintRows();
     modal.classList.add('show');
 
-    // Attach paste listener to table body
     const tbody = document.getElementById('vattu-qr-print-tbody');
     if (tbody) {
         tbody.removeEventListener('paste', handleVatTuQrTablePaste);
@@ -3330,19 +3593,16 @@ function updateAllQrCountBadges() {
     const totalLabels = validRows.reduce((sum, r) => sum + (Math.max(1, parseInt(r.quantity, 10) || 1)), 0);
     const totalDistinctQr = validRows.length;
 
-    // 1. Modal summary text
     const summaryCountEl = document.getElementById('vattu-qr-summary-count');
     if (summaryCountEl) {
         summaryCountEl.textContent = `${totalDistinctQr} mã (${totalLabels} tem)`;
     }
 
-    // 2. Modal print button count
     const btnCountEl = document.getElementById('vattu-qr-btn-count');
     if (btnCountEl) {
         btnCountEl.textContent = totalLabels;
     }
 
-    // 3. Main toolbar button badge
     const toolbarBadge = document.getElementById('vattu-qr-toolbar-badge');
     if (toolbarBadge) {
         if (totalLabels > 0) {
@@ -3353,7 +3613,6 @@ function updateAllQrCountBadges() {
         }
     }
 
-    // 4. Update any child row QR button badges currently on screen
     document.querySelectorAll('.btn-qr-subrow').forEach(btn => {
         const bBarcode = (btn.getAttribute('data-barcode') || '').trim();
         const bLot = (btn.getAttribute('data-lot') || '').trim();
@@ -3408,7 +3667,6 @@ function addVatTuChildToQrPrint(maVach, tenVt, lot, dateExpiry, event) {
     const cleanExpiry = (dateExpiry || '').trim();
     const cleanTen = (tenVt || cleanBarcode).trim();
 
-    // Check if already in vattuQrRows (1 mã QR chỉ thêm 1 lần thôi, ấn 2 lần không có hiệu lực)
     const alreadyExists = (vattuQrRows || []).some(r => 
         r.ma_vach && String(r.ma_vach).trim().toLowerCase() === cleanBarcode.toLowerCase() &&
         String(r.lot || '').trim().toLowerCase() === cleanLot.toLowerCase() &&
@@ -3422,7 +3680,6 @@ function addVatTuChildToQrPrint(maVach, tenVt, lot, dateExpiry, event) {
         return;
     }
 
-    // If vattuQrRows only has 1 blank row, clear it
     if (vattuQrRows.length === 1 && (!vattuQrRows[0].ma_vach || vattuQrRows[0].ma_vach.trim() === '')) {
         vattuQrRows = [];
     }
@@ -3436,8 +3693,6 @@ function addVatTuChildToQrPrint(maVach, tenVt, lot, dateExpiry, event) {
         quantity: 1
     });
 
-    // Thêm thôi chứ không cần mở cửa sổ ra, khi cần in user tự mở
-    // Update all badges and counts
     updateAllQrCountBadges();
 
     if (typeof showToast === 'function') {
@@ -3491,13 +3746,12 @@ function handleVatTuQrMaVachChange(idx, val) {
         return;
     }
 
-    // Lookup barcode in vatTuData or tonKhoDetailData
     const matched = lookupVatTuByBarcode(cleanBarcode);
     if (matched) {
         vattuQrRows[idx].ten_vt = matched.ten_mat_hang || matched.ten_hang_hoa || '';
         if (tenInput) tenInput.value = vattuQrRows[idx].ten_vt;
     } else {
-        // Sai mã hoặc xóa số không tìm được -> xóa tên cũ ngay lập tức
+
         vattuQrRows[idx].ten_vt = '';
         if (tenInput) tenInput.value = '';
     }
@@ -3521,7 +3775,6 @@ function lookupVatTuByBarcode(barcode) {
     return found || null;
 }
 
-// Paste Excel Data (Ctrl+V) Handler
 function handleVatTuQrTablePaste(e) {
     const clipboardData = e.clipboardData || window.clipboardData;
     if (!clipboardData) return;
@@ -3540,7 +3793,6 @@ function handleVatTuQrTablePaste(e) {
     const lines = pastedText.split(/\r\n|\r|\n/).filter(line => line.length > 0);
     if (lines.length === 0) return;
 
-    // Parse pasted lines into rows
     lines.forEach((line, i) => {
         const cols = line.split('\t').map(c => c.trim());
         const targetIdx = startIdx + i;
@@ -3552,7 +3804,7 @@ function handleVatTuQrTablePaste(e) {
         const rawQty = cols[4] || '1';
 
         const parsedQty = parseInt(rawQty, 10) || 1;
-        // Tên VT dù bên ngoài có điền và dán vào thì kệ, cứ chạy theo mã vạch tìm ra tên
+
         const matched = lookupVatTuByBarcode(ma_vach);
         const ten_vt = matched ? (matched.ten_mat_hang || matched.ten_hang_hoa || '') : '';
 
@@ -3575,31 +3827,26 @@ function handleVatTuQrTablePaste(e) {
     renderVatTuQrPrintRows();
 }
 
-// Helper to normalize any date input to strict dd/mm/yyyy format
 function normalizeToDDMMYYYY(dateStr) {
     if (!dateStr || dateStr === '-' || dateStr === 'null' || dateStr === 'undefined') return '-';
     const str = String(dateStr).trim();
     if (!str || str === '-') return '-';
 
-    // 1. If DD/MM/YYYY
     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
         const parts = str.split('/');
         return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
     }
 
-    // 2. If YYYY-MM-DD
     if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
         const parts = str.split('-');
         return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
     }
 
-    // 3. If DD-MM-YYYY
     if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(str)) {
         const parts = str.split('-');
         return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
     }
 
-    // 4. Try Date object
     try {
         const dt = new Date(str);
         if (!isNaN(dt.getTime())) {
@@ -3613,7 +3860,6 @@ function normalizeToDDMMYYYY(dateStr) {
     return str;
 }
 
-// Execute Batch QR Label Printing
 function executeVatTuQrBatchPrint() {
     const validRows = vattuQrRows.filter(r => r.ma_vach && r.ma_vach.trim() !== '');
 
@@ -3622,7 +3868,6 @@ function executeVatTuQrBatchPrint() {
         return;
     }
 
-    // Generate list of individual labels expanded by quantity
     const labels = [];
     let count = 0;
 
@@ -3630,14 +3875,13 @@ function executeVatTuQrBatchPrint() {
         const maVach = row.ma_vach.trim();
         const rawLot = (row.lot || '').trim();
         const lot = (rawLot === '-' || rawLot.toLowerCase() === 'null') ? '' : rawLot;
-        
+
         const rawDate = (row.date_expiry || '').trim();
         const normalizedDate = normalizeToDDMMYYYY(rawDate);
         const formattedDate = (normalizedDate === '-' || normalizedDate.toLowerCase() === 'null') ? '' : normalizedDate;
 
         const qty = Math.max(1, parseInt(row.quantity, 10) || 1);
 
-        // Build QR string dynamically omitting empty fields and their ; separators
         const qrParts = [maVach];
         if (lot) qrParts.push(lot);
         if (formattedDate) qrParts.push(formattedDate);
@@ -3667,7 +3911,6 @@ function formatLotWithLeadingEllipsis(lot, maxLen = 10) {
     return '...' + clean.slice(-(maxLen - 3));
 }
 
-// Open Printable Popup Window with QR Codes
 function printVatTuQrLabels(labels) {
     const presetSelect = document.getElementById('vattu-qr-paper-preset');
     const presetVal = presetSelect ? presetSelect.value : '80x15_dual';
@@ -3732,7 +3975,6 @@ function printVatTuQrLabels(labels) {
         titleFontSize = (labelHeight > 20) ? '9pt' : '5.5pt';
     }
 
-    // Apply User Custom Overrides if specified
     if (!isNaN(customQrSize) && customQrSize > 0) {
         qrSizeMm = customQrSize;
     }
@@ -3962,7 +4204,6 @@ function printVatTuQrLabels(labels) {
     printWin.document.close();
 }
 
-// Expose to window for any inline onclick handlers
 window.downloadVatTuExcelTemplate = downloadVatTuExcelTemplate;
 window.openColumnConfigModal = openColumnConfigModal;
 window.closeColumnConfigModal = closeColumnConfigModal;
@@ -3983,4 +4224,3 @@ window.addVatTuChildToQrPrint = addVatTuChildToQrPrint;
 window.handleSubrowQrButtonClick = handleSubrowQrButtonClick;
 window.handleVatTuQrQtyChange = handleVatTuQrQtyChange;
 window.updateAllQrCountBadges = updateAllQrCountBadges;
-

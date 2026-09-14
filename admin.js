@@ -1,43 +1,31 @@
-/* ==========================================================================
-   GAIA Animal Hospital Ho Chi Minh City Realtime Admin Dashboard Logic
-   ========================================================================== */
-
-// --- Global State Variables ---
 let intakesData = [];
 let supabaseClient = null;
 let soundEnabled = true;
-let loyalPhones = new Set(); // Set of owner_phone strings that have registered > 1 times in database
-let duplicateIds = new Set(); // Set of record IDs that are duplicates (same phone, same day, same pet_name)
-let activeIntakeRecord = null; // The record currently opened in the details modal
+let loyalPhones = new Set(); 
+let duplicateIds = new Set(); 
+let activeIntakeRecord = null; 
 
-// Date navigation state
-let viewDate = new Date(); // The date currently being viewed
+let viewDate = new Date(); 
 viewDate.setHours(0, 0, 0, 0);
-let isAllDates = false; // true if showing all dates
+let isAllDates = false; 
 
-// Status filter state: 'all' | 'new' | 'done'
 let currentStatusFilter = 'all';
 
-// Pagination state variables
 let currentPage = 1;
 const itemsPerPage = 20;
 
-// DOM Elements
 const loadingSpinner = document.getElementById("loading-spinner");
 const noDataPlaceholder = document.getElementById("no-data-placeholder");
 const intakesList = document.getElementById("intakes-list");
 const searchInput = document.getElementById("dashboard-search");
 
-// Stats Elements
 const statDate = document.getElementById("stat-date");
 
-// Sound Toggle Elements
 const soundToggleBtn = document.getElementById("sound-toggle-btn");
 const soundOnIcon = soundToggleBtn.querySelector(".icon-sound-on");
 const soundOffIcon = soundToggleBtn.querySelector(".icon-sound-off");
 const soundStatusSpan = soundToggleBtn.querySelector("span");
 
-// QR Code Modal Elements
 const qrToggleBtn = document.getElementById("qr-toggle-btn");
 const qrModal = document.getElementById("qr-modal");
 const qrModalCloseBtn = document.getElementById("qr-modal-close-btn");
@@ -46,12 +34,10 @@ const qrDeclarationUrl = document.getElementById("qr-declaration-url");
 const qrCopyLinkBtn = document.getElementById("qr-copy-link-btn");
 const qrDownloadBtn = document.getElementById("qr-download-btn");
 
-// Modal Elements
 const detailsModal = document.getElementById("details-modal");
 const modalCloseBtn = document.getElementById("modal-close-btn");
 const modalPrintBtn = document.getElementById("modal-print-btn");
 
-// Modal detail fields
 const modalPatientId = document.getElementById("modal-patient-id");
 const dOwnerName = document.getElementById("detail-owner-name");
 const dOwnerPhone = document.getElementById("detail-owner-phone");
@@ -72,17 +58,14 @@ const dDietTags = document.getElementById("detail-diet-tags");
 const dDateSigned = document.getElementById("detail-date-signed");
 const dSignatureImg = document.getElementById("detail-signature-img");
 
-// --- Initialize Dashboard ---
 document.addEventListener("DOMContentLoaded", async () => {
-    // 1. Set current date stat
+
     updateDateDisplay();
 
-    // 2. Initialize sound settings & live typing indicator & more options dropdown
     initSoundToggle();
     initLiveTypingIndicator();
     initMoreOptionsDropdown();
 
-    // 3. Initialize Supabase Client
     if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_PROJECT_URL') {
         try {
             supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
@@ -98,20 +81,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // 4. Load loyal phone numbers and initial entries in parallel (speeds up initial page load!)
     await Promise.all([
         fetchLoyalPhones(),
         fetchInitialIntakes()
     ]);
 
-    // 5. Subscribe to Supabase Realtime changes
     setupRealtimeSubscription();
 
-    // 6. Setup general event listeners
     setupEventListeners();
 });
 
-// --- Fetch Intakes for the Currently Viewed Date ---
 async function fetchInitialIntakes() {
     try {
         loadingSpinner.style.display = "flex";
@@ -132,7 +111,7 @@ async function fetchInitialIntakes() {
         }
 
         if (!isAllDates) {
-            // Build date range: from 00:00:00 to 23:59:59 of viewDate
+
             const dayStart = new Date(viewDate);
             dayStart.setHours(0, 0, 0, 0);
             const dayEnd = new Date(viewDate);
@@ -150,7 +129,6 @@ async function fetchInitialIntakes() {
         intakesData = data || [];
         currentPage = 1;
 
-        // Initialize branch filter dropdown options
         initBranchFilterDropdown();
 
         applyStatusFilter();
@@ -163,7 +141,6 @@ async function fetchInitialIntakes() {
     }
 }
 
-// --- Update Sidebar Schedule Count Badge (Today New Count + Total New Count) ---
 window.updateScheduleCountBadge = async function () {
     const todayEl = document.getElementById("schedule-today-count");
     const totalEl = document.getElementById("schedule-total-count");
@@ -192,7 +169,6 @@ window.updateScheduleCountBadge = async function () {
     }
 };
 
-// --- Fetch loyal phones (registered more than once in database) ---
 async function fetchLoyalPhones() {
     if (!supabaseClient) return;
     try {
@@ -222,10 +198,9 @@ async function fetchLoyalPhones() {
     }
 }
 
-// --- Analyze duplicates in intakesData (same phone, same day, same pet name) ---
 function analyzeDuplicates() {
     duplicateIds.clear();
-    const groups = {}; // key format: phone_date_petname -> array of ids
+    const groups = {}; 
 
     intakesData.forEach(record => {
         if (!record.owner_phone || !record.pet_name) return;
@@ -233,7 +208,6 @@ function analyzeDuplicates() {
         const phone = record.owner_phone.trim();
         const petName = record.pet_name.trim().toLowerCase();
 
-        // Extract date part (YYYY-MM-DD) from created_at or date_signed
         let dateStr = "";
         if (record.created_at) {
             dateStr = record.created_at.substring(0, 10);
@@ -250,7 +224,6 @@ function analyzeDuplicates() {
         groups[key].push(record.id);
     });
 
-    // Mark IDs with group size > 1 as duplicates
     for (const ids of Object.values(groups)) {
         if (ids.length > 1) {
             ids.forEach(id => duplicateIds.add(id));
@@ -258,8 +231,6 @@ function analyzeDuplicates() {
     }
 }
 
-
-// --- Setup Supabase Realtime Subscription ---
 function setupRealtimeSubscription() {
     if (!supabaseClient) return;
 
@@ -310,72 +281,61 @@ function setupRealtimeSubscription() {
     }
 }
 
-// --- Handle Incoming Realtime Entries ---
 async function handleIncomingIntake(newRecord) {
-    // Only show on the current viewed date
+
     const recDate = new Date(newRecord.created_at);
     const recDay = new Date(recDate); recDay.setHours(0, 0, 0, 0);
     const viewDay = new Date(viewDate); viewDay.setHours(0, 0, 0, 0);
 
     if (isAllDates || recDay.getTime() === viewDay.getTime()) {
-        // Avoid duplicates if we already fetched/added it
+
         const exists = intakesData.some(r => r.id === newRecord.id);
         if (!exists) {
-            // Add to global state array at the beginning
+
             intakesData.unshift(newRecord);
 
-            // Update database-wide loyal phones list
             await fetchLoyalPhones();
 
-            // Calculate updated statistics
             calculateStatistics(intakesData);
 
-            // Re-apply current filter (which will also render)
             applyStatusFilter();
             updateScheduleCountBadge();
 
-            // Play synthesized bell alert chime
             playAlertPing();
 
-            // Toggle empty state placeholder off if active
             noDataPlaceholder.style.display = "none";
             intakesList.style.display = "grid";
         }
     }
 }
 
-// --- Handle Incoming Realtime Updates ---
 function handleIncomingUpdate(updatedRecord) {
     const idx = intakesData.findIndex(r => r.id === updatedRecord.id);
     if (idx !== -1) {
-        // Prevent Supabase Realtime from omitting TOASTed columns (like long strings/photos)
+
         const oldRecord = intakesData[idx];
         const mergedRecord = { ...oldRecord, ...updatedRecord };
 
-        // Preserve old photo if realtime payload omitted it
         if (oldRecord.pet_photo && !updatedRecord.pet_photo) {
             mergedRecord.pet_photo = oldRecord.pet_photo;
         }
 
-        // Update local data with the merged record
         intakesData[idx] = mergedRecord;
 
-        // Recalculate statistics and re-apply current filter & render
         calculateStatistics(intakesData);
         applyStatusFilter();
 
-        // If details modal is open for this updated record, refresh the modal view
         const detailsModal = document.getElementById("details-modal");
         const modalPatientId = document.getElementById("modal-patient-id");
         if (detailsModal && detailsModal.classList.contains("show") && modalPatientId) {
             const currentModalId = modalPatientId.textContent.replace("#ID-", "");
             if (parseInt(currentModalId) === mergedRecord.id) {
-                // Refresh modal with merged data
+
                 openIntakeDetails(mergedRecord);
             }
         }
     } else {
-        // If it's a new record or updated record that fits our current date but we don't have it yet
+
         const recDate = new Date(updatedRecord.created_at);
         const recDay = new Date(recDate); recDay.setHours(0, 0, 0, 0);
         const viewDay = new Date(viewDate); viewDay.setHours(0, 0, 0, 0);
@@ -388,19 +348,16 @@ function handleIncomingUpdate(updatedRecord) {
     }
 }
 
-// --- Handle Incoming Realtime Deletions ---
 async function handleIncomingDelete(oldRecord) {
     const idx = intakesData.findIndex(r => r.id === oldRecord.id);
     if (idx !== -1) {
         intakesData.splice(idx, 1);
 
-        // Update database-wide loyal phones list
         await fetchLoyalPhones();
 
         calculateStatistics(intakesData);
         applyStatusFilter();
 
-        // Close modal if deleted record was being viewed
         const detailsModal = document.getElementById("details-modal");
         const modalPatientId = document.getElementById("modal-patient-id");
         if (detailsModal && detailsModal.classList.contains("show") && modalPatientId) {
@@ -412,15 +369,12 @@ async function handleIncomingDelete(oldRecord) {
     }
 }
 
-
-// --- Synthesize alert bell chime (Web Audio API) ---
 function playAlertPing() {
     if (!soundEnabled) return;
 
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        // Bell sound envelope
         const osc = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
 
@@ -428,12 +382,12 @@ function playAlertPing() {
         gainNode.connect(audioCtx.destination);
 
         osc.type = "sine";
-        // Play sweet major 3rd jump (A5 to C#6)
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
-        osc.frequency.exponentialRampToValueAtTime(1109, audioCtx.currentTime + 0.12); // C#6
+
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
+        osc.frequency.exponentialRampToValueAtTime(1109, audioCtx.currentTime + 0.12); 
 
         gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8); // Smooth decay
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8); 
 
         osc.start(audioCtx.currentTime);
         osc.stop(audioCtx.currentTime + 0.8);
@@ -442,7 +396,6 @@ function playAlertPing() {
     }
 }
 
-// --- Initialize More Options 3-Dots Dropdown Menu ---
 function initMoreOptionsDropdown() {
     const btnMoreOptions = document.getElementById("btn-more-options");
     const moreOptionsDropdown = document.getElementById("more-options-dropdown");
@@ -461,8 +414,6 @@ function initMoreOptionsDropdown() {
     }
 }
 
-
-// --- Utility to Parse Photos Array ---
 function getPhotosArray(petPhotoString) {
     if (!petPhotoString) return [];
     try {
@@ -472,12 +423,11 @@ function getPhotosArray(petPhotoString) {
         }
         return [petPhotoString];
     } catch (e) {
-        // Not a JSON array, treat it as a single photo string
+
         return [petPhotoString];
     }
 }
 
-// Helper to extract CN code prefix (e.g. 'CN1' from 'CN1 - No. 2D...')
 function extractCNCode(branchStr) {
     if (!branchStr) return "";
     const str = branchStr.trim();
@@ -491,8 +441,6 @@ function extractCNCode(branchStr) {
     return str;
 }
 
-// Dynamic Branch Selection & Permission Rule:
-// Manager can select "All branches" or filter by any branch. Admin & Employee are locked to their own branch.
 function isRecordInSelectedBranch(record) {
     const selectEl = document.getElementById("branch-select-filter");
     const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
@@ -503,7 +451,6 @@ function isRecordInSelectedBranch(record) {
 
     let selectedBranch = selectEl ? selectEl.value : "all";
 
-    // Enforce branch lock for non-managers
     if (!isManager) {
         selectedBranch = loggedUser.cn || extractCNCode(loggedUser.branch || "");
     }
@@ -525,13 +472,30 @@ function initBranchFilterDropdown() {
     let userCN = loggedUser ? (loggedUser.cn || extractCNCode(loggedUser.branch || "")) : "";
     userCN = userCN ? userCN.toUpperCase().trim() : "";
 
-    // Collect available unique CN codes from dataset
-    const cnSet = new Set(["CN1", "CN2"]);
-    if (userCN) cnSet.add(userCN);
+    const cnMap = new Map();
+
+    // 1. Ưu tiên lấy từ bảng cài đặt cai_dat_he_thong
+    if (typeof window.getSystemBranchesDetailed === 'function') {
+        const sysBranches = window.getSystemBranchesDetailed();
+        sysBranches.forEach(b => {
+            if (b.code && b.code !== 'ALL') {
+                cnMap.set(b.code, b.name || `Chi nhánh ${b.code}`);
+            }
+        });
+    }
+
+    if (userCN && !cnMap.has(userCN)) {
+        cnMap.set(userCN, `Chi nhánh ${userCN}`);
+    }
+
     (intakesData || []).forEach(item => {
-        const c = item.cn || extractCNCode(item.chi_nhanh || item.branch || "");
-        if (c) cnSet.add(c.toUpperCase().trim());
+        const c = (item.cn || extractCNCode(item.chi_nhanh || item.branch || "")).toUpperCase().trim();
+        if (c && !cnMap.has(c)) cnMap.set(c, `Chi nhánh ${c}`);
     });
+
+    if (cnMap.size === 0) {
+        cnMap.set("CN1", "Chi nhánh CN1");
+    }
 
     const currentSelection = selectEl.value;
     selectEl.innerHTML = "";
@@ -546,16 +510,16 @@ function initBranchFilterDropdown() {
         optAll.textContent = "🌐 Tất cả chi nhánh";
         selectEl.appendChild(optAll);
 
-        Array.from(cnSet).sort().forEach(cnCode => {
+        Array.from(cnMap.keys()).sort().forEach(cnCode => {
             const opt = document.createElement("option");
             opt.value = cnCode;
-            opt.textContent = `📍 Chi nhánh ${cnCode}`;
+            opt.textContent = `📍 ${cnMap.get(cnCode)} (${cnCode})`;
             selectEl.appendChild(opt);
         });
 
-        selectEl.value = currentSelection && cnSet.has(currentSelection) ? currentSelection : "all";
+        selectEl.value = currentSelection && cnMap.has(currentSelection) ? currentSelection : "all";
     } else {
-        // Lock for Admin / Employee to their own branch
+
         selectEl.disabled = true;
         selectEl.style.opacity = "0.85";
         selectEl.style.cursor = "not-allowed";
@@ -575,15 +539,12 @@ function handleBranchFilterChange() {
     applyStatusFilter();
 }
 
-// --- Status Filter and Rendering ---
 function applyStatusFilter() {
-    // Analyze duplicates across full dataset before filtering/pagination
+
     analyzeDuplicates();
 
-    // 1. Filter dataset by selected branch FIRST
     const scopedData = intakesData.filter(isRecordInSelectedBranch);
 
-    // 2. Synchronize Top 3 Stat Cards ("Tất cả", "Mới", "Đã xử lý") from scopedData
     const totalCount = scopedData.length;
     const newCount = scopedData.filter(r => !r.trang_thai || r.trang_thai === 'new').length;
     const doneCount = scopedData.filter(r => r.trang_thai === 'done').length;
@@ -596,7 +557,6 @@ function applyStatusFilter() {
     if (countNewEl) countNewEl.textContent = newCount;
     if (countDoneEl) countDoneEl.textContent = doneCount;
 
-    // 3. Apply Status Filter Tab (all vs new vs done)
     let filtered = scopedData;
     if (currentStatusFilter === 'new') {
         filtered = scopedData.filter(r => !r.trang_thai || r.trang_thai === 'new');
@@ -606,7 +566,6 @@ function applyStatusFilter() {
         filtered = scopedData;
     }
 
-    // Apply search filter if query exists (now integrated into the filter data flow)
     const query = searchInput.value.toLowerCase().trim();
     if (query) {
         filtered = filtered.filter(record =>
@@ -620,7 +579,6 @@ function applyStatusFilter() {
     const totalItems = filtered.length;
     const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
-    // Safety check for currentPage bounds
     if (currentPage > totalPages) {
         currentPage = totalPages;
     }
@@ -636,7 +594,6 @@ function applyStatusFilter() {
     updateScheduleCountBadge();
 }
 
-// --- Pagination Renderer ---
 function renderPagination(totalItems) {
     const container = document.getElementById("pagination-container");
     if (!container) return;
@@ -645,11 +602,10 @@ function renderPagination(totalItems) {
 
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     if (totalPages <= 1) {
-        // Hide pagination if only 1 page or empty
+
         return;
     }
 
-    // Previous Page Button
     const prevBtn = document.createElement("button");
     prevBtn.className = "pagination-btn pagination-btn-arrow";
     prevBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>`;
@@ -663,7 +619,6 @@ function renderPagination(totalItems) {
     });
     container.appendChild(prevBtn);
 
-    // Page Numbers
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
@@ -672,7 +627,6 @@ function renderPagination(totalItems) {
         startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
 
-    // First page and dots if startPage > 1
     if (startPage > 1) {
         const firstBtn = document.createElement("button");
         firstBtn.className = `pagination-btn ${currentPage === 1 ? 'active' : ''}`;
@@ -704,7 +658,6 @@ function renderPagination(totalItems) {
         container.appendChild(btn);
     }
 
-    // Last page and dots if endPage < totalPages
     if (endPage < totalPages) {
         if (endPage < totalPages - 1) {
             const dots = document.createElement("span");
@@ -724,7 +677,6 @@ function renderPagination(totalItems) {
         container.appendChild(lastBtn);
     }
 
-    // Next Page Button
     const nextBtn = document.createElement("button");
     nextBtn.className = "pagination-btn pagination-btn-arrow";
     nextBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
@@ -739,7 +691,6 @@ function renderPagination(totalItems) {
     container.appendChild(nextBtn);
 }
 
-// Helper to scroll smoothly to the top of the intakes list when changing page
 function scrollToIntakesList() {
     const listEl = document.getElementById("intakes-list");
     if (listEl) {
@@ -749,14 +700,13 @@ function scrollToIntakesList() {
     }
 }
 
-// --- Rendering Intakes Cards ---
 function renderAllIntakes(records) {
     intakesList.innerHTML = "";
 
     if (records.length === 0) {
         noDataPlaceholder.style.display = "flex";
         intakesList.style.display = "none";
-        // Context-aware empty state
+
         const h3 = noDataPlaceholder.querySelector("h3");
         const p = noDataPlaceholder.querySelector("p");
         const query = searchInput.value.toLowerCase().trim();
@@ -785,7 +735,6 @@ function renderAllIntakes(records) {
     });
 }
 
-// Helper to compute GAIA Intake ID: STT.DDMMYY.4SốĐuôiSĐT
 function getFormattedIntakeId(record) {
     if (!record) return "--.------.----";
     const dateObj = new Date(record.created_at || record.date_signed || new Date());
@@ -816,13 +765,11 @@ function createIntakeCard(record) {
     card.setAttribute("data-id", record.id);
     card.setAttribute("data-status", isDone ? 'done' : 'new');
 
-    // Loyal customer detection (only show for 'new' status, not 'done')
     const isLoyal = record.owner_phone && loyalPhones.has(record.owner_phone.trim()) && (!record.trang_thai || record.trang_thai === 'new');
     const loyalBadgeHTML = isLoyal
         ? `<span class="customer-loyal-badge" title="Khách hàng đã đăng ký nhiều lần">(Khách quen)</span>`
         : ``;
 
-    // Duplicate detection
     const isDuplicate = duplicateIds.has(record.id);
     const duplicateHTML = isDuplicate
         ? `<div class="duplicate-indicator-wrap">
@@ -838,10 +785,8 @@ function createIntakeCard(record) {
            </div>`
         : ``;
 
-    // Parse time
     const localTimeStr = formatDateTime(record.created_at || record.date_signed);
 
-    // Get vaccines status HTML classes
     const coreClass = record.vaccine_core === 'yes' ? 'badge-yes' : (record.vaccine_core === 'no' ? 'badge-no' : 'badge-unknown');
     const coreText = record.vaccine_core === 'yes' ? 'Core Vac ✓' : (record.vaccine_core === 'no' ? 'Core Vac ✗' : 'Core Vac ?');
 
@@ -851,12 +796,10 @@ function createIntakeCard(record) {
     const neuteredClass = record.pet_neutered === 'yes' ? 'badge-neutered' : 'badge-unknown';
     const neuteredText = record.pet_neutered === 'yes' ? 'Đã Triệt Sản' : 'Chưa Triệt Sản';
 
-    // Status badge HTML
     const statusBadgeHTML = isDone
         ? `<span class="card-status-badge badge-done-card">✔ Đã xử lý</span>`
         : `<span class="card-status-badge badge-new-card">● Mới</span>`;
 
-    // Toggle button HTML
     const toggleBtnHTML = isDone
         ? `<button class="btn-toggle-status btn-mark-new" data-id="${record.id}" title="Đánh dấu là Mới">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 18 0A9 9 0 0 0 3 12z"/><path d="M12 8v4m0 4h.01"/></svg>
@@ -867,7 +810,6 @@ function createIntakeCard(record) {
             Xác nhận Xử lý
            </button>`;
 
-    // Renders pet cover banner (takes first image from array if exists)
     const photosArray = getPhotosArray(record.pet_photo);
     const coverHTML = photosArray.length > 0
         ? `<div class="card-cover-wrap"><img src="${photosArray[0]}" class="card-cover-img" alt="${escapeHtml(record.pet_name)}"></div>`
@@ -924,13 +866,11 @@ function createIntakeCard(record) {
         </div>
     `;
 
-    // Click on card body (but NOT on the toggle button or delete button) triggers modal view popup
     card.addEventListener("click", (e) => {
-        if (e.target.closest(".btn-toggle-status") || e.target.closest(".btn-delete-duplicate")) return; // Don't open modal on button click
+        if (e.target.closest(".btn-toggle-status") || e.target.closest(".btn-delete-duplicate")) return; 
         openIntakeDetails(record);
     });
 
-    // Toggle status button
     const toggleBtn = card.querySelector(".btn-toggle-status");
     if (toggleBtn) {
         toggleBtn.addEventListener("click", async (e) => {
@@ -939,7 +879,6 @@ function createIntakeCard(record) {
         });
     }
 
-    // Delete duplicate button
     const deleteDupBtn = card.querySelector(".btn-delete-duplicate");
     if (deleteDupBtn) {
         deleteDupBtn.addEventListener("click", async (e) => {
@@ -951,7 +890,6 @@ function createIntakeCard(record) {
     return card;
 }
 
-// --- Custom Confirm Modal Promise ---
 function showCustomConfirm(message) {
     return new Promise((resolve) => {
         const modal = document.getElementById("confirm-delete-modal");
@@ -980,20 +918,17 @@ function showCustomConfirm(message) {
         btnOk.addEventListener("click", onOk);
         btnCancel.addEventListener("click", onCancel);
 
-        // Also clean up/cancel if clicked outside card (on overlay backdrop)
         modal.onclick = (e) => {
             if (e.target === modal) cleanUp(false);
         };
     });
 }
 
-// --- Delete Duplicate Record ---
 async function deleteDuplicateRecord(record, btnEl) {
     const confirmMsg = `Bạn có chắc chắn muốn xóa vĩnh viễn ca khai báo trùng lặp này của bé ${record.pet_name} (SĐT: ${record.owner_phone}) không?`;
     const isConfirmed = await showCustomConfirm(confirmMsg);
     if (!isConfirmed) return;
 
-    // Disable button & show loading state
     btnEl.disabled = true;
     const originalHTML = btnEl.innerHTML;
     btnEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 0.8s linear infinite;width:12px;height:12px"><circle cx="12" cy="12" r="10" stroke-dasharray="30" stroke-dashoffset="5"/></svg>`;
@@ -1007,7 +942,6 @@ async function deleteDuplicateRecord(record, btnEl) {
 
             if (error) throw error;
 
-            // Xóa ở Google Sheet
             try {
                 fetch(GOOGLE_SHEET_WEBHOOK_URL, {
                     method: 'POST',
@@ -1020,7 +954,6 @@ async function deleteDuplicateRecord(record, btnEl) {
             }
         }
 
-        // Local fallback in case realtime delay or disconnect occurs
         const idx = intakesData.findIndex(r => r.id === record.id);
         if (idx !== -1) {
             intakesData.splice(idx, 1);
@@ -1036,11 +969,9 @@ async function deleteDuplicateRecord(record, btnEl) {
     }
 }
 
-// --- Toggle Status (Mới ↔ Đã xử lý) với Lịch Sử Thao Tác Audit Log ---
 async function toggleCardStatus(record, cardEl, btnEl) {
     const newStatus = (record.trang_thai === 'done') ? 'new' : 'done';
 
-    // Build Action Log Entry: "Đã Xử Lý - Thái Trung Tín - 15h45 05/08/2026"
     const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
     const actorName = loggedUser ? (loggedUser.full_name || "Nhân viên") : "Hệ thống";
     const userCN = loggedUser ? (loggedUser.cn || extractCNCode(loggedUser.branch || "")) : "";
@@ -1056,7 +987,6 @@ async function toggleCardStatus(record, cardEl, btnEl) {
     const statusText = newStatus === 'done' ? 'Đã Xử Lý' : 'Mới';
     const newLogLine = `${statusText} - ${actorName} - ${timeStr}`;
 
-    // Read existing logs from record.history or record.status_history
     let currentLogs = [];
     const rawHistory = record.history || record.status_history;
     if (rawHistory) {
@@ -1072,9 +1002,8 @@ async function toggleCardStatus(record, cardEl, btnEl) {
         }
     }
 
-    currentLogs.unshift(newLogLine); // Newest log on top!
+    currentLogs.unshift(newLogLine); 
 
-    // Build Supabase update payload matching your exact database columns: staff_name, history (jsonb), cn
     const updatePayload = {
         trang_thai: newStatus,
         staff_name: actorName,
@@ -1082,7 +1011,6 @@ async function toggleCardStatus(record, cardEl, btnEl) {
     };
     if (userCN) updatePayload.cn = userCN;
 
-    // Optimistic UI: disable button and show loading
     btnEl.disabled = true;
     const originalHTML = btnEl.innerHTML;
     btnEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 0.8s linear infinite;width:14px;height:14px"><circle cx="12" cy="12" r="10" stroke-dasharray="30" stroke-dashoffset="5"/></svg> Đang lưu...`;
@@ -1106,7 +1034,6 @@ async function toggleCardStatus(record, cardEl, btnEl) {
                     .eq('id', record.id);
             }
 
-            // Push update to Google Sheets if configured
             if (typeof GOOGLE_SHEET_WEBHOOK_URL !== 'undefined' && GOOGLE_SHEET_WEBHOOK_URL) {
                 try {
                     let updatedRecord = { ...record, ...updatePayload };
@@ -1124,7 +1051,6 @@ async function toggleCardStatus(record, cardEl, btnEl) {
             }
         }
 
-        // Update local data
         record.trang_thai = newStatus;
         record.staff_name = actorName;
         record.history = currentLogs;
@@ -1136,7 +1062,6 @@ async function toggleCardStatus(record, cardEl, btnEl) {
             intakesData[idx] = { ...intakesData[idx], ...record };
         }
 
-        // Recalculate counts and re-render
         calculateStatistics(intakesData);
         applyStatusFilter();
 
@@ -1148,24 +1073,20 @@ async function toggleCardStatus(record, cardEl, btnEl) {
     }
 }
 
-// --- Open Detailed Modal View ---
 function openIntakeDetails(record) {
     activeIntakeRecord = record;
     modalPatientId.textContent = `ID: ${getFormattedIntakeId(record)}`;
 
-    // Owner Details
     dOwnerName.textContent = record.owner_name || "-";
     dOwnerPhone.textContent = record.owner_phone || "-";
     dOwnerAddress.textContent = record.owner_address || "-";
 
-    // Pet Details
     dPetName.textContent = record.pet_name || "-";
     dPetBreed.textContent = record.pet_breed || "-";
     dPetWeight.textContent = record.pet_weight ? `${record.pet_weight} kg` : "-";
     dPetAgeGender.textContent = record.pet_age_gender || "-";
     dPetColor.textContent = record.pet_color || "-";
 
-    // Neutered translation
     if (record.pet_neutered === 'yes') {
         dPetNeutered.className = "info-value badge badge-neutered";
         dPetNeutered.textContent = "Đã Triệt Sản (Neutered)";
@@ -1174,7 +1095,6 @@ function openIntakeDetails(record) {
         dPetNeutered.textContent = "Chưa Triệt Sản (Intact)";
     }
 
-    // Render Action Logs (Lịch Sử Thao Tác từ cột history / status_history)
     const historyTextEl = document.getElementById("detail-history-text");
     if (historyTextEl) {
         let logsList = [];
@@ -1204,7 +1124,6 @@ function openIntakeDetails(record) {
         }
     }
 
-    // Pet photo details show/hide with multi-photo gallery support
     const photoContainer = document.getElementById("detail-pet-photo-container");
     const activePhotoImg = document.getElementById("detail-active-photo-img");
     const thumbnailsGrid = document.getElementById("detail-photo-thumbnails-grid");
@@ -1246,29 +1165,26 @@ function openIntakeDetails(record) {
                 }
             }
         } else {
-            // No photos, but keep right column displayed for History box
+
             if (activePhotoImg) activePhotoImg.src = "";
             if (activePhotoBox) activePhotoBox.style.display = "none";
             if (thumbnailsGrid) {
                 thumbnailsGrid.innerHTML = "";
                 thumbnailsGrid.style.display = "none";
             }
-            photoContainer.style.display = "block"; // Keep history visible!
+            photoContainer.style.display = "block"; 
             if (detailTwoCol) detailTwoCol.classList.add("has-photos");
         }
     }
 
-    // Vaccines translations
     setupVaccineLabel(dVacCore, record.vaccine_core, "Core Vaccine");
     setupVaccineLabel(dVacRabies, record.vaccine_rabies, "Rabies Vaccine");
     setupVaccineLabel(dVacParasite, record.parasite_prevention, "Parasite Prev");
 
-    // Texts fields
     dMedHistory.textContent = record.medical_history ? record.medical_history.trim() : "Không ghi nhận";
     dAllergies.textContent = record.allergies ? record.allergies.trim() : "Không ghi nhận";
     dMeds.textContent = record.current_meds ? record.current_meds.trim() : "Không ghi nhận";
 
-    // Diets checkboxes render
     dDietTags.innerHTML = "";
     let hasDiet = false;
 
@@ -1289,13 +1205,9 @@ function openIntakeDetails(record) {
         dDietTags.innerHTML = `<span style="color: var(--text-muted); font-size: 13.5px;">Chưa chọn chế độ ăn đặc biệt.</span>`;
     }
 
-    // Date signed and base64 signature
     dDateSigned.textContent = formatDateString(record.created_at || record.date_signed);
     dSignatureImg.src = record.signature_data || "";
 
-    // ==========================================
-    // 🖨️ Populate High-Fidelity Print Template
-    // ==========================================
     const printBannerIdEl = document.getElementById("print-banner-id");
     if (printBannerIdEl && record) {
         const dateObj = new Date(record.created_at || record.date_signed || new Date());
@@ -1327,44 +1239,35 @@ function openIntakeDetails(record) {
     document.getElementById("print-pet-color").textContent = record.pet_color || "-";
     document.getElementById("print-pet-age-gender").textContent = record.pet_age_gender || "-";
 
-    // Neutered checkbox representation
     document.getElementById("print-pet-neutered-yes").textContent = record.pet_neutered === "yes" ? "☑" : "☐";
     document.getElementById("print-pet-neutered-no").textContent = record.pet_neutered === "no" ? "☑" : "☐";
 
-    // Vaccine Core checkbox representation
     document.getElementById("print-vac-core-yes").textContent = record.vaccine_core === "yes" ? "☑" : "☐";
     document.getElementById("print-vac-core-no").textContent = record.vaccine_core === "no" ? "☑" : "☐";
     document.getElementById("print-vac-core-unknown").textContent = record.vaccine_core === "unknown" ? "☑" : "☐";
 
-    // Vaccine Rabies checkbox representation
     document.getElementById("print-vac-rabies-yes").textContent = record.vaccine_rabies === "yes" ? "☑" : "☐";
     document.getElementById("print-vac-rabies-no").textContent = record.vaccine_rabies === "no" ? "☑" : "☐";
     document.getElementById("print-vac-rabies-unknown").textContent = record.vaccine_rabies === "unknown" ? "☑" : "☐";
 
-    // Parasite Prevention checkbox representation
     document.getElementById("print-parasite-yes").textContent = record.parasite_prevention === "yes" ? "☑" : "☐";
     document.getElementById("print-parasite-no").textContent = record.parasite_prevention === "no" ? "☑" : "☐";
     document.getElementById("print-parasite-unknown").textContent = record.parasite_prevention === "unknown" ? "☑" : "☐";
 
-    // Medical text values representation
     document.getElementById("print-med-history").textContent = record.medical_history ? record.medical_history.trim() : "Không ghi nhận";
     document.getElementById("print-allergies").textContent = record.allergies ? record.allergies.trim() : "Không ghi nhận";
     document.getElementById("print-meds").textContent = record.current_meds ? record.current_meds.trim() : "Không ghi nhận";
 
-    // Diet checkbox representation
     document.getElementById("print-diet-wet").textContent = record.diet_wet ? "☑" : "☐";
     document.getElementById("print-diet-dry").textContent = record.diet_dry ? "☑" : "☐";
     document.getElementById("print-diet-homemade").textContent = record.diet_homemade ? "☑" : "☐";
 
-    // Consent checkbox representation
     document.getElementById("print-consent-accuracy").textContent = record.consent_accuracy ? "☑" : "☐";
     document.getElementById("print-consent-storage").textContent = record.consent_storage ? "☑" : "☐";
 
-    // Signature and date representation
     document.getElementById("print-date").textContent = formatDateString(record.created_at || record.date_signed);
     document.getElementById("print-sig-img").src = record.signature_data || "";
 
-    // Dedicated print photos attachments
     const printPhotosSection = document.getElementById("print-photos-section");
     const printPhotosGrid = document.getElementById("print-photos-grid");
 
@@ -1387,7 +1290,6 @@ function openIntakeDetails(record) {
         }
     }
 
-    // Show modal overlay
     detailsModal.classList.add("show");
 }
 
@@ -1414,21 +1316,18 @@ function addDietTag(dietText) {
     dDietTags.appendChild(span);
 }
 
-// --- Setup Event Listeners ---
 function setupEventListeners() {
-    // Close Modal button
+
     modalCloseBtn.addEventListener("click", () => {
         detailsModal.classList.remove("show");
     });
 
-    // Close Modal on clicking dark backdrop
     detailsModal.addEventListener("click", (e) => {
         if (e.target === detailsModal) {
             detailsModal.classList.remove("show");
         }
     });
 
-    // PDF direct download trigger
     modalPrintBtn.addEventListener("click", () => {
         if (!activeIntakeRecord) return;
 
@@ -1448,24 +1347,20 @@ function setupEventListeners() {
 
         window.print();
 
-        // Restore title after print dialog closes
         setTimeout(() => { document.title = originalTitle; }, 1000);
     });
 
-    // Realtime search bar dynamic filtering
     searchInput.addEventListener("input", () => {
         currentPage = 1;
         applyStatusFilter();
     });
 
-    // --- QR Modal Event Listeners ---
     if (qrToggleBtn) {
         qrToggleBtn.addEventListener("click", () => {
-            // Generate URL for declaration page (directory root, without index.html or menu.html)
+
             const declarationUrl = window.location.origin + window.location.pathname.replace(/(admin|menu)\.html.*/i, '');
             qrDeclarationUrl.textContent = declarationUrl;
 
-            // Generate QR Code
             qrCodeContainer.innerHTML = "";
             try {
                 new QRCode(qrCodeContainer, {
@@ -1520,12 +1415,11 @@ function setupEventListeners() {
 
     if (qrDownloadBtn) {
         qrDownloadBtn.addEventListener("click", () => {
-            // Get QR source image from the container
+
             const qrImg = qrCodeContainer.querySelector("img");
             const qrCanvas = qrCodeContainer.querySelector("canvas");
             const urlText = qrDeclarationUrl.textContent || "";
 
-            // Resolve QR image source
             let qrSource = null;
             if (qrImg && qrImg.complete && qrImg.naturalWidth > 0) {
                 qrSource = qrImg;
@@ -1538,8 +1432,7 @@ function setupEventListeners() {
                 return;
             }
 
-            // --- Card dimensions (pixel-perfect for print) ---
-            const scale = 3; // 3x for crystal clear output
+            const scale = 3; 
             const cardW = 420 * scale;
             const cardH = 460 * scale;
             const radius = 28 * scale;
@@ -1551,7 +1444,6 @@ function setupEventListeners() {
             exportCanvas.height = cardH;
             const ctx = exportCanvas.getContext("2d");
 
-            // --- 1. Draw dark rounded rectangle background ---
             ctx.beginPath();
             ctx.moveTo(radius, 0);
             ctx.lineTo(cardW - radius, 0);
@@ -1566,12 +1458,10 @@ function setupEventListeners() {
             ctx.fillStyle = "#0f172a";
             ctx.fill();
 
-            // Subtle border glow
             ctx.strokeStyle = "rgba(16, 185, 129, 0.25)";
             ctx.lineWidth = 1.5 * scale;
             ctx.stroke();
 
-            // --- 2. Draw "GAIA QR" badge pill ---
             const badgeText = "GAIA QR";
             const badgeFontSize = 11 * scale;
             ctx.font = `700 ${badgeFontSize}px 'Outfit', sans-serif`;
@@ -1583,7 +1473,6 @@ function setupEventListeners() {
             const badgeX = padding;
             const badgeY = padding;
 
-            // Badge background
             const badgeRadius = 6 * scale;
             ctx.beginPath();
             ctx.moveTo(badgeX + badgeRadius, badgeY);
@@ -1602,20 +1491,17 @@ function setupEventListeners() {
             ctx.lineWidth = 1 * scale;
             ctx.stroke();
 
-            // Badge text
             ctx.fillStyle = "#10b981";
             ctx.textBaseline = "middle";
             ctx.fillText(badgeText, badgeX + badgePadX, badgeY + badgeH / 2);
 
-            // --- 3. Draw title "Mã QR Khai Báo" ---
             const titleFontSize = 18 * scale;
             ctx.font = `700 ${titleFontSize}px 'Outfit', sans-serif`;
             ctx.fillStyle = "#f3f4f6";
             ctx.textBaseline = "middle";
             ctx.fillText("Mã QR Khai Báo", badgeX + badgeW + 12 * scale, badgeY + badgeH / 2);
 
-            // --- 4. Draw white rounded QR box with QR code ---
-            const qrBoxSize = qrSize + 32 * scale; // padding around QR
+            const qrBoxSize = qrSize + 32 * scale; 
             const qrBoxX = (cardW - qrBoxSize) / 2;
             const qrBoxY = badgeY + badgeH + 25 * scale;
             const qrBoxRadius = 18 * scale;
@@ -1641,21 +1527,19 @@ function setupEventListeners() {
             ctx.shadowBlur = 0;
             ctx.shadowOffsetY = 0;
 
-            // Draw QR code image onto card (crisp, centered inside white box)
             const qrDrawX = qrBoxX + (qrBoxSize - qrSize) / 2;
             const qrDrawY = qrBoxY + (qrBoxSize - qrSize) / 2;
-            ctx.imageSmoothingEnabled = false; // Keep QR pixels sharp
+            ctx.imageSmoothingEnabled = false; 
             ctx.drawImage(qrSource, qrDrawX, qrDrawY, qrSize, qrSize);
             ctx.imageSmoothingEnabled = true;
 
-            // --- 5. Draw centered URL text below QR ---
             const urlY = qrBoxY + qrBoxSize + 30 * scale;
             const urlFontSize = 12 * scale;
             ctx.font = `500 ${urlFontSize}px 'Plus Jakarta Sans', sans-serif`;
             ctx.fillStyle = "#9ca3af";
             ctx.textAlign = "center";
             ctx.textBaseline = "top";
-            // Truncate URL if too long
+
             let displayUrl = urlText;
             const maxUrlWidth = cardW - padding * 2;
             while (ctx.measureText(displayUrl).width > maxUrlWidth && displayUrl.length > 10) {
@@ -1663,9 +1547,8 @@ function setupEventListeners() {
             }
             if (displayUrl !== urlText) displayUrl += "…";
             ctx.fillText(displayUrl, cardW / 2, urlY);
-            ctx.textAlign = "start"; // reset
+            ctx.textAlign = "start"; 
 
-            // --- 7. Download the composed card ---
             const dataUrl = exportCanvas.toDataURL("image/png");
             const link = document.createElement("a");
             link.href = dataUrl;
@@ -1676,7 +1559,6 @@ function setupEventListeners() {
         });
     }
 
-    // --- Image Lightbox Viewer ---
     const lightbox = document.getElementById("image-lightbox");
     const lightboxImg = document.getElementById("lightbox-img");
     const lightboxZoomIn = document.getElementById("lightbox-zoom-in");
@@ -1688,7 +1570,7 @@ function setupEventListeners() {
     const lightboxNext = document.getElementById("lightbox-next");
 
     let lightboxZoom = 1;
-    let activePhotoIndex = 0; // 0-based index of current photo
+    let activePhotoIndex = 0; 
     const ZOOM_STEP = 0.25;
     const ZOOM_MIN = 0.25;
     const ZOOM_MAX = 5;
@@ -1701,7 +1583,6 @@ function setupEventListeners() {
         lightboxZoomLabel.textContent = "100%";
         activePhotoIndex = index;
 
-        // Control displaying nav buttons based on total images
         if (activeIntakeRecord) {
             const photosArray = getPhotosArray(activeIntakeRecord.pet_photo);
             if (photosArray.length > 1) {
@@ -1745,7 +1626,6 @@ function setupEventListeners() {
 
         activePhotoIndex = newIdx;
 
-        // Fading effect transition
         lightboxImg.style.opacity = "0";
         setTimeout(() => {
             lightboxImg.src = photosArray[newIdx];
@@ -1756,7 +1636,6 @@ function setupEventListeners() {
         }, 150);
     }
 
-    // Click on active photo to open lightbox
     const activePhotoBox = document.querySelector(".detail-active-photo-box");
     if (activePhotoBox) {
         activePhotoBox.addEventListener("click", () => {
@@ -1788,16 +1667,13 @@ function setupEventListeners() {
         });
     }
 
-    // Lightbox toolbar controls
     if (lightboxZoomIn) lightboxZoomIn.addEventListener("click", () => setLightboxZoom(lightboxZoom + ZOOM_STEP));
     if (lightboxZoomOut) lightboxZoomOut.addEventListener("click", () => setLightboxZoom(lightboxZoom - ZOOM_STEP));
     if (lightboxClose) lightboxClose.addEventListener("click", closeLightbox);
 
-    // Lightbox navigation controls
     if (lightboxPrev) lightboxPrev.addEventListener("click", () => navigateLightbox(-1));
     if (lightboxNext) lightboxNext.addEventListener("click", () => navigateLightbox(1));
 
-    // Mouse wheel zoom
     if (lightbox) {
         lightbox.addEventListener("wheel", (e) => {
             e.preventDefault();
@@ -1806,7 +1682,6 @@ function setupEventListeners() {
         }, { passive: false });
     }
 
-    // Click outside image to close
     if (lightbox) {
         lightbox.addEventListener("click", (e) => {
             if (e.target === lightbox || e.target.classList.contains("lightbox-image-wrap")) {
@@ -1815,7 +1690,6 @@ function setupEventListeners() {
         });
     }
 
-    // Download lightbox image with dynamic clean naming format: photo_[petName]_[phone]_[date]_[index+1].png
     if (lightboxDownload) {
         lightboxDownload.addEventListener("click", () => {
             if (lightboxImg.src && lightboxImg.src !== window.location.href) {
@@ -1829,7 +1703,6 @@ function setupEventListeners() {
 
                 const photoNum = activePhotoIndex + 1;
 
-                // Clean name, phone and date for filesystem safety
                 const cleanPetName = petName.replace(/[\/\\?%*:|"<>\s]+/g, "_");
                 const cleanPhone = phone.replace(/[\/\\?%*:|"<>\s]+/g, "_");
                 const cleanDate = formattedDate.replace(/[\/\\?%*:|"<>\s]+/g, "-");
@@ -1876,7 +1749,6 @@ function setupEventListeners() {
         }
     }
 
-    // Close modals on pressing the Escape key (lightbox has priority)
     window.addEventListener("keydown", (e) => {
         if (e.key === "Escape" || e.key === "Esc") {
             if (lightbox && lightbox.classList.contains("show")) {
@@ -1894,24 +1766,22 @@ function setupEventListeners() {
         }
     });
 
-    // Date navigation arrows
     const prevBtn = document.getElementById('date-prev-btn');
     const nextBtn = document.getElementById('date-next-btn');
     if (prevBtn) prevBtn.addEventListener('click', () => navigateDate(-1));
     if (nextBtn) nextBtn.addEventListener('click', () => navigateDate(1));
 
-    // 'All Dates' / 'Today' toggle button click handler
     const dateAllBtn = document.getElementById('date-all-btn');
     if (dateAllBtn) {
         dateAllBtn.addEventListener('click', () => {
             if (isAllDates) {
-                // If showing all, toggle back to Today
+
                 isAllDates = false;
                 viewDate = new Date();
                 viewDate.setHours(0, 0, 0, 0);
                 syncDatePickerInput();
             } else {
-                // If showing specific date, toggle to All Dates
+
                 isAllDates = true;
             }
             currentPage = 1;
@@ -1920,18 +1790,17 @@ function setupEventListeners() {
         });
     }
 
-    // Calendar picker: clicking the calendar icon opens native date picker
     const datePickerInput = document.getElementById('date-picker-input');
     if (datePickerInput) {
         const todayISO = new Date().toISOString().split('T')[0];
-        // Set initial value to today (but allow future dates)
+
         datePickerInput.value = todayISO;
 
         datePickerInput.addEventListener('change', () => {
-            const val = datePickerInput.value; // 'YYYY-MM-DD'
+            const val = datePickerInput.value; 
             if (!val) return;
             isAllDates = false;
-            // Parse as local date (avoid UTC shift)
+
             const [y, m, d] = val.split('-').map(Number);
             const picked = new Date(y, m - 1, d);
             picked.setHours(0, 0, 0, 0);
@@ -1943,8 +1812,6 @@ function setupEventListeners() {
         });
     }
 
-
-    // Status filter tabs
     document.querySelectorAll('.status-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
@@ -1955,7 +1822,6 @@ function setupEventListeners() {
         });
     });
 
-    // Floating Back to Top Button
     const backToTopBtn = document.getElementById("back-to-top-btn");
     if (backToTopBtn) {
         window.addEventListener("scroll", () => {
@@ -1971,7 +1837,6 @@ function setupEventListeners() {
         });
     }
 
-    // Clipboard Click-to-Copy event delegation
     detailsModal.addEventListener("click", (e) => {
         const copyBtn = e.target.closest(".btn-copy-field");
         if (!copyBtn) return;
@@ -1993,7 +1858,7 @@ function setupEventListeners() {
         }
 
         if (textToCopy && textToCopy !== "-" && textToCopy !== "Không ghi nhận") {
-            // Remove text inside dynamic nested badge or clean symbols if any
+
             const cleanedText = textToCopy.replace(/[✓✗\?]/g, "").trim();
 
             navigator.clipboard.writeText(cleanedText).then(() => {
@@ -2006,7 +1871,7 @@ function setupEventListeners() {
 }
 
 function showCopiedTooltip(button) {
-    // Prevent duplicate tooltips
+
     if (button.querySelector(".copied-tooltip")) return;
 
     const tooltip = document.createElement("span");
@@ -2015,19 +1880,16 @@ function showCopiedTooltip(button) {
 
     button.appendChild(tooltip);
 
-    // Remove tooltip after animation is complete
     setTimeout(() => {
         tooltip.remove();
     }, 1500);
 }
 
-// --- Search filtering helper ---
 function filterCards(query) {
     currentPage = 1;
     applyStatusFilter();
 }
 
-// --- Statistical Summary Calculations ---
 function calculateStatistics(records) {
     const newCount = records.filter(r => !r.trang_thai || r.trang_thai === 'new').length;
     const doneCount = records.filter(r => r.trang_thai === 'done').length;
@@ -2041,7 +1903,6 @@ function calculateStatistics(records) {
     if (countDone) countDone.textContent = doneCount;
 }
 
-// --- Date Navigation ---
 function updateDateDisplay() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -2091,13 +1952,13 @@ function updateDateDisplay() {
     }
 
     if (statDateEl) {
-        // Capitalize first letter
+
         statDateEl.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
     if (labelEl) {
         labelEl.textContent = isToday ? 'Hôm nay' : (viewDate.getTime() > today.getTime() ? 'Kế hoạch tương lai' : 'Ngày đã chọn');
     }
-    // Allow selecting future dates (do not disable nextBtn at today)
+
     if (nextBtn) {
         nextBtn.disabled = false;
         nextBtn.style.opacity = '1';
@@ -2119,21 +1980,19 @@ function navigateDate(delta) {
     viewDate = newDate;
     updateDateDisplay();
     syncDatePickerInput();
-    fetchInitialIntakes(); // Reload data for the new date
+    fetchInitialIntakes(); 
 }
 
 function syncDatePickerInput() {
     const input = document.getElementById('date-picker-input');
     if (!input) return;
-    // Format viewDate as YYYY-MM-DD (local time, not UTC)
+
     const y = viewDate.getFullYear();
     const m = String(viewDate.getMonth() + 1).padStart(2, '0');
     const d = String(viewDate.getDate()).padStart(2, '0');
     input.value = `${y}-${m}-${d}`;
 }
 
-
-// --- Utility Helpers (legacy stub for backward compat) ---
 function setTodayDateStat() {
     updateDateDisplay();
 }
@@ -2157,7 +2016,7 @@ function formatDateString(isoString) {
     if (!isoString) return "-";
     try {
         const trimmed = isoString.trim();
-        // Detect date-only strings (like YYYY-MM-DD or YYYY/MM/DD) that don't have time portions
+
         if (!trimmed.includes(":") && !trimmed.includes("T")) {
             const match = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
             if (match) {
@@ -2200,9 +2059,6 @@ function initSoundToggle() {
     });
 }
 
-// ==========================================
-// 🟢 FB / Zalo Real-time Live Form Activity Indicator (Supabase Broadcast + Presence)
-// ==========================================
 function initLiveTypingIndicator() {
     const typingTextEl = document.getElementById("live-typing-text");
     const typingDotsEl = document.querySelector(".live-typing-dots");
@@ -2213,7 +2069,6 @@ function initLiveTypingIndicator() {
     const remoteActiveClients = new Map();
     let activeUsersCount = 0;
 
-    // 1. Listen to cross-tab BroadcastChannel & LocalStorage heartbeats
     try {
         if (typeof BroadcastChannel !== 'undefined') {
             const bc = new BroadcastChannel('gaia_live_form');
@@ -2230,7 +2085,6 @@ function initLiveTypingIndicator() {
         }
     } catch (e) { }
 
-    // Periodic check for stale heartbeats
     setInterval(() => {
         try {
             const lastPing = parseInt(localStorage.getItem('gaia_live_form_ping') || '0', 10);
@@ -2243,7 +2097,6 @@ function initLiveTypingIndicator() {
         checkActiveCount();
     }, 1500);
 
-    // 2. Listen to Supabase Realtime Unified Channel (Broadcast + Presence across devices worldwide)
     if (supabaseClient) {
         try {
             const liveRoom = supabaseClient.channel('gaia_live_form_room_v1', {
@@ -2311,7 +2164,6 @@ function initLiveTypingIndicator() {
         }
     }
 
-    // Default status on initial load
     updateLiveUI(0);
 }
 

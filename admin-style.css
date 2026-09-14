@@ -1,27 +1,19 @@
-/* ==========================================================================
-   GAIA Animal Hospital Ho Chi Minh City Intake Form Admin Realtime Dashboard Stylesheet
-   Design Paradigm: Premium Dark Mode Glassmorphism & High Contrast Printing
-   ========================================================================== */
-
-/* --- CSS Variables & Design Tokens --- */
 :root {
     --bg-dark: #0a0e17;
     --bg-card: rgba(20, 30, 48, 0.5);
     --bg-card-hover: rgba(30, 45, 72, 0.7);
     --border-glass: rgba(255, 255, 255, 0.08);
     --border-glass-focus: rgba(16, 185, 129, 0.4);
-    
-    /* Harmonious HSL Accent Colors */
-    --primary: #10b981;      /* Emerald Green */
+
+    --primary: #10b981;      
     --primary-glow: rgba(16, 185, 129, 0.25);
-    --secondary: #6366f1;    /* Violet Indigo */
-    --text-main: #f3f4f6;    /* Off-white */
-    --text-muted: #9ca3af;   /* Soft Grey */
-    --text-dark: #111827;    /* Ink */
-    
-    /* Alert Status Colors */
-    --danger: #ef4444;       /* Rose Red */
-    --warning: #f59e0b;      /* Warm Gold */
+    --secondary: #6366f1;    
+    --text-main: #f3f4f6;    
+    --text-muted: #9ca3af;   
+    --text-dark: #111827;    
+
+    --danger: #ef4444;       
+    --warning: #f59e0b;      
     --success: #10b981;
     --neutral: #6b7280;
 
@@ -41,7 +33,6 @@
     --shadow-premium: 0 8px 32px 0 rgba(0, 0, 0, 0.06);
 }
 
-/* --- Base Reset & Scrollbar --- */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -58,7 +49,6 @@ body {
     overflow-y: scroll;
 }
 
-/* Elegant Custom Scrollbars */
 ::-webkit-scrollbar {
     width: 8px;
 }
@@ -73,7 +63,6 @@ body {
     background: var(--primary);
 }
 
-/* --- Main Layout Dashboard --- */
 .dashboard-container {
     max-width: 1400px;
     margin: 0 auto;
@@ -82,7 +71,6 @@ body {
     gap: 30px;
 }
 
-/* Header Section styling */
 .dashboard-header {
     display: flex;
     justify-content: space-between;
@@ -136,9 +124,6 @@ body {
     font-weight: 500;
 }
 
-/* ========================================================
-   🟢 FB / Zalo Style Live Typing Form Indicator Widget
-   ======================================================== */
 .live-typing-widget {
     display: flex;
     align-items: center;
@@ -194,7 +179,7 @@ body {
 }
 
 .live-count-badge {
-    display: none; /* Hidden on desktop where full text is shown */
+    display: none; 
     position: absolute;
     top: -6px;
     right: -8px;
@@ -285,7 +270,7 @@ body {
         flex: 0 0 auto !important;
         margin: 0 !important;
     }
-    /* Reduce icon sizes down to 2/3 (~26px x 26px) */
+
     .live-typing-pill,
     .header-controls .control-btn {
         width: 26px !important;
@@ -339,7 +324,6 @@ body {
     gap: 20px;
 }
 
-/* Control Buttons styling */
 .control-btn {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-glass);
@@ -372,7 +356,6 @@ body {
     height: 18px;
 }
 
-/* Live Connection indicator lamp */
 .status-indicator {
     display: flex;
     align-items: center;
@@ -415,7 +398,6 @@ body {
     100% { transform: scale(0.9); opacity: 0.6; }
 }
 
-/* --- Stats Summary Panel (Sticky Single Row) --- */
 .stats-summary-grid {
     display: flex;
     align-items: center;
@@ -513,7 +495,6 @@ body {
     margin-top: 2px;
 }
 
-/* --- Search Card Integrated in Stats Grid --- */
 .search-card-wrap {
     background: var(--bg-card);
     backdrop-filter: blur(12px);
@@ -562,13 +543,11 @@ body {
     outline: none;
 }
 
-/* --- Intakes Cards Grid Area --- */
 .cards-grid-section {
     min-height: 400px;
     position: relative;
 }
 
-/* Spinner Loader styling */
 .spinner-container {
     display: flex;
     flex-direction: column;
@@ -593,7 +572,6 @@ body {
     100% { transform: rotate(360deg); }
 }
 
-/* No data styling */
 .no-data-card {
     background: var(--bg-card);
     border: 1px dashed var(--border-glass);
@@ -637,14 +615,12 @@ body {
     max-width: 400px;
 }
 
-/* Card list styling */
 .intakes-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
     gap: 20px;
 }
 
-/* Individual Intake Card */
 .intake-card {
     background: var(--bg-card);
     backdrop-filter: blur(12px);
@@ -672,7 +648,6 @@ body {
     transform: scale(1.05);
 }
 
-/* Highlight style for fresh arrivals */
 .intake-card.new-arrival {
     border-color: var(--primary);
     box-shadow: 0 0 20px var(--primary-glow);
@@ -683,7 +658,6 @@ body {
     100% { transform: translateY(0); opacity: 1; }
 }
 
-/* Cover Image Banner styling */
 .card-cover-wrap {
     width: 100%;
     height: 270px;
@@ -717,7 +691,6 @@ body {
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-/* Card layout segments */
 .card-body-wrap {
     padding: 20px;
     display: flex;
@@ -793,7 +766,6 @@ body {
     margin-top: auto;
 }
 
-/* Badges styling */
 .badge {
     font-size: 11px;
     font-weight: 600;
@@ -829,7 +801,6 @@ body {
     border-color: rgba(99, 102, 241, 0.2);
 }
 
-/* --- Details View Modal Glassmorphism --- */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -878,7 +849,6 @@ body {
     transform: translateY(0) scale(1);
 }
 
-/* Modal Header styling */
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -961,7 +931,6 @@ body {
     color: var(--danger);
 }
 
-/* Modal Content area */
 .modal-content {
     padding: 25px;
     overflow-y: auto;
@@ -970,7 +939,6 @@ body {
     gap: 25px;
 }
 
-/* Two Columns detailed data */
 .detail-two-col {
     display: grid;
     grid-template-columns: 1fr;
@@ -1075,7 +1043,6 @@ body {
     align-self: center;
 }
 
-/* Vaccine rows details */
 .detail-full-col {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-glass);
@@ -1132,7 +1099,6 @@ body {
     border: 1px solid transparent;
 }
 
-/* Status colors */
 .bg-badge-yes {
     background: rgba(16, 185, 129, 0.15);
     color: var(--primary);
@@ -1151,7 +1117,6 @@ body {
     border-color: rgba(107, 114, 128, 0.3);
 }
 
-/* Medical History cards */
 .medical-text-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -1179,7 +1144,6 @@ body {
     white-space: pre-wrap;
 }
 
-/* Diet styling tags */
 .diet-tags-wrap {
     display: flex;
     flex-wrap: wrap;
@@ -1205,7 +1169,6 @@ body {
     color: var(--primary);
 }
 
-/* Signature block display */
 .detail-signature-block {
     display: grid;
     grid-template-columns: 1.2fr 0.8fr;
@@ -1278,7 +1241,6 @@ body {
     object-fit: contain;
 }
 
-/* --- Responsive Adaptations --- */
 @media (max-width: 900px) {
     .detail-two-col {
         grid-template-columns: 1fr;
@@ -1305,15 +1267,12 @@ body {
     }
 }
 
-/* ==========================================================================
-   🖨️ PRINT MEDIA QUERIES (High Contrast Professional Styling for PDF Export)
-   ========================================================================== */
 .print-only-layout {
     display: none !important;
 }
 
 @media print {
-    /* Global Print resets */
+
     body {
         background: #ffffff !important;
         color: #000000 !important;
@@ -1322,7 +1281,6 @@ body {
         margin: 0 !important;
     }
 
-    /* Hide everything on screen */
     .dashboard-container,
     .modal-overlay,
     .modal-card,
@@ -1337,7 +1295,6 @@ body {
         display: none !important;
     }
 
-    /* Show only the high-fidelity print-only container */
     .print-only-layout {
         display: block !important;
         background: #ffffff !important;
@@ -1402,7 +1359,7 @@ body {
     }
 
     .table-header-row td {
-        background-color: #9B1530 !important; /* Signature GAIA Burgundy */
+        background-color: #9B1530 !important; 
         color: #ffffff !important;
         font-weight: bold !important;
         font-size: 11pt !important;
@@ -1460,7 +1417,6 @@ body {
     }
 }
 
-/* --- Pet Image Avatar in Dashboard Intake Cards --- */
 .card-header-row {
     display: flex;
     align-items: center;
@@ -1497,7 +1453,6 @@ body {
     opacity: 0.6;
 }
 
-/* --- Click-to-Copy Fields & Gallery Styling --- */
 .info-value-wrap {
     display: flex;
     align-items: center;
@@ -1558,7 +1513,6 @@ body {
     100% { opacity: 0; transform: translateX(-50%) translateY(-12px); }
 }
 
-/* Stacked left column in modal details */
 .detail-left-stack {
     display: flex;
     flex-direction: column;
@@ -1566,7 +1520,6 @@ body {
     grid-column: 1 / -1;
 }
 
-/* Grid stack layout when HAS photos exist */
 .detail-two-col.has-photos .detail-left-stack {
     display: flex;
     flex-direction: column;
@@ -1574,7 +1527,6 @@ body {
     grid-column: auto;
 }
 
-/* Responsive adjustments for modal grids under 900px screen width */
 @media (max-width: 900px) {
     .detail-left-stack > div:first-child {
         grid-template-columns: 1fr !important;
@@ -1584,7 +1536,6 @@ body {
     }
 }
 
-/* dedicated Right Column: Pet Photos Gallery */
 .detail-right-gallery {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-glass);
@@ -1596,7 +1547,6 @@ body {
     gap: 16px;
 }
 
-/* Modal details photo gallery elements */
 .detail-gallery-wrap {
     display: flex;
     flex-direction: column;
@@ -1609,7 +1559,7 @@ body {
     overflow: hidden;
     border: 1px solid var(--border-glass);
     background: rgba(0, 0, 0, 0.25);
-    height: 320px; /* Highly prominent photo viewer */
+    height: 320px; 
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1630,7 +1580,7 @@ body {
 .thumbnail-item {
     border-radius: 8px;
     overflow: hidden;
-    height: 52px; /* Bigger thumbnails */
+    height: 52px; 
     border: 2px solid transparent;
     cursor: pointer;
     background: rgba(0, 0, 0, 0.2);
@@ -1655,12 +1605,9 @@ body {
     box-shadow: 0 0 8px var(--primary-glow);
 }
 
-/* ============================================================
-   STICKY STATS BAR
-   ============================================================ */
 .sticky-stats {
     position: sticky;
-    top: 74px; /* height of sticky header approx */
+    top: 74px; 
     z-index: 150;
     background: rgba(10, 14, 23, 0.75);
     backdrop-filter: blur(20px);
@@ -1673,9 +1620,6 @@ body {
     border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
-/* ============================================================
-   STATUS FILTER CARD & TABS
-   ============================================================ */
 .status-filter-card {
     padding: 8px 12px !important;
     min-width: 290px;
@@ -1723,14 +1667,12 @@ body {
     transition: color 0.2s;
 }
 
-/* Tất cả active */
 .status-tab.active {
     background: rgba(255,255,255,0.07);
     border-color: rgba(255,255,255,0.2);
 }
 .status-tab.active .tab-label { color: var(--text-main); }
 
-/* Mới tab */
 .status-tab.tab-new:hover,
 .status-tab.tab-new.active {
     background: rgba(245, 158, 11, 0.12);
@@ -1740,7 +1682,6 @@ body {
 .status-tab.tab-new.active .tab-count { color: var(--warning); }
 .status-tab.tab-new:hover .tab-label { color: var(--warning); }
 
-/* Đã xử lý tab */
 .status-tab.tab-done:hover,
 .status-tab.tab-done.active {
     background: rgba(16, 185, 129, 0.12);
@@ -1750,9 +1691,6 @@ body {
 .status-tab.tab-done.active .tab-count { color: var(--primary); }
 .status-tab.tab-done:hover .tab-label { color: var(--primary); }
 
-/* ============================================================
-   DATE NAVIGATOR CARD
-   ============================================================ */
 .date-nav-card {
     display: flex !important;
     align-items: center;
@@ -1796,7 +1734,7 @@ body {
 }
 
 .date-nav-value {
-    font-size: 15px !important; /* Shrunk slightly for desktop */
+    font-size: 15px !important; 
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1804,7 +1742,7 @@ body {
 
 .date-nav-icon {
     flex-shrink: 0;
-    width: 42px !important; /* Shrunk from 55px to fit grid columns */
+    width: 42px !important; 
     height: 42px !important;
     border-radius: 10px !important;
 }
@@ -1814,7 +1752,6 @@ body {
     height: 20px !important;
 }
 
-/* Calendar icon wrapper — positions date picker input over icon */
 .date-nav-icon-wrap {
     position: relative;
     flex-shrink: 0;
@@ -1831,7 +1768,6 @@ body {
     transform: scale(1.06);
 }
 
-/* Hidden date input that covers the calendar icon — invisible but clickable */
 .date-picker-hidden {
     position: absolute;
     inset: 0;
@@ -1843,11 +1779,10 @@ body {
     padding: 0;
     margin: 0;
     z-index: 10;
-    /* Prevent the input itself from having a visible box */
+
     color-scheme: dark;
 }
 
-/* Remove default date picker chrome appearance */
 .date-picker-hidden::-webkit-calendar-picker-indicator {
     position: absolute;
     inset: 0;
@@ -1857,11 +1792,6 @@ body {
     cursor: pointer;
 }
 
-/* ============================================================
-   CARD STATUS THEMES
-   ============================================================ */
-
-/* New status — subtle amber left border accent */
 .intake-card.card-status-new {
     border-left: 3px solid rgba(245, 158, 11, 0.55);
 }
@@ -1870,7 +1800,6 @@ body {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
 }
 
-/* Done status — emerald left border accent */
 .intake-card.card-status-done {
     border-left: 3px solid rgba(16, 185, 129, 0.55);
     opacity: 0.82;
@@ -1884,9 +1813,6 @@ body {
     opacity: 1;
 }
 
-/* ============================================================
-   CARD STATUS BADGES
-   ============================================================ */
 .card-top-right {
     display: flex;
     flex-direction: column;
@@ -1915,9 +1841,6 @@ body {
     border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
-/* ============================================================
-   CARD ACTION ROW — STATUS TOGGLE BUTTON
-   ============================================================ */
 .card-action-row {
     padding-top: 4px;
     border-top: 1px solid var(--border-glass);
@@ -1946,7 +1869,6 @@ body {
     flex-shrink: 0;
 }
 
-/* Mark as Done button (shown on Mới cards) */
 .btn-mark-done {
     background: rgba(16, 185, 129, 0.1);
     border-color: rgba(16, 185, 129, 0.3);
@@ -1959,7 +1881,6 @@ body {
     transform: translateY(-1px);
 }
 
-/* Mark back as New button (shown on Đã xử lý cards) */
 .btn-mark-new {
     background: rgba(245, 158, 11, 0.1);
     border-color: rgba(245, 158, 11, 0.3);
@@ -1978,11 +1899,6 @@ body {
     transform: none !important;
 }
 
-/* ============================================================
-   RESPONSIVE DESIGN & MEDIA QUERIES (MOBILE & TABLET)
-   ============================================================ */
-
-/* Global control button override to prevent date-all-btn from stretching */
 #date-all-btn {
     flex: none !important;
     width: 80px !important;
@@ -1990,17 +1906,15 @@ body {
     justify-content: center !important;
 }
 
-/* 1. Large Tablets and Small Desktops (max-width: 1024px) */
 @media (max-width: 1024px) {
     body {
         padding: 20px 15px;
     }
-    
+
     .dashboard-container {
         gap: 20px;
     }
 
-    /* Make header sticky and compact on tablets */
     .dashboard-header {
         position: sticky !important;
         top: 0 !important;
@@ -2008,7 +1922,7 @@ body {
         height: 60px !important;
         padding: 10px 15px !important;
     }
-    
+
     .brand-logo {
         max-height: 32px !important;
     }
@@ -2018,13 +1932,12 @@ body {
     }
 
     .brand-subtitle {
-        display: none !important; /* Hide address to save vertical space */
+        display: none !important; 
     }
 
-    /* On tablet, keep the parent stats-summary-grid sticky as a single row */
     .stats-summary-grid {
         position: sticky !important;
-        top: 60px !important; /* Sticks right below the 60px header */
+        top: 60px !important; 
         z-index: 150 !important;
         margin: 0 -15px !important;
         padding-left: 15px !important;
@@ -2036,7 +1949,6 @@ body {
         border-radius: 0 !important;
     }
 
-    /* Reset status-filter-card individual sticky positioning and negative margins to prevent grid column overflow */
     .status-filter-card {
         position: relative !important;
         top: auto !important;
@@ -2050,22 +1962,20 @@ body {
         border: 1px solid var(--border-glass) !important;
     }
 
-    /* Modal Layout adapts to single column to avoid content compression */
     .detail-two-col.has-photos {
         grid-template-columns: 1fr;
     }
-    
+
     .detail-right-gallery {
         max-width: 100%;
         margin-top: 10px;
     }
-    
+
     .detail-active-photo-box {
         height: 380px;
     }
 }
 
-/* 2. Tablets and Medium Devices (max-width: 768px) */
 @media (max-width: 768px) {
     .dashboard-header {
         height: auto !important;
@@ -2115,7 +2025,7 @@ body {
         gap: 5px !important;
         margin-left: auto !important;
     }
-    
+
     .control-btn, .live-typing-pill {
         flex: none !important;
         width: 26px !important;
@@ -2137,10 +2047,9 @@ body {
     }
 
     .control-btn span {
-        display: none !important; /* Hide sound status text, keep icon only */
+        display: none !important; 
     }
 
-    /* Stack stats cards vertically on mobile/portrait tablet */
     .stats-summary-grid {
         grid-template-columns: 1fr !important;
         gap: 15px !important;
@@ -2155,7 +2064,6 @@ body {
         border-bottom: none !important;
     }
 
-    /* Make only status filter card sticky right below the 54px header in stacked mode */
     .status-filter-card {
         position: sticky !important;
         top: 54px !important;
@@ -2172,7 +2080,6 @@ body {
         border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     }
 
-    /* Signature display stacks vertically */
     .detail-signature-block {
         grid-template-columns: 1fr;
         gap: 20px;
@@ -2191,7 +2098,6 @@ body {
     }
 }
 
-/* 3. Mobile Phones (max-width: 480px) */
 @media (max-width: 480px) {
     body {
         padding: 10px 10px;
@@ -2207,12 +2113,11 @@ body {
     }
 
     .status-filter-card {
-        top: 50px !important; /* Sticky right below the 50px header */
+        top: 50px !important; 
         margin: 0 -10px 15px -10px !important;
         padding: 12px 15px !important;
     }
 
-    /* Date Navigator Card layout - Single row, no wrap */
     .date-nav-card {
         flex-wrap: nowrap !important;
         justify-content: space-between !important;
@@ -2225,7 +2130,7 @@ body {
         height: 36px !important;
         border-radius: 10px !important;
     }
-    
+
     .date-nav-card .stats-icon.date-nav-icon svg {
         width: 18px !important;
         height: 18px !important;
@@ -2270,13 +2175,11 @@ body {
         margin-left: 0 !important;
         justify-content: center !important;
     }
-    
-    /* Intakes list grid adjustments */
+
     .intakes-grid {
         grid-template-columns: 1fr;
     }
 
-    /* Modal padding and close buttons */
     .modal-card {
         max-height: 95vh;
         border-radius: 20px;
@@ -2288,13 +2191,13 @@ body {
         align-items: stretch;
         gap: 12px;
     }
-    
+
     .modal-header-title {
         flex-direction: column;
         align-items: flex-start;
         gap: 6px;
     }
-    
+
     .modal-actions {
         width: 100%;
         justify-content: space-between;
@@ -2305,7 +2208,6 @@ body {
         gap: 15px;
     }
 
-    /* Info rows stacking */
     .info-row-grid {
         grid-template-columns: 1fr;
         gap: 8px;
@@ -2316,7 +2218,7 @@ body {
         align-items: stretch;
         gap: 10px;
     }
-    
+
     .vaccine-badge-item {
         justify-content: space-between;
         background: rgba(255, 255, 255, 0.02);
@@ -2330,11 +2232,6 @@ body {
     }
 }
 
-/* ============================================================
-   PAGINATION & BACK TO TOP BUTTON
-   ============================================================ */
-
-/* Floating Back to Top Button */
 .back-to-top-btn {
     position: fixed;
     bottom: 25px;
@@ -2382,7 +2279,6 @@ body {
     transform: translateY(-2px);
 }
 
-/* Pagination container */
 .pagination-wrap {
     display: flex;
     justify-content: center;
@@ -2440,12 +2336,11 @@ body {
     letter-spacing: 2.5px;
 }
 
-/* Ensure mobile layout doesn't shrink pagination buttons too much */
 @media (max-width: 480px) {
     .pagination-wrap {
         gap: 5px;
     }
-    
+
     .pagination-btn {
         padding: 6px 10px;
         font-size: 12px;
@@ -2455,11 +2350,6 @@ body {
     }
 }
 
-/* ==========================================================================
-   Loyal Customer Badge & Duplicate Flag Styles (Premium Theme)
-   ========================================================================== */
-
-/* Pet Name Row Layout */
 .pet-name-row {
     display: flex;
     align-items: center;
@@ -2472,7 +2362,6 @@ body {
     margin: 0;
 }
 
-/* Loyal Customer Badge (Emerald Soft Style) */
 .customer-loyal-badge {
     display: inline-flex;
     align-items: center;
@@ -2488,7 +2377,6 @@ body {
     letter-spacing: 0.2px;
 }
 
-/* Duplicate Indicator Wrapper */
 .duplicate-indicator-wrap {
     display: inline-flex;
     align-items: center;
@@ -2496,7 +2384,6 @@ body {
     margin-left: auto;
 }
 
-/* Red Exclamation Point with Pulse Animation */
 .duplicate-exclamation {
     display: inline-flex;
     align-items: center;
@@ -2529,7 +2416,6 @@ body {
     }
 }
 
-/* Delete Duplicate Button */
 .btn-delete-duplicate {
     display: inline-flex;
     align-items: center;
@@ -2562,7 +2448,6 @@ body {
     height: 13px;
 }
 
-/* Custom Confirmation Modal for Deletion */
 .confirm-delete-card {
     max-width: 480px !important;
     border-radius: 20px !important;
@@ -2570,7 +2455,6 @@ body {
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(239, 68, 68, 0.15) !important;
 }
 
-/* --- QR Modal Custom Styles --- */
 .qr-modal-card {
     max-width: 420px !important;
 }
@@ -2588,7 +2472,6 @@ body {
     user-select: all;
 }
 
-/* --- Image Lightbox Viewer --- */
 .detail-active-photo-box {
     cursor: pointer;
 }
@@ -2615,7 +2498,6 @@ body {
     visibility: visible;
 }
 
-/* Toolbar */
 .lightbox-toolbar {
     display: flex;
     align-items: center;
@@ -2627,7 +2509,7 @@ body {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     z-index: 10;
-    flex-shrink: 0; /* Keep size */
+    flex-shrink: 0; 
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
@@ -2676,7 +2558,6 @@ body {
     user-select: none;
 }
 
-/* Image container */
 .lightbox-image-wrap {
     display: flex;
     align-items: center;
@@ -2685,7 +2566,7 @@ body {
     flex-grow: 1;
     position: relative;
     padding: 12px 0 24px;
-    overflow: visible; /* Let navigation buttons float outside wrap bounds if needed */
+    overflow: visible; 
 }
 
 .lightbox-image-wrap img {
@@ -2700,7 +2581,6 @@ body {
     box-shadow: 0 20px 50px rgba(0,0,0,0.5);
 }
 
-/* Navigation buttons */
 .lightbox-nav-btn {
     position: absolute;
     top: 50%;
@@ -2712,7 +2592,7 @@ body {
     background: rgba(15, 23, 42, 0.8);
     color: #e2e8f0;
     cursor: pointer;
-    display: none; /* Controlled dynamically by JS */
+    display: none; 
     align-items: center;
     justify-content: center;
     transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
@@ -2740,7 +2620,6 @@ body {
     right: 24px;
 }
 
-/* Adjust size on smaller screens */
 @media (max-width: 768px) {
     .lightbox-nav-btn {
         width: 44px;
@@ -2754,9 +2633,6 @@ body {
     }
 }
 
-/* ==========================================================================
-   ☀️ Light Mode Full Synchronized Overrides
-   ========================================================================== */
 [data-theme="light"] {
     --bg-dark: #f3f4f6;
     --bg-card: #ffffff;
@@ -2869,7 +2745,6 @@ body {
     color: #0f172a !important;
 }
 
-/* Modal Light Mode Styling */
 [data-theme="light"] .modal-card,
 [data-theme="light"] .confirm-delete-card,
 [data-theme="light"] .qr-modal-card {
@@ -2946,7 +2821,6 @@ body {
     color: #ef4444 !important;
 }
 
-/* --- Card Owner Info & Text Light Mode Overrides --- */
 .card-owner-info {
     display: flex;
     flex-direction: column;
@@ -3089,7 +2963,6 @@ body {
     border: 1px solid #a5b4fc !important;
 }
 
-/* --- Diet Tags Styling (Dark & Light Modes) --- */
 .diet-tags-wrap {
     display: flex;
     flex-wrap: wrap;
@@ -3167,7 +3040,6 @@ body {
     text-shadow: none !important;
 }
 
-/* --- Vertical 3-Dots Dropdown Button & Options Menu --- */
 .more-options-wrap {
     margin-left: auto;
     position: relative;
@@ -3271,14 +3143,6 @@ body {
     color: #047857 !important;
 }
 
-/* Standalone Print-only rules inside admin-style.css */
 .print-only-layout {
     display: none !important;
 }
-
-
-
-
-
-
-

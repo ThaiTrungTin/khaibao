@@ -1,14 +1,7 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Staff Management Module (staff.js)
-   Full CRUD: Fetch, Add, Edit, Delete (Custom Modal), Search & Branch Filter
-   Inline Validation: Red error messages under input fields
-   ========================================================================== */
-
 let staffData = [];
 let editingStaffId = null;
 let deletingStaffId = null;
 
-// Initial Fallback Data if Supabase table is not created yet
 const defaultStaffData = [
     {
         id: "demo-1",
@@ -42,7 +35,6 @@ const defaultStaffData = [
     }
 ];
 
-// Get or Initialize Supabase Client
 function getSupabaseClient() {
     if (window.supabaseClient) return window.supabaseClient;
     if (typeof supabaseClient !== 'undefined' && supabaseClient) {
@@ -70,7 +62,6 @@ function initStaffModule() {
     bindStaffEvents();
 }
 
-// Fetch Staff Data from Supabase
 async function fetchStaffData() {
     const gridContainer = document.getElementById("staff-list-grid");
     const loadingSpinner = document.getElementById("staff-loading-spinner");
@@ -105,11 +96,10 @@ async function fetchStaffData() {
         if (loadingSpinner) loadingSpinner.style.display = "none";
         updateBranchDropdowns();
         filterStaffList();
-        window.staffData = staffData; // expose for global search
+        window.staffData = staffData; 
     }
 }
 
-// Local Storage Fallback
 function getLocalStaffData() {
     const saved = localStorage.getItem("gaia_staff_list");
     if (saved) {
@@ -127,51 +117,129 @@ function saveLocalStaffData(data) {
     localStorage.setItem("gaia_staff_list", JSON.stringify(data));
 }
 
-// Dynamically update Select Dropdowns for Staff Branch Form & Filter
+function formatBranchStandard(code, name) {
+    const c = (code || '').trim().toUpperCase();
+    let n = (name || '').trim();
+    if (!c && !n) return 'CN1 - Chi Nhánh TP.HCM';
+    if (!c) {
+        const extracted = extractCNCode(n);
+        if (extracted) {
+            const prefixRegex = new RegExp(`^${extracted}\\s*-\\s*`, 'i');
+            n = n.replace(prefixRegex, '').trim();
+            return `${extracted} - ${n || 'Chi Nhánh'}`;
+        }
+        return `CN1 - ${n}`;
+    }
+    if (!n) return `${c} - Chi Nhánh ${c.replace(/\D/g, '') || '1'}`;
+
+    // Xóa tiền tố trùng lặp nếu name đã bắt đầu bằng CNx - 
+    const prefixRegex = new RegExp(`^${c}\\s*-\\s*`, 'i');
+    n = n.replace(prefixRegex, '').trim();
+    return `${c} - ${n}`;
+}
+
 function updateBranchDropdowns() {
     const branchSelect = document.getElementById("staff-input-branch");
     const branchFilter = document.getElementById("staff-branch-filter");
 
-    // Collect ONLY unique non-empty branches from actual database records
-    const branches = new Set();
-    (staffData || []).forEach(s => {
-        if (s.branch && s.branch !== "Toàn hệ thống" && s.branch.trim() !== "") {
-            branches.add(s.branch.trim());
-        }
-    });
-
     const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
     const roleLower = loggedUser ? (loggedUser.role || "").toLowerCase().trim() : "";
     const isManager = roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower.includes("manager");
+    const rawMyBranch = (loggedUser ? (loggedUser.branch || "CN1 - Chi Nhánh TP.HCM") : "CN1 - Chi Nhánh TP.HCM").trim();
+    const myBranchCode = (loggedUser ? (loggedUser.cn || extractCNCode(rawMyBranch)) : "CN1") || "CN1";
+    const myBranch = formatBranchStandard(myBranchCode, rawMyBranch);
 
-    if (branches.size === 0 && loggedUser && loggedUser.branch) {
-        branches.add(loggedUser.branch.trim());
+    // 1. Lấy danh sách chi nhánh chính thức từ bảng cài đặt cai_dat_he_thong
+    const branchList = [];
+    const seenFull = new Set();
+
+    if (typeof window.getSystemBranchesDetailed === 'function') {
+        const sysBranches = window.getSystemBranchesDetailed();
+        if (Array.isArray(sysBranches)) {
+            sysBranches.forEach(b => {
+                const code = b.code ? b.code.trim().toUpperCase() : '';
+                const name = b.name ? b.name.trim() : '';
+                if (code || name) {
+                    const full = formatBranchStandard(code, name);
+                    if (!seenFull.has(full)) {
+                        seenFull.add(full);
+                        branchList.push({
+                            code: code || extractCNCode(full),
+                            name: name,
+                            full: full
+                        });
+                    }
+                }
+            });
+        }
+    }
+
+    // 2. Dự phòng lấy từ dữ liệu nhân viên hiện có nếu chưa có bảng cài đặt
+    if (branchList.length === 0) {
+        (staffData || []).forEach(s => {
+            if (s.branch && s.branch !== "Toàn hệ thống" && s.branch.trim() !== "") {
+                const sCN = s.cn || extractCNCode(s.branch);
+                const full = formatBranchStandard(sCN, s.branch);
+                if (!seenFull.has(full)) {
+                    seenFull.add(full);
+                    branchList.push({
+                        code: sCN || extractCNCode(full),
+                        name: s.branch,
+                        full: full
+                    });
+                }
+            }
+        });
+    }
+
+    if (branchList.length === 0 && myBranch) {
+        branchList.push({
+            code: myBranchCode,
+            name: myBranch,
+            full: myBranch
+        });
     }
 
     if (branchSelect && branchSelect.tagName === "SELECT") {
         const savedVal = branchSelect.value;
         branchSelect.innerHTML = "";
 
-        branches.forEach(b => {
+        if (!isManager && loggedUser) {
+            // Admin: cố định chi nhánh của chính Admin theo chuẩn [Mã Chi Nhánh] - [Tên Chi Nhánh]
             const option = document.createElement("option");
-            option.value = b;
-            option.textContent = b;
+            option.value = myBranch;
+            option.textContent = myBranch;
             branchSelect.appendChild(option);
-        });
+            branchSelect.value = myBranch;
+            branchSelect.disabled = true;
+            branchSelect.style.opacity = "0.75";
+            branchSelect.style.cursor = "not-allowed";
+        } else {
+            // Quản lý: lấy toàn bộ danh sách chuẩn [Mã Chi Nhánh] - [Tên Chi Nhánh] (VD: CN1 - Chi Nhánh TP.HCM, CN2 - Hiệp Bình)
+            if (branchList.length === 0) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "(Chưa có chi nhánh - Vui lòng tạo tại Cài Đặt)";
+                branchSelect.appendChild(opt);
+            } else {
+                branchList.forEach(item => {
+                    const option = document.createElement("option");
+                    option.value = item.full;
+                    option.textContent = item.full;
+                    branchSelect.appendChild(option);
+                });
+            }
 
-        if (isManager) {
-            const customOpt = document.createElement("option");
-            customOpt.value = "__custom__";
-            customOpt.textContent = "➕ Thêm chi nhánh mới...";
-            branchSelect.appendChild(customOpt);
+            if (savedVal) {
+                const matchItem = branchList.find(b => b.full === savedVal || b.code === savedVal || b.name === savedVal);
+                if (matchItem) {
+                    branchSelect.value = matchItem.full;
+                }
+            }
+            branchSelect.disabled = false;
+            branchSelect.style.opacity = "1";
+            branchSelect.style.cursor = "default";
         }
-
-        if (savedVal && (branches.has(savedVal) || savedVal === "__custom__")) {
-            branchSelect.value = savedVal;
-        }
-
-        branchSelect.removeEventListener("change", toggleStaffCustomBranch);
-        branchSelect.addEventListener("change", toggleStaffCustomBranch);
     }
 
     if (branchFilter) {
@@ -186,10 +254,10 @@ function updateBranchDropdowns() {
 
             const currentSelected = branchFilter.value;
             branchFilter.innerHTML = `<option value="all">Tất cả chi nhánh</option>`;
-            branches.forEach(b => {
+            branchList.forEach(item => {
                 const option = document.createElement("option");
-                option.value = b;
-                option.textContent = b;
+                option.value = item.full;
+                option.textContent = item.full;
                 branchFilter.appendChild(option);
             });
             if (currentSelected) branchFilter.value = currentSelected;
@@ -235,7 +303,6 @@ function toggleStaffCustomBranch() {
     }
 }
 
-// Cascade update all staff members belonging to a CN code when address is updated
 async function updateAllStaffBranchForCN(cnCode, newBranchStr) {
     const client = getSupabaseClient();
     const newCN = extractCNCode(newBranchStr);
@@ -256,7 +323,6 @@ async function updateAllStaffBranchForCN(cnCode, newBranchStr) {
         }
     }
 
-    // Update local staffData
     (staffData || []).forEach(s => {
         const sCN = s.cn || extractCNCode(s.branch);
         if (sCN.toUpperCase() === cnCode.toUpperCase()) {
@@ -278,7 +344,6 @@ async function updateAllStaffBranchForCN(cnCode, newBranchStr) {
     }
 }
 
-// Show Custom UI Confirmation Modal for Branch Address Update
 function showBranchConfirmModal(cnCode, oldBranchStr, newBranchStr) {
     return new Promise((resolve) => {
         const modal = document.getElementById("branch-confirm-modal");
@@ -315,7 +380,6 @@ function showBranchConfirmModal(cnCode, oldBranchStr, newBranchStr) {
     });
 }
 
-// Bind Event Listeners
 function bindStaffEvents() {
     const btnAdd = document.getElementById("btn-add-staff");
     const modal = document.getElementById("staff-modal");
@@ -326,7 +390,6 @@ function bindStaffEvents() {
     const roleInput = document.getElementById("staff-input-role");
     const btnToggleFormPass = document.getElementById("btn-toggle-form-pass");
 
-    // Delete Modal elements
     const deleteModal = document.getElementById("staff-delete-modal");
     const btnConfirmDelete = document.getElementById("btn-confirm-delete-staff");
 
@@ -369,14 +432,12 @@ function bindStaffEvents() {
         branchFilter.addEventListener("change", filterStaffList);
     }
 
-    // Role selection dynamic branch visibility
     if (roleInput) {
         roleInput.addEventListener("change", () => {
             toggleBranchFieldByRole(roleInput.value);
         });
     }
 
-    // Form Password Eye Toggle
     if (btnToggleFormPass) {
         btnToggleFormPass.addEventListener("click", () => {
             const passInput = document.getElementById("staff-input-pass");
@@ -391,7 +452,6 @@ function bindStaffEvents() {
         });
     }
 
-    // Clear inline errors on input type
     ["staff-input-name", "staff-input-email", "staff-input-phone", "staff-input-pass", "staff-input-branch"].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -402,7 +462,6 @@ function bindStaffEvents() {
     });
 }
 
-// Show/Hide Branch Field based on Role ("Quản lý" manages all branches)
 function toggleBranchFieldByRole(roleValue) {
     const branchGroup = document.getElementById("group-staff-branch");
     const branchInput = document.getElementById("staff-input-branch");
@@ -420,13 +479,12 @@ function toggleBranchFieldByRole(roleValue) {
     }
 }
 
-// Filter Logic by Query and Branch + Hierarchical Scope & Self-Hide Rules
 function filterStaffList() {
     const query = (document.getElementById("staff-search-input")?.value || "").toLowerCase().trim();
     const branchVal = document.getElementById("staff-branch-filter")?.value || "all";
 
     const loggedUser = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : JSON.parse(localStorage.getItem("gaia_logged_user") || "null");
-    
+
     const roleLower = loggedUser ? (loggedUser.role || "").toLowerCase().trim() : "";
     const isManager = roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower.includes("manager");
     const isAdmin = roleLower === "admin";
@@ -438,33 +496,28 @@ function filterStaffList() {
         const itemRole = (item.role || "").toLowerCase().trim();
         const itemBranch = (item.branch || "Chi Nhánh TP.HCM").toLowerCase().trim();
 
-        // 1. HIDE SELF: Neither Admin nor Quản lý see their own card in the list
         const isSelf = (loggedUser && item.id && String(item.id) === String(loggedUser.id)) ||
                        (loggedUser && itemEmail && myEmail && itemEmail === myEmail) ||
                        (loggedUser && item.full_name && loggedUser.full_name && item.full_name.trim().toLowerCase() === loggedUser.full_name.trim().toLowerCase());
         if (isSelf) return false;
 
-        // 2. Hierarchical Visibility Rules:
         if (!isManager && loggedUser) {
             const userCN = loggedUser.cn || extractCNCode(loggedUser.branch || "");
             const itemCN = item.cn || extractCNCode(item.branch || "");
             const isTargetManager = itemRole.includes("quản lý") || itemRole.includes("quan ly") || itemRole.includes("manager");
 
-            // Admin & Staff can ONLY see staff members belonging to their SAME branch (same CN code)!
             if (!isTargetManager) {
                 if (userCN && itemCN && userCN.toUpperCase() !== itemCN.toUpperCase()) {
-                    return false; // Different branch -> Hide from Admin & Staff!
+                    return false; 
                 }
             }
         }
 
-        // 3. Search Query matching
         const matchesQuery = !query || 
             (item.full_name && item.full_name.toLowerCase().includes(query)) ||
             (item.email && item.email.toLowerCase().includes(query)) ||
             (item.phone && item.phone.toLowerCase().includes(query));
 
-        // 4. Branch Filter dropdown matching
         const matchesBranch = branchVal === "all" || (item.branch && item.branch.toLowerCase() === branchVal.toLowerCase());
 
         return matchesQuery && matchesBranch;
@@ -473,7 +526,6 @@ function filterStaffList() {
     renderStaffList(filtered);
 }
 
-// Render Staff List Cards
 function renderStaffList(list) {
     if (typeof applyRolePermissions === 'function') applyRolePermissions();
 
@@ -496,7 +548,6 @@ function renderStaffList(list) {
     });
 }
 
-// Create Card Element with Role-based Actions
 function createStaffCard(staff) {
     const div = document.createElement("div");
     div.className = "staff-card";
@@ -508,18 +559,16 @@ function createStaffCard(staff) {
     const targetRoleLower = (staff.role || "").toLowerCase().trim();
     const isTargetManager = targetRoleLower.includes("quản lý") || targetRoleLower.includes("quan ly") || targetRoleLower.includes("manager");
 
-    // Admin CANNOT edit, delete, or view password of Quản lý (Superior)
     const isSuperior = isLoggedAdmin && isTargetManager;
 
     const initials = staff.full_name ? staff.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : "NV";
-    
+
     let roleClass = "role-badge-default";
     const roleVal = staff.role || "Nhân viên";
     if (roleVal === "Quản lý") roleClass = "role-badge-manager";
     else if (roleVal === "Admin") roleClass = "role-badge-admin";
     else roleClass = "role-badge-staff";
 
-    // Actions HTML (Edit & Delete buttons - Hidden for Superior)
     let actionsHtml = "";
     if (!isSuperior) {
         actionsHtml = `
@@ -532,7 +581,6 @@ function createStaffCard(staff) {
         `;
     }
 
-    // Password Toggle Eye Button HTML - Hidden for Superior
     let passToggleHtml = "";
     if (!isSuperior) {
         passToggleHtml = `
@@ -542,7 +590,6 @@ function createStaffCard(staff) {
         `;
     }
 
-    // Branch Row HTML (Hidden for Quản lý role since Manager manages all branches)
     let branchRowHtml = "";
     if (!isTargetManager) {
         branchRowHtml = `
@@ -593,7 +640,6 @@ function createStaffCard(staff) {
     return div;
 }
 
-// Show/Hide Password on Card
 window.togglePassVisibility = function(id, rawPassword) {
     const textEl = document.getElementById(`pass-text-${id}`);
     if (!textEl) return;
@@ -607,7 +653,6 @@ window.togglePassVisibility = function(id, rawPassword) {
     }
 };
 
-// Inline Validation Error Handlers
 function showInputError(inputId, errId, message) {
     const inputEl = document.getElementById(inputId);
     const errEl = document.getElementById(errId);
@@ -644,7 +689,6 @@ function clearSingleInputError(inputId) {
     }
 }
 
-// Open Modal Add/Edit
 function openStaffModal(staff = null) {
     const modal = document.getElementById("staff-modal");
     const modalTitle = document.getElementById("staff-modal-title");
@@ -668,7 +712,6 @@ function openStaffModal(staff = null) {
     const roleSelect = document.getElementById("staff-input-role");
     const branchInput = document.getElementById("staff-input-branch");
 
-    // Restrict 'Quản lý' role option for Admin (Admin cannot grant Manager authority)
     if (roleSelect) {
         const quanLyOption = roleSelect.querySelector('option[value="Quản lý"]');
         if (quanLyOption) {
@@ -683,7 +726,7 @@ function openStaffModal(staff = null) {
         document.getElementById("staff-input-email").value = staff.email || "";
         document.getElementById("staff-input-phone").value = staff.phone || "";
         document.getElementById("staff-input-pass").value = staff.password || "";
-        
+
         const roleVal = staff.role || "Nhân viên";
         if (roleSelect) roleSelect.value = roleVal;
         toggleBranchFieldByRole(roleVal);
@@ -691,27 +734,13 @@ function openStaffModal(staff = null) {
         if (branchInput) {
             updateBranchDropdowns();
             const staffBranch = isLoggedAdmin ? myBranch : (staff.branch || myBranch);
-            const exists = Array.from(branchInput.options).some(o => o.value === staffBranch);
-            if (!exists && staffBranch) {
-                const opt = document.createElement("option");
-                opt.value = staffBranch;
-                opt.textContent = staffBranch;
-                if (branchInput.lastElementChild && branchInput.lastElementChild.value === "__custom__") {
-                    branchInput.insertBefore(opt, branchInput.lastElementChild);
-                } else {
-                    branchInput.appendChild(opt);
-                }
-            }
             branchInput.value = staffBranch || (branchInput.options[0] ? branchInput.options[0].value : "");
-            toggleStaffCustomBranch();
         }
 
-        // Check if target staff is self
         const isSelf = (loggedUser && staff.id && String(staff.id) === String(loggedUser.id)) ||
                        (loggedUser && staff.email && staff.email.toLowerCase() === loggedUser.email.toLowerCase());
 
         if (isSelf) {
-            // Lock Role and Branch for self!
             if (roleSelect) { roleSelect.disabled = true; roleSelect.style.opacity = "0.5"; }
             if (branchInput) { branchInput.disabled = true; branchInput.style.opacity = "0.5"; }
         } else {
@@ -732,23 +761,11 @@ function openStaffModal(staff = null) {
             roleSelect.style.opacity = "1";
         }
         toggleBranchFieldByRole("Nhân viên");
-        
+
         if (branchInput) {
             updateBranchDropdowns();
-            const targetVal = myBranch || (branchInput.options[0] ? branchInput.options[0].value : "");
-            const exists = Array.from(branchInput.options).some(o => o.value === targetVal);
-            if (!exists && targetVal) {
-                const opt = document.createElement("option");
-                opt.value = targetVal;
-                opt.textContent = targetVal;
-                if (branchInput.lastElementChild && branchInput.lastElementChild.value === "__custom__") {
-                    branchInput.insertBefore(opt, branchInput.lastElementChild);
-                } else {
-                    branchInput.appendChild(opt);
-                }
-            }
+            const targetVal = isLoggedAdmin ? myBranch : (branchInput.options[0] ? branchInput.options[0].value : "");
             branchInput.value = targetVal;
-            toggleStaffCustomBranch();
             branchInput.disabled = isLoggedAdmin;
             branchInput.style.opacity = isLoggedAdmin ? "0.7" : "1";
             branchInput.style.cursor = isLoggedAdmin ? "not-allowed" : "default";
@@ -771,7 +788,6 @@ function closeStaffModal() {
     if (branchInput) { branchInput.disabled = false; branchInput.style.opacity = "1"; }
 }
 
-// Edit Staff Handler
 window.editStaff = function(id) {
     const staff = staffData.find(s => String(s.id) === String(id));
     if (staff) {
@@ -779,7 +795,6 @@ window.editStaff = function(id) {
     }
 };
 
-// Save Staff (Insert/Update) with Inline Red Error Validations
 async function handleSaveStaff() {
     clearAllInputErrors();
 
@@ -788,7 +803,7 @@ async function handleSaveStaff() {
     const phone = document.getElementById("staff-input-phone").value.trim();
     const password = document.getElementById("staff-input-pass").value.trim();
     const role = document.getElementById("staff-input-role").value;
-    
+
     const branchSelect = document.getElementById("staff-input-branch");
     const customBranchInput = document.getElementById("staff-input-branch-custom");
     let branch = "";
@@ -808,7 +823,6 @@ async function handleSaveStaff() {
 
     let hasError = false;
 
-    // 1. Mandatory Fields Check
     if (!name) {
         showInputError("staff-input-name", "err-staff-name", "Vui lòng nhập họ và tên nhân viên");
         hasError = true;
@@ -831,14 +845,12 @@ async function handleSaveStaff() {
 
     if (hasError) return;
 
-    // 2. Phone Validation (Must start with 0 and have 10-11 digits)
     const phoneRegex = /^0\d{9,10}$/;
     if (!phoneRegex.test(phone)) {
         showInputError("staff-input-phone", "err-staff-phone", "Số điện thoại phải bao gồm 10 chữ số bắt đầu bằng số 0 (VD: 0918123456)");
         return;
     }
 
-    // 3. Unique Email Check
     const isDuplicateEmail = staffData.some(s => 
         s.email && 
         s.email.toLowerCase() === email.toLowerCase() && 
@@ -850,13 +862,11 @@ async function handleSaveStaff() {
         return;
     }
 
-    // 4. Password Validation (Must be at least 6 characters, any characters allowed)
     if (password.length < 6) {
         showInputError("staff-input-pass", "err-staff-pass", "Mật khẩu phải có tối thiểu 6 ký tự tùy ý (chữ, số, ký tự đặc biệt)");
         return;
     }
 
-// Helper to extract CN code prefix (e.g. 'CN1' from 'CN1 - No. 2D, 22 Road...')
 function extractCNCode(branchStr) {
     if (!branchStr) return "";
     const str = branchStr.trim();
@@ -870,9 +880,10 @@ function extractCNCode(branchStr) {
     return str;
 }
 
-    const cnCode = extractCNCode(branch);
+    const rawBranch = branch ? branch.trim() : '';
+    const cnCode = extractCNCode(rawBranch) || 'CN1';
+    const standardBranch = (role === "Quản lý") ? "Toàn hệ thống" : formatBranchStandard(cnCode, rawBranch);
 
-    // 5. Check if CN code already exists with a different old branch address
     if (role !== "Quản lý" && cnCode) {
         const existingBranchesWithSameCN = Array.from(new Set(
             (staffData || [])
@@ -883,16 +894,15 @@ function extractCNCode(branchStr) {
                 .map(s => s.branch.trim())
         ));
 
-        const oldBranchStr = existingBranchesWithSameCN.find(bStr => bStr.toLowerCase() !== branch.trim().toLowerCase());
+        const oldBranchStr = existingBranchesWithSameCN.find(bStr => bStr.toLowerCase() !== standardBranch.toLowerCase());
 
         if (oldBranchStr) {
-            const proceed = await showBranchConfirmModal(cnCode, oldBranchStr, branch);
+            const proceed = await showBranchConfirmModal(cnCode, oldBranchStr, standardBranch);
 
             if (proceed) {
-                // Cascade update all staff members with old branch address in Supabase & local
-                await updateAllStaffBranchForCN(cnCode, branch);
+                await updateAllStaffBranchForCN(cnCode, standardBranch);
             } else {
-                return; // User clicked Cancel / Hủy Bỏ, stop saving
+                return; 
             }
         }
     }
@@ -903,8 +913,8 @@ function extractCNCode(branchStr) {
         phone: phone,
         password: password,
         role: role,
-        branch: branch,
-        cn: cnCode,
+        branch: standardBranch,
+        cn: (role === "Quản lý") ? "ALL" : cnCode,
         status: 'active',
         updated_at: new Date().toISOString()
     };
@@ -921,7 +931,7 @@ function extractCNCode(branchStr) {
     try {
         if (client) {
             if (editingStaffId) {
-                // Update in Supabase
+
                 const { error } = await client
                     .from('staff')
                     .update(payload)
@@ -932,7 +942,7 @@ function extractCNCode(branchStr) {
                     showInputError("staff-input-name", "err-staff-name", "Chưa thể cập nhật Supabase: " + (error.message || JSON.stringify(error)));
                 }
             } else {
-                // Insert into Supabase
+
                 const { data, error } = await client
                     .from('staff')
                     .insert([payload])
@@ -954,7 +964,6 @@ function extractCNCode(branchStr) {
             submitBtn.innerHTML = originalHTML;
         }
 
-        // Update local state
         if (editingStaffId) {
             const idx = staffData.findIndex(s => String(s.id) === String(editingStaffId));
             if (idx !== -1) staffData[idx] = { ...staffData[idx], ...payload };
@@ -974,7 +983,6 @@ function extractCNCode(branchStr) {
     }
 }
 
-// Custom App Delete Modal Handler
 window.promptDeleteStaff = function(id) {
     const staff = staffData.find(s => String(s.id) === String(id));
     if (!staff) return;
@@ -994,7 +1002,6 @@ function closeDeleteStaffModal() {
     deletingStaffId = null;
 }
 
-// Execute Delete Staff Action
 async function executeDeleteStaff() {
     if (!deletingStaffId) return;
 
@@ -1019,7 +1026,6 @@ async function executeDeleteStaff() {
     }
 }
 
-// Utility Escape HTML
 function escapeHtml(str) {
     if (!str) return '';
     return String(str)

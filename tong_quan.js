@@ -1,14 +1,7 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Bảng Điều Khiển Tổng Quan (tong_quan.js)
-   Realtime Aggregation Dashboard: Lịch Khám, Vật Tư, Nhập Xuất, Kiểm Kho & Thẻ Kho
-   Branch RBAC: Dynamically loaded from Staff Table 'branch' column
-   ========================================================================== */
-
-let tongQuanBranchFilter = 'all'; // 'all' | 'CN1' | 'CN2' | ...
+let tongQuanBranchFilter = 'all'; 
 let tongQuanIsInitialized = false;
 let tongQuanRefreshTimer = null;
 
-// Cache local aggregations
 let tqStats = {
     todayIntakes: 0,
     newIntakes: 0,
@@ -25,7 +18,6 @@ let tqStats = {
     cn2Stock: 0
 };
 
-// --- 1. Supabase Client Helper ---
 function getTongQuanSupabaseClient() {
     if (window.supabaseClient) return window.supabaseClient;
     if (typeof supabaseClient !== 'undefined' && supabaseClient) {
@@ -43,7 +35,6 @@ function getTongQuanSupabaseClient() {
     return null;
 }
 
-// --- Helper: Get Logged User & Check Permissions from Staff Table ---
 function getTongQuanLoggedUser() {
     let u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
     if (!u) {
@@ -56,11 +47,10 @@ function getTongQuanLoggedUser() {
 }
 
 function isTongQuanManager(user) {
-    if (!user) return false; // If no session → default staff view (locked)
+    if (!user) return false; 
     const roleLower = (user.role || "").toLowerCase().trim();
     const branchLower = (user.branch || "").toLowerCase().trim();
-    // Only "Quản lý" role can freely choose all branches
-    // Admin and Nhân viên are locked to their own branch
+
     return roleLower.includes("quản lý") || 
            roleLower.includes("quan ly") || 
            roleLower.includes("manager") ||
@@ -76,19 +66,17 @@ function extractBranchCode(str) {
     if (upper === 'ALL' || upper === 'TOÀN HỆ THỐNG' || upper === 'TOAN HE THONG' || upper.includes('TOÀN HỆ THỐNG') || upper.includes('TOAN HE THONG')) {
         return 'ALL';
     }
-    
-    // Explicit regex match for CN followed by digit(s) e.g. CN1, CN2, CN01, etc.
+
     const m = upper.match(/CN\s*(\d+)/i);
     if (m) {
         return `CN${parseInt(m[1], 10)}`;
     }
-    
+
     const mChiNhanh = upper.match(/CHI\s*NH\xC1NH\s*(\d+)/i) || upper.match(/CHI\s*NHANH\s*(\d+)/i);
     if (mChiNhanh) {
         return `CN${parseInt(mChiNhanh[1], 10)}`;
     }
 
-    // Keywords matching known branch names from DB
     if (upper.includes('HUỲNH TẤN PHÁT') || upper.includes('HUYNH TAN PHAT') || upper.includes('QUẬN 7') || upper.includes('QUAN 7') || upper.includes('HÀ NỘI') || upper.includes('HA NOI')) {
         return 'CN2';
     }
@@ -99,7 +87,6 @@ function extractBranchCode(str) {
     return '';
 }
 
-// Dedicated helper for extracting branch code from an Order (nhap_xuat / the_kho)
 function extractOrderBranchCode(ord) {
     if (!ord) return '';
     if (ord.cn) {
@@ -127,7 +114,6 @@ function extractOrderBranchCode(ord) {
     return '';
 }
 
-// Dedicated helper for extracting branch code from a Pet Intake record
 function extractIntakeBranchCode(r) {
     if (!r) return '';
     if (r.cn) {
@@ -149,7 +135,6 @@ function extractIntakeBranchCode(r) {
     return '';
 }
 
-// --- 2. Dynamic Branch Dropdown based on Staff Table ---
 async function initTongQuanBranchDropdown() {
     const branchSelect = document.getElementById("tq-branch-filter");
     if (!branchSelect) return;
@@ -160,7 +145,6 @@ async function initTongQuanBranchDropdown() {
     userCN = userCN ? userCN.toUpperCase().trim() : "";
     const userBranchName = loggedUser ? (loggedUser.branch || "").trim() : "";
 
-    // 1. Fetch/Collect unique branches from staff table
     let staffList = (typeof staffData !== 'undefined' && Array.isArray(staffData) && staffData.length > 0) ? staffData : [];
     if (staffList.length === 0) {
         const client = getTongQuanSupabaseClient();
@@ -176,22 +160,29 @@ async function initTongQuanBranchDropdown() {
         }
     }
 
-    // Map of CN Code -> Full Branch Display Name from staff table
-    const branchMap = new Map(); // e.g. "CN1" => "CN1 - No. 2D, 22 Road...", "CN2" => "CN2 - Huỳnh Tấn Phát..."
-    
+    const branchMap = new Map();
+
+    // 1. Ưu tiên lấy từ bảng cài đặt cai_dat_he_thong
+    if (typeof window.getSystemBranchesDetailed === 'function') {
+        const sysBranches = window.getSystemBranchesDetailed();
+        sysBranches.forEach(b => {
+            if (b.code && b.code !== 'ALL') {
+                branchMap.set(b.code, b.name ? `${b.name} (${b.code})` : b.code);
+            }
+        });
+    }
+
+    // 2. Dự phòng thêm từ danh sách nhân viên nếu có chi nhánh khác
     staffList.forEach(s => {
         const rawBranch = (s.branch || "").trim();
         if (rawBranch && rawBranch !== "Toàn hệ thống" && rawBranch.toLowerCase() !== "all") {
             const cnCode = extractBranchCode(s.cn || rawBranch);
-            if (cnCode && cnCode !== "ALL") {
-                if (!branchMap.has(cnCode) || rawBranch.length > (branchMap.get(cnCode) || '').length) {
-                    branchMap.set(cnCode, rawBranch);
-                }
+            if (cnCode && cnCode !== "ALL" && !branchMap.has(cnCode)) {
+                branchMap.set(cnCode, rawBranch);
             }
         }
     });
 
-    // Ensure loggedUser branch is in map if present
     if (userBranchName && userBranchName !== "Toàn hệ thống" && userBranchName.toLowerCase() !== "all") {
         const cnCode = extractBranchCode(userBranchName);
         if (cnCode && cnCode !== "ALL" && !branchMap.has(cnCode)) {
@@ -199,9 +190,9 @@ async function initTongQuanBranchDropdown() {
         }
     }
 
-    // Fallbacks if database has no records yet
-    if (!branchMap.has("CN1")) branchMap.set("CN1", "CN1 - No. 2D, 22 Road, Hiep Binh Ward, Ho Chi Minh City");
-    if (!branchMap.has("CN2")) branchMap.set("CN2", "CN2 - Huỳnh Tấn Phát, Quận 7, Ho Chi Minh City");
+    if (branchMap.size === 0) {
+        branchMap.set("CN1", "Chi Nhánh 1 (CN1)");
+    }
 
     const currentSelection = branchSelect.value;
     branchSelect.innerHTML = "";
@@ -232,10 +223,10 @@ async function initTongQuanBranchDropdown() {
             tongQuanBranchFilter = "all";
         }
     } else {
-        // Strict lock for Staff / Doctor to their own branch from staff table
+
         const finalCN = userCN || "CN1";
         const finalBranchLabel = branchMap.get(finalCN) || userBranchName || `Chi Nhánh ${finalCN}`;
-        
+
         branchSelect.disabled = true;
         branchSelect.style.opacity = "0.85";
         branchSelect.style.cursor = "not-allowed";
@@ -250,26 +241,23 @@ async function initTongQuanBranchDropdown() {
     }
 }
 
-// --- 3. Initialize Dashboard ---
 window.initTongQuanDashboard = async function () {
-    // Populate branch filter dropdown dynamically from Staff Table & User permissions
+
     await initTongQuanBranchDropdown();
 
     if (!tongQuanIsInitialized) {
         tongQuanIsInitialized = true;
-        // Bind Event Listeners
+
         setupTongQuanEventListeners();
-        // Start Live Clock
+
         startDashboardLiveClock();
-        // Setup Supabase Realtime Listeners
+
         setupTongQuanRealtime();
     }
 
-    // Initial Data Fetch & Render
     await refreshTongQuanData();
 };
 
-// --- 4. Setup Event Listeners ---
 function setupTongQuanEventListeners() {
     const branchSelect = document.getElementById("tq-branch-filter");
     if (branchSelect) {
@@ -290,7 +278,6 @@ function setupTongQuanEventListeners() {
     }
 }
 
-// --- 5. Live Clock & Greeting ---
 function startDashboardLiveClock() {
     const clockEl = document.getElementById("tq-live-clock");
     const dateEl = document.getElementById("tq-live-date");
@@ -324,7 +311,6 @@ function startDashboardLiveClock() {
     setInterval(update, 1000);
 }
 
-// --- 6. Fetch / Refresh All Needed Data ---
 window.refreshTongQuanData = async function () {
     const client = getTongQuanSupabaseClient();
     if (!client) {
@@ -333,11 +319,11 @@ window.refreshTongQuanData = async function () {
     }
 
     try {
-        // Fetch pet_intakes if intakesData empty or stale
+
         if (typeof fetchInitialIntakes === 'function' && (!window.intakesData || window.intakesData.length === 0)) {
             await fetchInitialIntakes();
         } else {
-            // Background fetch latest pet_intakes
+
             const { data: intakes } = await client.from('pet_intakes').select('*').order('created_at', { ascending: false }).limit(200);
             if (intakes) {
                 if (typeof intakesData !== 'undefined') intakesData = intakes;
@@ -345,7 +331,6 @@ window.refreshTongQuanData = async function () {
             }
         }
 
-        // Fetch san_pham if vatTuData empty
         if (typeof vatTuData === 'undefined' || !vatTuData || vatTuData.length === 0) {
             const { data: vts } = await client.from('san_pham').select('*').limit(1500);
             if (vts) {
@@ -354,7 +339,6 @@ window.refreshTongQuanData = async function () {
             }
         }
 
-        // Fetch ton_kho_detail for accurate branch calculations
         if (typeof tonKhoDetailData === 'undefined' || !tonKhoDetailData || tonKhoDetailData.length === 0) {
             const { data: details } = await client.from('ton_kho_detail').select('*');
             if (details) {
@@ -363,7 +347,6 @@ window.refreshTongQuanData = async function () {
             }
         }
 
-        // Fetch nhap_xuat if nhapXuatData empty
         if (typeof nhapXuatData === 'undefined' || !nhapXuatData || nhapXuatData.length === 0) {
             const { data: nxs } = await client.from('nhap_xuat').select('*').order('created_at', { ascending: false }).limit(60);
             if (nxs) {
@@ -378,7 +361,6 @@ window.refreshTongQuanData = async function () {
     renderTongQuanDashboard();
 };
 
-// --- 7. Realtime Subscription ---
 function setupTongQuanRealtime() {
     const client = getTongQuanSupabaseClient();
     if (!client) return;
@@ -407,7 +389,6 @@ function setupTongQuanRealtime() {
     }
 }
 
-// --- Helper: Calculate Product Stock For Branch ---
 function getProductStockForBranch(item, branch, details) {
     const rawBarcode = (item.ma_vach || '').trim().toLowerCase();
     const matching = (details || []).filter(d => {
@@ -428,7 +409,6 @@ function getProductStockForBranch(item, branch, details) {
         }
     }
 
-    // Fallback to direct fields
     if (branch === 'CN1') {
         if (item.so_luong_cn1 !== undefined && item.so_luong_cn1 !== null) return Number(item.so_luong_cn1) || 0;
         return Number(item.ton_cuoi ?? item.so_luong ?? 0);
@@ -439,33 +419,28 @@ function getProductStockForBranch(item, branch, details) {
     return Number(item.ton_cuoi ?? item.so_luong ?? 0);
 }
 
-// --- 8. Main Render Logic ---
 window.renderTongQuanDashboard = function () {
     const rawIntakes = (typeof intakesData !== 'undefined' && Array.isArray(intakesData)) ? intakesData : (window.intakesData || []);
     const rawVatTu = (typeof vatTuData !== 'undefined' && Array.isArray(vatTuData)) ? vatTuData : (window.vatTuData || []);
     const rawDetails = (typeof tonKhoDetailData !== 'undefined' && Array.isArray(tonKhoDetailData)) ? tonKhoDetailData : (window.tonKhoDetailData || []);
     const rawNhapXuat = (typeof nhapXuatData !== 'undefined' && Array.isArray(nhapXuatData)) ? nhapXuatData : (window.nhapXuatData || []);
 
-    const branch = tongQuanBranchFilter; // 'all', 'CN1', 'CN2', ...
+    const branch = tongQuanBranchFilter; 
 
-    // Filter Intakes by branch
     const intakes = rawIntakes.filter(r => {
         if (branch === 'all') return true;
         const cn = extractIntakeBranchCode(r);
         return cn === branch;
     });
 
-    // Filter Nhap Xuat by branch
     const nhapXuatList = rawNhapXuat.filter(order => {
         if (branch === 'all') return true;
         const cn = extractOrderBranchCode(order);
         return cn === branch;
     });
 
-    // --- Compute Key Metrics ---
     const todayStr = new Date().toISOString().substring(0, 10);
-    
-    // 1. Intakes Metrics
+
     const todayIntakesList = intakes.filter(r => {
         const d = (r.created_at || r.date_signed || "").substring(0, 10);
         return d === todayStr;
@@ -475,7 +450,6 @@ window.renderTongQuanDashboard = function () {
     const doneCount = todayIntakesList.filter(r => r.trang_thai === 'done' || r.trang_thai === 'kham_xong' || r.trang_thai === 'tiep_nhan').length;
     const processingCount = todayIntakesList.filter(r => r.trang_thai === 'processing' || r.trang_thai === 'dang_kham').length;
 
-    // 2. Inventory Metrics (Evaluated according to active branch filter!)
     let lowStockItems = [];
     let outOfStockItems = [];
     let nearExpiryItems = [];
@@ -497,7 +471,6 @@ window.renderTongQuanDashboard = function () {
             lowStockItems.push(itemWithComputedTon);
         }
 
-        // Check Expiry Date
         const dateStr = item.date || item.date_expiry || item.han_su_dung;
         if (dateStr && dateStr !== '-' && dateStr !== 'null') {
             const expDate = parseExpiryDate(dateStr);
@@ -511,19 +484,16 @@ window.renderTongQuanDashboard = function () {
         }
     });
 
-    // Sort expiry items by days left ascending
     nearExpiryItems.sort((a, b) => a.daysLeft - b.daysLeft);
     expiredItems.sort((a, b) => a.daysLeft - b.daysLeft);
 
-    // 3. Stock Movement Metrics
     const recentOrdersCount = nhapXuatList.length;
 
-    // 4. Top Export Items (compute from theKhoData)
     const rawTheKho = (typeof theKhoData !== 'undefined' && Array.isArray(theKhoData)) ? theKhoData : (window.theKhoData || []);
     const exportMap = {};
     rawTheKho.forEach(tk => {
         if ((tk.loai || '').toLowerCase() !== 'xuất') return;
-        // Filter by branch if needed
+
         if (branch !== 'all') {
             const tkBranch = extractBranchCode(tk.user_name || '');
             if (tkBranch && tkBranch !== branch) return;
@@ -540,7 +510,7 @@ window.renderTongQuanDashboard = function () {
         }
         exportMap[key].tongXuat += Number(tk.so_luong) || 0;
     });
-    // If theKhoData empty, fallback to nhapXuatData items
+
     if (Object.keys(exportMap).length === 0) {
         rawNhapXuat.forEach(ord => {
             if ((ord.loai_don || '').toLowerCase() !== 'xuất') return;
@@ -568,13 +538,12 @@ window.renderTongQuanDashboard = function () {
         .sort((a, b) => b.tongXuat - a.tongXuat)
         .slice(0, 8);
 
-    // 5. Branch Breakdown Stats (Comparison CN1 vs CN2) — Manager only
     const loggedUserForRender = getTongQuanLoggedUser();
     const isManagerForRender = isTongQuanManager(loggedUserForRender);
 
     const cn1IntakesCount = rawIntakes.filter(r => extractIntakeBranchCode(r) === 'CN1' && (r.created_at || '').substring(0, 10) === todayStr).length;
     const cn2IntakesCount = rawIntakes.filter(r => extractIntakeBranchCode(r) === 'CN2' && (r.created_at || '').substring(0, 10) === todayStr).length;
-    
+
     let cn1StockSum = 0;
     let cn2StockSum = 0;
     rawVatTu.forEach(item => {
@@ -582,13 +551,11 @@ window.renderTongQuanDashboard = function () {
         cn2StockSum += getProductStockForBranch(item, 'CN2', rawDetails);
     });
 
-    // Show/hide Widget 5 (Branch Comparison) based on role: Manager only
     const branchComparisonWidget = document.getElementById('tq-widget-branch-comparison');
     if (branchComparisonWidget) {
         branchComparisonWidget.style.display = isManagerForRender ? '' : 'none';
     }
 
-    // --- Update KPI DOM Elements ---
     updateKpiCards({
         todayCount,
         newCount,
@@ -603,7 +570,6 @@ window.renderTongQuanDashboard = function () {
         recentOrdersCount
     });
 
-    // --- Render Sub-Sections ---
     renderRecentIntakesTable(intakes.slice(0, 6));
     renderTopExportList(topExportItems, rawVatTu, rawDetails, branch);
     renderExpiryWatchlist([...expiredItems, ...nearExpiryItems].slice(0, 6));
@@ -618,12 +584,10 @@ window.renderTongQuanDashboard = function () {
     }
 };
 
-// --- Helper: Parse Expiry Date ---
 function parseExpiryDate(dateStr) {
     if (!dateStr || dateStr === '-') return null;
     const s = String(dateStr).trim();
-    
-    // Case DD/MM/YYYY
+
     if (s.includes('/')) {
         const parts = s.split('/');
         if (parts.length === 3) {
@@ -639,7 +603,7 @@ function parseExpiryDate(dateStr) {
             return new Date(y, m, 28);
         }
     }
-    // Case YYYY-MM-DD
+
     if (s.includes('-')) {
         const d = new Date(s);
         if (!isNaN(d.getTime())) return d;
@@ -647,9 +611,8 @@ function parseExpiryDate(dateStr) {
     return null;
 }
 
-// --- 9. Update Top KPI Cards ---
 function updateKpiCards(stats) {
-    // 1. Ca Khám Hôm Nay
+
     const kpi1Val = document.getElementById("tq-kpi-intakes-val");
     const kpi1Badge = document.getElementById("tq-kpi-intakes-badge");
     const kpi1Desc = document.getElementById("tq-kpi-intakes-desc");
@@ -669,7 +632,6 @@ function updateKpiCards(stats) {
         kpi1Desc.textContent = `${stats.doneCount} đã khám xong • ${stats.processingCount} đang tiếp nhận`;
     }
 
-    // 2. Tồn Kho Cảnh Báo (Out of Stock / Low Stock)
     const kpi2Val = document.getElementById("tq-kpi-stock-val");
     const kpi2Badge = document.getElementById("tq-kpi-stock-badge");
     const kpi2Desc = document.getElementById("tq-kpi-stock-desc");
@@ -693,7 +655,6 @@ function updateKpiCards(stats) {
         kpi2Desc.textContent = `${stats.outOfStockCount} đã hết sạch (tồn 0) • ${stats.lowStockCount} dưới mức an toàn`;
     }
 
-    // 3. Dược Phẩm Cận Hạn Dùng
     const kpi3Val = document.getElementById("tq-kpi-expiry-val");
     const kpi3Badge = document.getElementById("tq-kpi-expiry-badge");
     const kpi3Desc = document.getElementById("tq-kpi-expiry-desc");
@@ -717,7 +678,6 @@ function updateKpiCards(stats) {
         kpi3Desc.textContent = `${stats.expiredCount} quá hạn • ${stats.nearExpiryCount} cận date (≤60 ngày)`;
     }
 
-    // 4. Hoạt Động Kho & Nhập Xuất
     const kpi4Val = document.getElementById("tq-kpi-orders-val");
     const kpi4Desc = document.getElementById("tq-kpi-orders-desc");
     if (kpi4Val) kpi4Val.textContent = `${stats.recentOrdersCount} đơn`;
@@ -726,7 +686,6 @@ function updateKpiCards(stats) {
     }
 }
 
-// --- 10. Render Recent Intakes Table ---
 function renderRecentIntakesTable(records) {
     const container = document.getElementById("tq-recent-intakes-list");
     if (!container) return;
@@ -807,8 +766,6 @@ function renderRecentIntakesTable(records) {
     container.innerHTML = html;
 }
 
-// --- 11. Render Low Stock Table ---
-// --- 11. Render Top Export Items List ---
 function renderTopExportList(topItems, rawVatTu, rawDetails, branch) {
     const container = document.getElementById('tq-top-export-list');
     if (!container) return;
@@ -834,7 +791,6 @@ function renderTopExportList(topItems, rawVatTu, rawDetails, branch) {
         const rank = idx + 1;
         const rankClass = rank === 1 ? 'tq-rank-1' : rank === 2 ? 'tq-rank-2' : rank === 3 ? 'tq-rank-3' : 'tq-rank-other';
 
-        // Compute current stock for this branch
         const vatTuItem = rawVatTu.find(v => v.ma_vach === item.ma_vach);
         const ton = vatTuItem ? getProductStockForBranch(vatTuItem, branch, rawDetails) : 0;
         const stockClass = ton <= 0 ? 'zero-stock' : 'has-stock';
@@ -930,7 +886,6 @@ function renderLowStockTable(items) {
     container.innerHTML = html;
 }
 
-// --- 12. Render Expiry Watchlist ---
 function renderExpiryWatchlist(items) {
     const container = document.getElementById("tq-expiry-watchlist");
     if (!container) return;
@@ -976,7 +931,6 @@ function renderExpiryWatchlist(items) {
     container.innerHTML = html;
 }
 
-// --- 13. Render Recent Warehouse Movement Timeline ---
 function renderRecentWarehouseTimeline(orders) {
     const container = document.getElementById("tq-recent-orders-timeline");
     if (!container) return;
@@ -997,7 +951,7 @@ function renderRecentWarehouseTimeline(orders) {
         const iconSvg = isNhap 
             ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>`
             : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
-        
+
         const typeBadge = isNhap 
             ? `<span class="badge-type-nhap">Nhập Kho</span>` 
             : `<span class="badge-type-xuat">Xuất Kho</span>`;
@@ -1029,7 +983,6 @@ function renderRecentWarehouseTimeline(orders) {
     container.innerHTML = html;
 }
 
-// --- 14. Render Branch Comparison Progress Bars ---
 function renderBranchComparisonBars(data) {
     const totalIntakes = (data.cn1Intakes || 0) + (data.cn2Intakes || 0);
     let cn1IntakePct = 50;
@@ -1068,12 +1021,10 @@ function renderBranchComparisonBars(data) {
     if (elStockTxtCn2) elStockTxtCn2.textContent = `CN2: ${(data.cn2Stock || 0).toLocaleString('vi-VN')} đv (${cn2StockPct}%)`;
 }
 
-// --- Helper Functions for Navigation & Jump ---
 window.jumpToView = function (viewName) {
     window.location.hash = viewName;
 };
 
-// Jump to Vật Tư view and filter specifically for Out of Stock (Tồn Cuối = 0)
 window.jumpToVatTuLowStock = function () {
     window.location.hash = 'vat-tu';
     setTimeout(() => {
@@ -1083,7 +1034,6 @@ window.jumpToVatTuLowStock = function () {
     }, 250);
 };
 
-// Jump to Vật Tư view and filter specifically for Near Expiry / Expired products (≤ 60d)
 window.jumpToVatTuExpiryWatch = function () {
     window.location.hash = 'vat-tu';
     setTimeout(() => {
@@ -1133,12 +1083,12 @@ window.jumpToCreateImportOrder = function (maVach, tenMatHang) {
 
 window.jumpToNxOrder = function (orderId) {
     window.location.hash = 'nhap-xuat';
-    // Trigger navigation click to activate the view
+
     const navEl = document.querySelector('[data-view="nhap-xuat"], [href="#nhap-xuat"]');
     if (navEl) navEl.click();
 
     setTimeout(() => {
-        // Find the order in nhapXuatData and open it
+
         const rawNx = (typeof nhapXuatData !== 'undefined' && Array.isArray(nhapXuatData))
             ? nhapXuatData
             : (window.nhapXuatData || []);
@@ -1146,7 +1096,7 @@ window.jumpToNxOrder = function (orderId) {
         if (order && typeof window.selectNxOrderForView === 'function') {
             window.selectNxOrderForView(order);
         } else {
-            // Fallback: scroll to matching card
+
             const cards = document.querySelectorAll('.nx-order-card');
             cards.forEach(card => {
                 const codeEl = card.querySelector('.nx-card-code');
@@ -1159,7 +1109,6 @@ window.jumpToNxOrder = function (orderId) {
     }, 350);
 };
 
-// --- Helpers: Formatting & Icons ---
 function formatTqTime(iso) {
     if (!iso) return '-';
     try {

@@ -1,10 +1,3 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Nhập Xuất (Stock Import/Export Module) (nhap_xuat.js)
-   Features: Split 3-Part View (1 Part List | 2 Parts Form & Items),
-   QR/Barcode Parsing (MãVạch;LOT;Date), Auto-increment Quantity,
-   Supabase Database Persistence & Automatic Realtime Sync to Thẻ Kho (the_kho)
-   ========================================================================== */
-
 let nhapXuatData = [];
 let filteredNhapXuatData = [];
 let selectedNxOrderId = null;
@@ -19,7 +12,6 @@ let currentDraftOrder = {
     items: []
 };
 
-// Supabase Client Initializer
 function getNhapXuatSupabaseClient() {
     if (window.supabaseClient) return window.supabaseClient;
     if (typeof supabase !== 'undefined' && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
@@ -33,13 +25,12 @@ function getNhapXuatSupabaseClient() {
     return null;
 }
 
-// LocalStorage Draft Persistence Helpers
 function saveNxDraftToStorage() {
-    // Disabled by user request
+
 }
 
 function loadNxDraftFromStorage() {
-    // Disabled by user request
+
     return false;
 }
 
@@ -57,7 +48,6 @@ function clearNxDraftStorage() {
     currentDraftNxItems = [];
 }
 
-// Module Initialization
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initNhapXuatModule);
 } else {
@@ -69,7 +59,7 @@ function initNhapXuatModule() {
     bindNhapXuatEvents();
     loadNxDraftFromStorage();
     fetchNhapXuatData();
-    createNewNhapXuatOrderForm(true); // true = restore draft if available
+    createNewNhapXuatOrderForm(true); 
     setupNhapXuatRealtimeSubscription();
     initNxFolderWatcher();
 }
@@ -99,6 +89,24 @@ function bindNhapXuatEvents() {
             renderNhapXuatOrderList(filteredNhapXuatData);
             checkNxOrderModified();
         });
+
+        mucdichInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = mucdichInput.value.trim();
+                currentDraftOrder.muc_dich = val;
+                saveNxDraftToStorage();
+                
+                const scannerInput = document.getElementById('nx-qr-scanner-input');
+                if (scannerInput) {
+                    scannerInput.focus();
+                    scannerInput.select();
+                }
+                if (typeof showToast === 'function') {
+                    showToast('success', 'Đã Nhận Mục Đích', 'Mục đích đơn đã ghi nhận. Hãy quét mã sản phẩm!', 2000);
+                }
+            }
+        });
     }
 
     let currentManagerSelectedBranch = localStorage.getItem('gaia_nx_selected_branch') || '';
@@ -120,7 +128,7 @@ function bindNhapXuatEvents() {
                 let currentCode = maDonInput.value;
                 const parts = currentCode.split('-');
                 if (parts.length >= 4 && newBranchCode) {
-                    parts[2] = newBranchCode; // Dynamically sync order code branch tag (CN1 -> CN2)
+                    parts[2] = newBranchCode; 
                     updatedCode = parts.join('-');
                     maDonInput.value = updatedCode;
                     if (typeof currentDraftOrder !== 'undefined' && currentDraftOrder) {
@@ -137,7 +145,6 @@ function bindNhapXuatEvents() {
                 }
             }
 
-            // IMMEDIATE DATABASE UPDATE FOR EXISTING ORDERS
             if (selectedNxOrderId !== null) {
                 const client = getNhapXuatSupabaseClient();
                 if (client) {
@@ -197,7 +204,6 @@ function bindNhapXuatEvents() {
     });
 }
 
-// Robust helper to extract CN code from any branch string
 function extractCNCodeFromBranchString(branchStr) {
     if (!branchStr) return '';
     const str = String(branchStr).trim();
@@ -216,12 +222,25 @@ function extractCNCodeFromBranchString(branchStr) {
     return '';
 }
 
-// Fetch distinct branch strings directly from Supabase table 'staff' (column 'branch')
 async function fetchBranchesFromStaffTable() {
     let branches = [];
-    const client = (typeof getNhapXuatSupabaseClient === 'function') ? getNhapXuatSupabaseClient() : null;
-    try {
-        if (client) {
+    // 1. Ưu tiên lấy từ bảng cài đặt hệ thống (cai_dat_he_thong)
+    if (typeof window.getSystemBranches === 'function') {
+        const sysBranches = window.getSystemBranches();
+        if (Array.isArray(sysBranches) && sysBranches.length > 0) {
+            sysBranches.forEach(b => {
+                if (b && b.trim() && b !== 'Toàn hệ thống') branches.push(b.trim());
+            });
+            if (branches.length > 0) {
+                return Array.from(new Set(branches));
+            }
+        }
+    }
+
+    // 2. Dự phòng lấy từ bảng staff
+    const client = getNhapXuatSupabaseClient();
+    if (client) {
+        try {
             const { data, error } = await client.from('staff').select('branch');
             if (!error && data && Array.isArray(data)) {
                 data.forEach(item => {
@@ -230,12 +249,11 @@ async function fetchBranchesFromStaffTable() {
                     }
                 });
             }
+        } catch (e) {
+            console.warn("NhapXuat: Error fetching staff table branches:", e);
         }
-    } catch (e) {
-        console.warn("NhapXuat: Error fetching staff table branches:", e);
     }
 
-    // Fallback to local staffData / localStorage gaia_staff_list if Supabase table query is empty/offline
     if (branches.length === 0) {
         let localList = [];
         if (typeof staffData !== 'undefined' && Array.isArray(staffData) && staffData.length > 0) {
@@ -256,11 +274,9 @@ async function fetchBranchesFromStaffTable() {
         });
     }
 
-    // Deduplicate
     return Array.from(new Set(branches));
 }
 
-// Check if logged-in user is STRICTLY Quản Lý (Excludes Admin & Staff)
 function isStrictManagerRole(user) {
     const u = user || (typeof window.getCurrentLoggedUser === 'function' ? window.getCurrentLoggedUser() : null);
     if (!u) return false;
@@ -268,7 +284,6 @@ function isStrictManagerRole(user) {
     return roleLower.includes('quản lý') || roleLower.includes('quan ly') || roleLower === 'manager';
 }
 
-// Populate Branch Options ONLY for Quản Lý - Directly from 'staff' table 'branch' column
 async function populateNxManagerBranches() {
     const branchSelect = document.getElementById('nx-manager-branch-select');
     if (!branchSelect) return;
@@ -277,36 +292,58 @@ async function populateNxManagerBranches() {
     const isStrictManager = isStrictManagerRole(loggedUser);
 
     if (!isStrictManager) {
-        // Admin & Staff: Hide dropdown, auto-use their own branch from staff table
         branchSelect.style.display = 'none';
         return;
     }
 
-    const rawBranches = await fetchBranchesFromStaffTable();
+    // 1. Ưu tiên lấy chi tiết từ getSystemBranchesDetailed
+    let branchItems = [];
+    if (typeof window.getSystemBranchesDetailed === 'function') {
+        branchItems = window.getSystemBranchesDetailed();
+    }
 
     branchSelect.innerHTML = `<option value="" disabled selected>-- Chọn Chi Nhánh --</option>`;
-    
-    rawBranches.forEach(bStr => {
-        const code = extractCNCodeFromBranchString(bStr);
-        const optionEl = document.createElement('option');
-        optionEl.value = code || bStr;
-        optionEl.dataset.fullBranch = bStr;
 
-        let labelText = bStr;
-        if (labelText.length > 28) {
-            labelText = labelText.substring(0, 25) + '...';
-        }
-        optionEl.textContent = `📍 ${labelText}`;
-        optionEl.title = bStr;
-        branchSelect.appendChild(optionEl);
-    });
+    if (branchItems.length > 0) {
+        branchItems.forEach(item => {
+            const code = item.code;
+            const name = item.name || code;
+            const optionEl = document.createElement('option');
+            optionEl.value = code;
+            optionEl.dataset.fullBranch = name;
+            optionEl.textContent = `📍 ${name} (${code})`;
+            optionEl.title = name;
+            branchSelect.appendChild(optionEl);
+        });
+    } else {
+        const rawBranches = await fetchBranchesFromStaffTable();
+        rawBranches.forEach(bStr => {
+            const code = extractCNCodeFromBranchString(bStr);
+            const optionEl = document.createElement('option');
+            optionEl.value = code || bStr;
+            optionEl.dataset.fullBranch = bStr;
+
+            let labelText = bStr;
+            if (labelText.length > 28) {
+                labelText = labelText.substring(0, 25) + '...';
+            }
+            optionEl.textContent = `📍 ${labelText}`;
+            optionEl.title = bStr;
+            branchSelect.appendChild(optionEl);
+        });
+    }
 
     const activeBranch = window.currentManagerSelectedBranch || localStorage.getItem('gaia_nx_selected_branch') || "";
-    branchSelect.value = activeBranch;
+    if (activeBranch && branchSelect.querySelector(`option[value="${activeBranch}"]`)) {
+        branchSelect.value = activeBranch;
+    } else if (branchSelect.options.length > 1) {
+        branchSelect.selectedIndex = 1;
+        window.currentManagerSelectedBranch = branchSelect.value;
+        localStorage.setItem('gaia_nx_selected_branch', branchSelect.value);
+    }
     branchSelect.style.display = 'inline-block';
 }
 
-// Formats `#nx-input-user` as [Tên Người Đăng Nhập] - [Chi Nhánh]
 function updateNxUserFieldWithBranch() {
     const userInput = document.getElementById('nx-input-user');
     if (!userInput) return '';
@@ -331,9 +368,9 @@ function updateNxUserFieldWithBranch() {
                 branchSelect.value = selectedCN;
             }
         }
-        // Requirement: Ban đầu khi chưa chọn CN thì chỉ xuất hiện tên NV thôi (selectedCN = '')
+
     } else {
-        // Admin & Staff: Auto-add branch directly from their own 'branch' column in staff table!
+
         let userBranchStr = loggedUser ? (loggedUser.branch || '') : '';
 
         if (!userBranchStr && typeof window.getUserBranch === 'function' && loggedUser) {
@@ -356,10 +393,6 @@ function updateNxUserFieldWithBranch() {
     return formattedUser;
 }
 
-
-
-
-// Fetch Orders from Supabase table 'nhap_xuat'
 async function fetchNhapXuatData() {
     const client = getNhapXuatSupabaseClient();
     try {
@@ -386,16 +419,14 @@ async function fetchNhapXuatData() {
     } finally {
         await initNhapXuatBranchFilterForManager();
         applyNhapXuatFilters();
-        window.nhapXuatData = nhapXuatData; // expose for global search
+        window.nhapXuatData = nhapXuatData; 
     }
 }
 
-// Sample Fallback Data (Cleaned - returns empty array by default)
 function getSampleNhapXuatData() {
     return [];
 }
 
-// Supabase Realtime Channel
 function setupNhapXuatRealtimeSubscription() {
     const client = getNhapXuatSupabaseClient();
     if (!client) return;
@@ -414,7 +445,6 @@ function setupNhapXuatRealtimeSubscription() {
     }
 }
 
-// Init & Populate Manager Branch Filter for Nhập Xuất List
 async function initNhapXuatBranchFilterForManager() {
     const filterBranchSelect = document.getElementById('nhapxuat-filter-branch');
     if (!filterBranchSelect) return;
@@ -435,7 +465,7 @@ async function initNhapXuatBranchFilterForManager() {
         const optionEl = document.createElement('option');
         optionEl.value = code || bStr;
         optionEl.dataset.fullBranch = bStr;
-        
+
         let labelText = bStr;
         if (labelText.length > 25) {
             labelText = labelText.substring(0, 22) + '...';
@@ -448,7 +478,6 @@ async function initNhapXuatBranchFilterForManager() {
     filterBranchSelect.style.display = 'inline-block';
 }
 
-// Filters & Order List Rendering
 function applyNhapXuatFilters() {
     const searchInput = document.getElementById('nhapxuat-search-input');
     const term = searchInput ? searchInput.value.trim().toLowerCase() : '';
@@ -464,12 +493,10 @@ function applyNhapXuatFilters() {
 
     let result = [...nhapXuatData];
 
-    // Apply Role & Branch Permission Filter (Admin & Staff restricted to their own branch; Manager sees all)
     result = result.filter(item => {
         return (typeof window.canUserAccessRecord === 'function') ? window.canUserAccessRecord(item) : true;
     });
 
-    // Apply Manager Branch Filter Dropdown
     if (selectedBranch && selectedBranch !== 'all') {
         result = result.filter(x => {
             const itemCN = extractCNCodeFromBranchString(x.user_name || x.branch || '');
@@ -502,7 +529,6 @@ function applyNhapXuatFilters() {
         );
     }
 
-    // Update Funnel Reset Button highlight state (turns RED if any filter is active)
     const isFilteringActive = !!(term || (selectedLoai && selectedLoai !== 'all') || (selectedStatus && selectedStatus !== 'all') || (selectedBranch && selectedBranch !== 'all'));
     const funnelBtn = document.getElementById('nhapxuat-funnel-reset-btn');
     if (funnelBtn) {
@@ -524,11 +550,9 @@ function applyNhapXuatFilters() {
     filteredNhapXuatData = result;
     renderNhapXuatOrderList(filteredNhapXuatData);
 
-    // Update dynamic options and counts across all 3 filter dropdowns
     updateNxFilterDropdownOptions();
 }
 
-// Dynamic Cascading Options Updater: Calculates real-time available counts for each dropdown option based on other active filters
 function updateNxFilterDropdownOptions() {
     const searchInput = document.getElementById('nhapxuat-search-input');
     const term = searchInput ? searchInput.value.trim().toLowerCase() : '';
@@ -554,7 +578,6 @@ function updateNxFilterDropdownOptions() {
         );
     }
 
-    // 1. UPDATE 'LOẠI ĐƠN' OPTIONS (depends on Branch + Status)
     let recordsForLoai = baseRecords;
     if (selectedBranch && selectedBranch !== 'all') {
         recordsForLoai = recordsForLoai.filter(x => {
@@ -591,7 +614,6 @@ function updateNxFilterDropdownOptions() {
         }
     }
 
-    // 2. UPDATE 'TRẠNG THÁI' OPTIONS (depends on Branch + Loai)
     let recordsForStatus = baseRecords;
     if (selectedBranch && selectedBranch !== 'all') {
         recordsForStatus = recordsForStatus.filter(x => {
@@ -629,7 +651,6 @@ function updateNxFilterDropdownOptions() {
         }
     }
 
-    // 3. UPDATE 'CHI NHÁNH' OPTIONS (depends on Loai + Status)
     let recordsForBranch = baseRecords;
     if (selectedLoai && selectedLoai !== 'all') {
         recordsForBranch = recordsForBranch.filter(x => x.loai_don === selectedLoai);
@@ -678,7 +699,6 @@ function resetNxFilters() {
 }
 window.resetNxFilters = resetNxFilters;
 
-
 let originalOrderStateSnapshot = null;
 
 function getAvailableStockInNx(ma_vach, lot, date_expiry, branchCode, excludeMaDon) {
@@ -718,12 +738,12 @@ function validateNxDraftStock() {
 function updateNxSaveButtonState(hasChanges = true) {
     const saveBtn = document.getElementById('btn-save-nx-order');
     if (!saveBtn) return;
-    
+
     const isValidStock = validateNxDraftStock();
     const canSave = hasChanges && isValidStock;
 
     if (selectedNxOrderId !== null) {
-        // VIEWING / EDITING EXISTING ORDER MODE
+
         saveBtn.innerHTML = '💾 Cập Nhật';
         if (canSave) {
             saveBtn.disabled = false;
@@ -737,7 +757,7 @@ function updateNxSaveButtonState(hasChanges = true) {
             saveBtn.style.background = '#4b5563';
         }
     } else {
-        // CREATING NEW DRAFT ORDER MODE
+
         saveBtn.innerHTML = '💾 Lưu';
         if (isValidStock) {
             saveBtn.disabled = false;
@@ -774,18 +794,17 @@ function checkNxOrderModified() {
     updateNxSaveButtonState(isModified);
 }
 
-// Helper: Phân biệt nguồn gốc của đơn (Thư mục tự động, PDF tải lên, hoặc Tạo thủ công/quét tay)
 function getNxOrderSourceInfo(order) {
     if (!order) return { type: 'thu_cong', label: '✍️ Thủ công', icon: '✍️', bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: 'rgba(16, 185, 129, 0.35)', desc: 'Đơn tự tạo hoặc quét mã trực tiếp' };
 
     let src = order.nguon_don;
     if (!src) {
-        // Fallback cho đơn cũ chưa có trường nguon_don
+
         const mucDich = (order.muc_dich || '').toLowerCase();
         if (mucDich.includes('[auto folder]') || mucDich.includes('[tự động theo dõi]') || mucDich.includes('[tự động')) {
             src = 'auto_folder';
         } else {
-            // Mặc định là thủ công — KHÔNG dựa vào file_url vì đính kèm PDF ≠ đơn nhập từ PDF
+
             src = 'thu_cong';
         }
     }
@@ -829,7 +848,6 @@ function renderNhapXuatOrderList(orders) {
 
     listEl.innerHTML = '';
 
-    // Requirement: Show Draft Order Card ONLY when creating a new order (selectedNxOrderId === null)!
     const isEditingDraft = selectedNxOrderId === null;
     const hasDraftContent = (currentDraftNxItems && currentDraftNxItems.length > 0) || 
                            Boolean(currentDraftOrder.loai_don) || 
@@ -838,7 +856,7 @@ function renderNhapXuatOrderList(orders) {
     if (isEditingDraft && hasDraftContent) {
         const draftTitleTag = currentDraftOrder.loai_don ? `${currentDraftOrder.loai_don} - Nháp` : 'Nháp';
         const draftQtyCount = (currentDraftNxItems || []).length;
-        
+
         const draftCard = document.createElement('div');
         draftCard.className = 'nx-order-card selected';
         draftCard.style.border = '1px dashed #f59e0b';
@@ -919,7 +937,6 @@ function renderNhapXuatOrderList(orders) {
 
 let currentNxLogs = [];
 
-// Modal Open/Close Helpers
 function openNxHistoryLogModal() {
     const modal = document.getElementById('nx-history-log-modal');
     const codeEl = document.getElementById('nx-modal-log-code');
@@ -942,7 +959,6 @@ function closeNxHistoryLogModal() {
     }
 }
 
-// Close Modal when clicking on overlay backdrop
 window.addEventListener('click', (e) => {
     const modal = document.getElementById('nx-history-log-modal');
     if (modal && e.target === modal) {
@@ -950,15 +966,14 @@ window.addEventListener('click', (e) => {
     }
 });
 
-// Audit Log Creator Helper
 async function logNxOrderAction(maDon, loaiDon, hanhDong, noiDung) {
     if (!maDon) return;
     const userName = (document.getElementById('nx-input-user')?.value) || 'Thái Trung Tín - CN1';
-    
+
     const logPayload = {
         ma_don: maDon,
         loai_don: loaiDon || 'Nhập',
-        hanh_dong: hanhDong, // 'TẠO_ĐƠN', 'THÊM_SP', 'XÓA_SP', 'SỬA_SL', 'CẬP_NHẬT_ĐƠN'
+        hanh_dong: hanhDong, 
         noi_dung: noiDung,
         user_name: userName,
         created_at: new Date().toISOString()
@@ -977,13 +992,11 @@ async function logNxOrderAction(maDon, loaiDon, hanhDong, noiDung) {
     }
 }
 
-// REQUIREMENT: Merge Qty Increase Logs into a SINGLE Row per product item (e.g. 1 -> 4)
 async function logOrUpdateItemQtyLog(maDon, loaiDon, tenHangHoa, startQty, newQty) {
     if (!maDon || !tenHangHoa) return;
     const userName = (document.getElementById('nx-input-user')?.value) || 'Thái Trung Tín - CN1';
     const newText = `Quét trùng mã -> Tự động tăng số lượng [${tenHangHoa}] từ ${startQty} lên ${newQty}`;
 
-    // Search existing log entry for this exact product item in currentNxLogs
     const existingLog = currentNxLogs.find(l => 
         l.ma_don === maDon && 
         (l.hanh_dong === 'SỬA_SL' || l.hanh_dong === 'THÊM_SP') &&
@@ -1013,7 +1026,6 @@ async function logOrUpdateItemQtyLog(maDon, loaiDon, tenHangHoa, startQty, newQt
     }
 }
 
-// Fetch Order Audit Logs from Supabase
 async function fetchNxOrderLogs(maDon) {
     if (!maDon) {
         currentNxLogs = [];
@@ -1041,7 +1053,6 @@ async function fetchNxOrderLogs(maDon) {
     }
 }
 
-// Render Order Audit Log Table (Supports both inline and Modal)
 function renderNxOrderLogs(logs) {
     const modalTbody = document.getElementById('nx-log-modal-table-body');
     const inlineTbody = document.getElementById('nx-log-table-body');
@@ -1102,17 +1113,16 @@ function renderNxOrderLogs(logs) {
     });
 }
 
-// Helper: Kiểm tra có thay đổi chưa lưu không
 function hasUnsavedNxChanges() {
     if (selectedNxOrderId === null) {
-        // Đang tạo đơn mới – check có dữ liệu gì không
+
         const loai = document.getElementById('nx-input-loai')?.value || '';
         const mucDich = document.getElementById('nx-input-mucdich')?.value?.trim() || '';
         const hasItems = currentDraftNxItems && currentDraftNxItems.length > 0;
         const hasAttachments = currentNxAttachments && currentNxAttachments.length > 0;
         return !!(loai || mucDich || hasItems || hasAttachments);
     } else {
-        // Đang xem/sửa đơn cũ – so sánh với snapshot
+
         if (!originalOrderStateSnapshot) return false;
         const currentState = JSON.stringify({
             loai_don: document.getElementById('nx-input-loai')?.value || '',
@@ -1124,9 +1134,8 @@ function hasUnsavedNxChanges() {
     }
 }
 
-// Select Order from List to View Details
 function selectNxOrderForView(order) {
-    // Guard: Nếu đang có thay đổi chưa lưu → hỏi trước khi chuyển đơn
+
     if (hasUnsavedNxChanges()) {
         const warningTitle = selectedNxOrderId === null
             ? 'Bỏ Đơn Đang Tạo?'
@@ -1150,7 +1159,6 @@ function selectNxOrderForView(order) {
     _doSelectNxOrderForView(order);
 }
 
-// Internal: thực sự load đơn vào form (không guard)
 async function _doSelectNxOrderForView(order) {
     selectedNxOrderId = order.id;
     isEditingNxOrder = true;
@@ -1162,10 +1170,9 @@ async function _doSelectNxOrderForView(order) {
     const fileLink = document.getElementById('nhapxuat-file-link');
 
     if (titleEl) titleEl.textContent = `📋 Chi Tiết Đơn ${order.ma_don}`;
-    
-    // Render Source Origin Badge
+
     if (sourceBadge) {
-        sourceBadge.style.display = 'none'; // User requested to hide this badge completely
+        sourceBadge.style.display = 'none'; 
     }
 
     if (fileLink) {
@@ -1212,7 +1219,6 @@ async function _doSelectNxOrderForView(order) {
         modeBadge.style.color = '#3b82f6';
     }
 
-    // Buttons & Scanner Control
     const btnCancel = document.getElementById('btn-cancel-nx-order');
     const btnRestore = document.getElementById('btn-restore-nx-order');
     const btnHardDelete = document.getElementById('btn-hard-delete-nx-order');
@@ -1229,7 +1235,7 @@ async function _doSelectNxOrderForView(order) {
         if (btnCancel) btnCancel.style.display = 'none';
         if (btnRestore) btnRestore.style.display = 'flex';
         if (btnHardDelete) btnHardDelete.style.display = canHardDelete ? 'flex' : 'none';
-        if (btnSave) btnSave.style.display = 'flex'; // Allow saving attached files
+        if (btnSave) btnSave.style.display = 'flex'; 
         if (scannerInput) {
             scannerInput.disabled = true;
             scannerInput.placeholder = 'Đơn đã bị hủy - Không thể quét hoặc chỉnh sửa';
@@ -1261,7 +1267,7 @@ async function _doSelectNxOrderForView(order) {
 
     const loaiInput = document.getElementById('nx-input-loai');
     const mucDichInput = document.getElementById('nx-input-mucdich');
-    
+
     document.getElementById('nx-input-madon').value = order.ma_don || '';
     loaiInput.value = order.loai_don || 'Nhập';
     document.getElementById('nx-input-time').value = formatNxDateTime(order.created_at || order.ngay_tao);
@@ -1285,8 +1291,7 @@ async function _doSelectNxOrderForView(order) {
     }
 
     currentDraftNxItems = order.chi_tiet_san_pham ? JSON.parse(JSON.stringify(order.chi_tiet_san_pham)) : [];
-    
-    // Parse Attached Files
+
     currentNxAttachments = [];
     if (order.file_url) {
         try {
@@ -1304,7 +1309,6 @@ async function _doSelectNxOrderForView(order) {
     }
     renderNxAttachmentsUI();
 
-    // Save snapshot of original state to detect changes
     originalOrderStateSnapshot = JSON.stringify({
         loai_don: order.loai_don || '',
         muc_dich: order.muc_dich || '',
@@ -1317,15 +1321,12 @@ async function _doSelectNxOrderForView(order) {
     renderNxDraftItemsTable();
     fetchNxOrderLogs(order.ma_don);
     renderNhapXuatOrderList(filteredNhapXuatData);
-    updateNxSaveButtonState(false); // Initially dimmed / disabled when just viewing!
+    updateNxSaveButtonState(false); 
 }
 
-
-// Create New Order Form Handler
-function createNewNhapXuatOrderForm(restoreSavedDraft = false) {
-    // Guard: Nếu đang SỬA đơn cũ và có thay đổi chưa lưu → hỏi trước
-    if (selectedNxOrderId !== null && hasUnsavedNxChanges()) {
-        const currentMaDon = document.getElementById('nx-input-madon')?.value || '';
+function createNewNhapXuatOrderForm(restoreSavedDraft = false, onApproved = null) {
+    if (hasUnsavedNxChanges()) {
+        const currentMaDon = document.getElementById('nx-input-madon')?.value || 'ĐƠN-NHÁP';
         showGenericConfirmModal(
             '⚠️ CẢNH BÁO',
             'Bỏ Thay Đổi Chưa Lưu?',
@@ -1333,14 +1334,18 @@ function createNewNhapXuatOrderForm(restoreSavedDraft = false) {
             'Nhấn "Tiếp Tục" để tạo đơn mới, hoặc "Hủy" để quay lại và Cập Nhật đơn.',
             '#f59e0b',
             'Tiếp Tục',
-            () => _doCreateNewNhapXuatOrderForm()
+            async () => {
+                await _doCreateNewNhapXuatOrderForm();
+                if (typeof onApproved === 'function') onApproved();
+            }
         );
-        return;
+        return false;
     }
     _doCreateNewNhapXuatOrderForm();
+    if (typeof onApproved === 'function') onApproved();
+    return true;
 }
 
-// Internal: thực sự reset form tạo đơn mới (không guard)
 async function _doCreateNewNhapXuatOrderForm() {
     selectedNxOrderId = null;
     isEditingNxOrder = false;
@@ -1355,7 +1360,7 @@ async function _doCreateNewNhapXuatOrderForm() {
     if (statusBadge) statusBadge.style.display = 'none';
     if (sourceBadge) sourceBadge.style.display = 'none';
     if (fileLink) fileLink.style.display = 'none';
-    
+
     const btnCancel = document.getElementById('btn-cancel-nx-order');
     const btnRestore = document.getElementById('btn-restore-nx-order');
     const btnHardDelete = document.getElementById('btn-hard-delete-nx-order');
@@ -1384,21 +1389,19 @@ async function _doCreateNewNhapXuatOrderForm() {
         modeBadge.style.color = '#10b981';
     }
 
-    // Auto-fill logged-in user formatted as "Tên Nhân Viên - Chi Nhánh"
     const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
     await populateNxManagerBranches();
 
     const branchSelect = document.getElementById('nx-manager-branch-select');
     if (branchSelect && branchSelect.style.display !== 'none') {
-        branchSelect.value = ''; // Ban đầu của Quản lý sẽ trống (-- Chọn Chi Nhánh --)
+        branchSelect.value = ''; 
     }
 
     const userNameFormatted = updateNxUserFieldWithBranch();
 
-    // Fresh Form Always (Draft disabled)
     currentDraftOrder = {
         ma_don: 'ĐƠN-NHÁP',
-        loai_don: '', // Initial loại đơn is EMPTY
+        loai_don: '', 
         muc_dich: '',
         nguon_don: 'thu_cong',
         user_name: userNameFormatted,
@@ -1407,7 +1410,7 @@ async function _doCreateNewNhapXuatOrderForm() {
     currentDraftNxItems = [];
     currentNxAttachments = [];
     renderNxAttachmentsUI();
-    document.getElementById('nx-input-loai').value = ''; // Ban đầu để trống!
+    document.getElementById('nx-input-loai').value = ''; 
     document.getElementById('nx-input-madon').value = 'ĐƠN-NHÁP';
     document.getElementById('nx-input-mucdich').value = '';
     document.getElementById('nx-input-user').value = userNameFormatted;
@@ -1421,7 +1424,6 @@ async function _doCreateNewNhapXuatOrderForm() {
 
     if (scannerInput) scannerInput.focus();
 }
-
 
 function generateRandom3Chars() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -1464,7 +1466,6 @@ function generateNextNxOrderCode(loai) {
     if (codeInput) codeInput.value = code;
 }
 
-// Web Audio API Scanner Beep (Sound on Success OK, NO Sound on Error)
 function playScanSuccessSound() {
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -1490,14 +1491,12 @@ function playScanSuccessSound() {
     }
 }
 
-// Web Audio API Error Beep (âm thanh cảnh báo khi quét sai mã)
 function playScanErrorSound() {
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         if (!AudioContext) return;
         const ctx = new AudioContext();
 
-        // 2 tiếng bíp ngắn, tone thấp xuống để báo lỗi
         const playBeep = (startTime, freq) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -1523,14 +1522,13 @@ function playScanErrorSound() {
     }
 }
 
-// Text-To-Speech (TTS) Voice Counting on Valid Scan (Hô đếm số lượng 1, 2, 3, 4...)
 function speakScanCount(count) {
     if ('speechSynthesis' in window) {
         try {
-            window.speechSynthesis.cancel(); // Dừng ngay câu đọc trước đó để không bị trễ khi quét nhanh
+            window.speechSynthesis.cancel(); 
             const utterance = new SpeechSynthesisUtterance(String(count));
             utterance.lang = 'vi-VN';
-            utterance.rate = 1.3; // Đọc nhanh, dứt khoát
+            utterance.rate = 1.3; 
             utterance.pitch = 1.0;
             window.speechSynthesis.speak(utterance);
             return;
@@ -1538,15 +1536,9 @@ function speakScanCount(count) {
             console.warn("Speech synthesis error:", e);
         }
     }
-    // Fallback tiếng bíp nếu không hỗ trợ giọng nói
+
     playScanSuccessSound();
 }
-
-
-
-// =========================================================================
-// Scanner Autocomplete & Product Search with Child LOT/Date Sub-Branches
-// =========================================================================
 
 function hideNxScannerDropdown() {
     const dropdown = document.getElementById('nx-scanner-dropdown');
@@ -1566,7 +1558,6 @@ function handleNxScannerInputSearch(event) {
         return;
     }
 
-    // Nếu quét mã QR đầy đủ có dấu chấm phẩy thì không cần bung popup tìm kiếm
     if (query.includes(';')) {
         hideNxScannerDropdown();
         return;
@@ -1604,8 +1595,7 @@ function handleNxScannerInputSearch(event) {
 
     matchedList.forEach(p => {
         const rawBarcode = (p.ma_vach || '').trim().toLowerCase();
-        
-        // Phân quyền lọc các nhánh con (LOT/Date) theo Chi Nhánh đang làm việc
+
         const subDetails = allDetails.filter(d => {
             const dBarcode = (d.ma_vach || '').trim().toLowerCase();
             const dQr = (d.ma_qr || '').trim().toLowerCase();
@@ -1620,16 +1610,30 @@ function handleNxScannerInputSearch(event) {
 
         const pName = p.ten_mat_hang || p.ten_hoa_don || 'Vật tư';
         const pBarcode = p.ma_vach || '-';
+        const pImg = p.anh || '';
+
+        const imgHtml = pImg ? `
+            <div class="nx-search-item-img-wrap" onclick="event.stopPropagation(); if(typeof openVatTuImageLightbox==='function') openVatTuImageLightbox('${escapeHtml(pImg)}', '${escapeHtml(pName)}', '${escapeHtml(pBarcode)}', '${p.id}');" title="Click để xem ảnh lớn">
+                <img src="${escapeHtml(pImg)}" alt="" class="nx-search-item-img" loading="lazy" />
+            </div>
+        ` : `
+            <div class="nx-search-item-img-wrap" style="cursor: default;" title="Chưa có ảnh">
+                <div class="nx-search-item-no-img">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                </div>
+            </div>
+        `;
 
         if (subDetails.length > 0) {
             html += `
                 <div class="nx-search-item">
                     <div class="nx-search-item-header" onclick="addNxItemFromSearch('${p.id}', '-', null)" title="Thêm mặt hàng này (LOT mặc định)">
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="nx-search-item-header-left">
+                            ${imgHtml}
                             <code class="vattu-barcode-code" style="margin: 0;">${escapeHtml(pBarcode)}</code>
-                            <strong style="font-size: 13px;">${escapeHtml(pName)}</strong>
+                            <strong style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(pName)}</strong>
                         </div>
-                        <span style="font-size: 11px; color: #60a5fa; font-weight: 600;">${subDetails.length} nhánh LOT (${branchCode})</span>
+                        <span style="font-size: 11px; color: #60a5fa; font-weight: 600; flex-shrink: 0;">${subDetails.length} nhánh LOT (${branchCode})</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 5px;">
                         ${subDetails.map(d => {
@@ -1660,11 +1664,12 @@ function handleNxScannerInputSearch(event) {
             html += `
                 <div class="nx-search-item" onclick="addNxItemFromSearch('${p.id}', '-', null)" title="Thêm mặt hàng này vào đơn">
                     <div class="nx-search-item-header">
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="nx-search-item-header-left">
+                            ${imgHtml}
                             <code class="vattu-barcode-code" style="margin: 0;">${escapeHtml(pBarcode)}</code>
-                            <strong style="font-size: 13px;">${escapeHtml(pName)}</strong>
+                            <strong style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(pName)}</strong>
                         </div>
-                        <span style="font-size: 11px; color: var(--text-muted);">${escapeHtml(p.don_vi || 'Sản phẩm')}</span>
+                        <span style="font-size: 11px; color: var(--text-muted); flex-shrink: 0;">${escapeHtml(p.don_vi || 'Sản phẩm')}</span>
                     </div>
                 </div>
             `;
@@ -1675,17 +1680,16 @@ function handleNxScannerInputSearch(event) {
     dropdown.style.display = 'flex';
 }
 
-// Helper to format Date for Nhập Xuất
 function formatDateForNx(rawDate) {
     if (!rawDate || rawDate === '-' || rawDate === 'null' || rawDate === 'undefined') return '';
     const str = String(rawDate).trim();
     if (!str) return '';
-    // DD/MM/YYYY
+
     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
         const parts = str.split('/');
         return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
     }
-    // YYYY-MM-DD
+
     if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
         const parts = str.substring(0, 10).split('-');
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -1702,7 +1706,6 @@ function formatDateForNx(rawDate) {
     return str;
 }
 
-// Helper to construct clean ma_qr string without generating empty trailing `;-;`
 function buildMaQr(ma_vach, lot, date_expiry) {
     const vach = (ma_vach || '').trim();
     const cleanLot = (lot && lot !== 'null' && lot !== 'undefined' && lot !== '-') ? String(lot).trim() : '';
@@ -1745,7 +1748,7 @@ function addNxItemFromSearch(productId, lot = '-', date_expiry = null) {
         const item = currentDraftNxItems[existingIndex];
         const oldQty = Number(item.so_luong) || 0;
         const newQty = oldQty + 1;
-        
+
         if (isPendingOrder && item.so_luong_yeu_cau && newQty > item.so_luong_yeu_cau) {
             playScanErrorSound();
             if (typeof showToast === 'function') {
@@ -1837,7 +1840,60 @@ function addNxItemFromSearch(productId, lot = '-', date_expiry = null) {
 window.addNxItemFromSearch = addNxItemFromSearch;
 window.hideNxScannerDropdown = hideNxScannerDropdown;
 
-// Requirement: QR / Barcode Scanner Add & Parsing Logic
+async function startNewNxOrderWithShortcut(loai = 'Xuất') {
+    if (hasUnsavedNxChanges()) {
+        const currentMaDon = document.getElementById('nx-input-madon')?.value || 'ĐƠN-NHÁP';
+        if (typeof playScanErrorSound === 'function') {
+            playScanErrorSound();
+        }
+        showGenericConfirmModal(
+            '⚠️ CẢNH BÁO',
+            'Bỏ Thay Đổi Chưa Lưu?',
+            `Đơn kho <strong>${currentMaDon}</strong> đang có thay đổi chưa được cập nhật. Tạo đơn mới sẽ mất toàn bộ các thay đổi này.`,
+            'Nhấn "Tiếp Tục" để tạo đơn mới, hoặc "Hủy" để quay lại và Cập Nhật đơn.',
+            '#f59e0b',
+            'Tiếp Tục',
+            async () => {
+                await _doApplyNewOrderShortcut(loai);
+            }
+        );
+        return;
+    }
+
+    await _doApplyNewOrderShortcut(loai);
+}
+
+async function _doApplyNewOrderShortcut(loai) {
+    await _doCreateNewNhapXuatOrderForm();
+    const loaiSelect = document.getElementById('nx-input-loai');
+    if (loaiSelect) {
+        loaiSelect.value = loai;
+        currentDraftOrder.loai_don = loai;
+        generateNextNxOrderCode(loai);
+        saveNxDraftToStorage();
+        renderNxDraftItemsTable();
+        renderNhapXuatOrderList(filteredNhapXuatData);
+        checkNxOrderModified();
+        updateNxSaveButtonState();
+    }
+    
+    const mucdichInput = document.getElementById('nx-input-mucdich');
+    if (mucdichInput) {
+        setTimeout(() => {
+            mucdichInput.focus();
+            mucdichInput.select();
+        }, 80);
+    }
+
+    if (typeof playScanSuccessSound === 'function') {
+        playScanSuccessSound();
+    }
+    if (typeof showToast === 'function') {
+        showToast('info', 'Tạo Đơn ' + loai, `Đã mở form tạo đơn ${loai} kho. Quét/nhập Mã hoặc Mục đích rồi ấn Enter!`, 3000);
+    }
+}
+window.startNewNxOrderWithShortcut = startNewNxOrderWithShortcut;
+
 async function handleNxQrScannerAdd() {
     const scannerInput = document.getElementById('nx-qr-scanner-input');
     if (!scannerInput) return;
@@ -1845,7 +1901,41 @@ async function handleNxQrScannerAdd() {
     const rawVal = scannerInput.value.trim();
     if (!rawVal) return;
 
-    // 1. Tách chuỗi Mã QR dạng: "MãVạch;LOT;Date" (Ví dụ: 300000000630 hoặc 8935001234567;LOT202601;31/12/2026)
+    const trimmedUpper = rawVal.toUpperCase();
+
+    // 1. Quét lệnh XUAT / XUẤT KHO
+    if (['XUAT', 'XUẤT', 'XUAT KHO', 'XUẤT KHO', 'XK'].includes(trimmedUpper)) {
+        scannerInput.value = '';
+        hideNxScannerDropdown();
+        await startNewNxOrderWithShortcut('Xuất');
+        return;
+    }
+
+    // 2. Quét lệnh NHAP / NHẬP KHO
+    if (['NHAP', 'NHẬP', 'NHAP KHO', 'NHẬP KHO', 'NK'].includes(trimmedUpper)) {
+        scannerInput.value = '';
+        hideNxScannerDropdown();
+        await startNewNxOrderWithShortcut('Nhập');
+        return;
+    }
+
+    // 3. Quét lệnh LƯU ĐƠN / HOÀN TẤT (OK, LUU, SAVE)
+    if (['OK', 'LUU', 'LƯU', 'DONE', 'SAVE', 'HOANTAT', 'HOAN TAT'].includes(trimmedUpper)) {
+        scannerInput.value = '';
+        hideNxScannerDropdown();
+        if (!currentDraftNxItems || currentDraftNxItems.length === 0) {
+            playScanErrorSound();
+            if (typeof showToast === 'function') {
+                showToast('warning', 'Chưa Có Sản Phẩm', 'Đơn hàng chưa có sản phẩm nào để lưu!');
+            }
+            return;
+        }
+        if (typeof saveNxOrderToSystem === 'function') {
+            await saveNxOrderToSystem();
+        }
+        return;
+    }
+
     const parts = rawVal.split(';');
     const ma_vach = parts[0] ? parts[0].trim() : rawVal;
     const lot = parts[1] ? parts[1].trim() : '-';
@@ -1855,11 +1945,9 @@ async function handleNxQrScannerAdd() {
         date_expiry = formatDateForNx(date_expiry);
     }
 
-    // 2. Truy xuất vào bảng Vật Tư (vatTuData / Supabase table 'san_pham') để lấy chính xác Tên Hàng Hóa & Mã Vạch
     let ten_hang_hoa = '';
     let matchedBarCode = ma_vach;
 
-    // First: Search in-memory array vatTuData
     let allVatTu = [];
     if (typeof vatTuData !== 'undefined' && Array.isArray(vatTuData) && vatTuData.length > 0) {
         allVatTu = vatTuData;
@@ -1880,7 +1968,6 @@ async function handleNxQrScannerAdd() {
                (vName2 && vName2 === queryLower);
     });
 
-    // Second: If not found in memory, query Supabase table 'san_pham' directly!
     if (!matchedVatTu) {
         const client = getNhapXuatSupabaseClient();
         if (client) {
@@ -1900,9 +1987,8 @@ async function handleNxQrScannerAdd() {
         }
     }
 
-    // REQUIREMENT: Nếu không tìm thấy mã vạch -> Báo lỗi + âm thanh cảnh báo
     if (!matchedVatTu) {
-        playScanErrorSound(); // Bíp 2 tiếng báo quét sai
+        playScanErrorSound(); 
         if (typeof showVatTuNoticeModal === 'function') {
             showVatTuNoticeModal(
                 'danger',
@@ -1918,7 +2004,6 @@ async function handleNxQrScannerAdd() {
         return;
     }
 
-
     ten_hang_hoa = matchedVatTu.ten_mat_hang || matchedVatTu.ten_hoa_don || 'Vật tư y tế';
     matchedBarCode = matchedVatTu.ma_vach || ma_vach;
 
@@ -1930,15 +2015,14 @@ async function handleNxQrScannerAdd() {
 
     const isPendingOrder = currentDraftOrder.trang_thai === 'Chờ';
 
-    // 3. Nếu quét 2 mã QR giống nhau (hoặc cùng mã vạch & LOT) -> Số lượng tự động cộng dồn lên dần (+1)
     let existingIndex = -1;
     if (isPendingOrder) {
-        // Find exact match first
+
         existingIndex = currentDraftNxItems.findIndex(item => {
             return (item.ma_qr && item.ma_qr === ma_qr) || 
                    (item.ma_vach === matchedBarCode && item.lot === lot);
         });
-        // If not found, find a matching barcode that hasn't been assigned a LOT yet ('-')
+
         if (existingIndex === -1) {
             existingIndex = currentDraftNxItems.findIndex(item => item.ma_vach === matchedBarCode && item.lot === '-');
         }
@@ -1953,7 +2037,7 @@ async function handleNxQrScannerAdd() {
         const item = currentDraftNxItems[existingIndex];
         const oldQty = Number(item.so_luong) || 0;
         const newQty = oldQty + 1;
-        
+
         if (isPendingOrder && item.so_luong_yeu_cau && newQty > item.so_luong_yeu_cau) {
             playScanErrorSound();
             if (typeof showVatTuNoticeModal === 'function') {
@@ -2038,7 +2122,6 @@ async function handleNxQrScannerAdd() {
         }
     }
 
-    // SUCCESS: Giọng nói đếm số lượng hiện tại của mặt hàng này (1, 2, 3, 4...)
     speakScanCount(scannedCount);
 
     scannerInput.value = '';
@@ -2051,9 +2134,6 @@ async function handleNxQrScannerAdd() {
 
 }
 
-// =========================================================================
-// DOWNLOAD EXCEL TEMPLATE CHO VIEW NHẬP XUẤT (.xlsx)
-// =========================================================================
 function downloadNhapXuatExcelTemplate() {
     if (typeof XLSX === 'undefined') {
         if (typeof showVatTuNoticeModal === 'function') {
@@ -2102,12 +2182,12 @@ function downloadNhapXuatExcelTemplate() {
     const worksheet = XLSX.utils.aoa_to_sheet(templateRows);
 
     worksheet['!cols'] = [
-        { wch: 6 },   // STT
-        { wch: 18 },  // Mã VT
-        { wch: 35 },  // Tên Hàng Hóa
-        { wch: 16 },  // LOT
-        { wch: 16 },  // Date
-        { wch: 12 }   // Số Lượng
+        { wch: 6 },   
+        { wch: 18 },  
+        { wch: 35 },  
+        { wch: 16 },  
+        { wch: 16 },  
+        { wch: 12 }   
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -2134,9 +2214,6 @@ function downloadNhapXuatExcelTemplate() {
     }
 }
 
-// =========================================================================
-// EXCEL IMPORT CHO VIEW NHẬP XUẤT (Tự động lấy tên theo mã vạch từ kho Vật tư)
-// =========================================================================
 async function handleNxExcelFileImport(event) {
     const fileInput = event.target;
     const file = fileInput.files && fileInput.files[0];
@@ -2152,7 +2229,6 @@ async function handleNxExcelFileImport(event) {
         return;
     }
 
-    // Kiểm tra đơn bị hủy
     if (currentDraftOrder && currentDraftOrder.trang_thai === 'Đã hủy') {
         if (typeof showVatTuNoticeModal === 'function') {
             showVatTuNoticeModal('warning', 'Đơn Đã Bị Hủy', 'Không thể nạp thêm sản phẩm vào đơn hàng đã bị hủy!');
@@ -2186,7 +2262,6 @@ async function handleNxExcelFileImport(event) {
             return;
         }
 
-        // Helper tìm giá trị theo nhiều alias cột khác nhau
         const getRowVal = (row, ...keys) => {
             const rowKeys = Object.keys(row);
             for (const k of keys) {
@@ -2202,11 +2277,9 @@ async function handleNxExcelFileImport(event) {
             return '';
         };
 
-        // Helper chuẩn hóa Date sang dd/mm/yyyy
         const parseExcelDate = (val) => {
             if (!val || val === '-' || val === 'null' || val === 'undefined') return null;
-            
-            // 1. Nếu là số serial của Excel (e.g. 45289)
+
             if (typeof val === 'number' && val > 1000) {
                 try {
                     if (typeof XLSX !== 'undefined' && XLSX.SSF && typeof XLSX.SSF.parse_date_code === 'function') {
@@ -2220,7 +2293,6 @@ async function handleNxExcelFileImport(event) {
                     }
                 } catch (e) {}
 
-                // Fallback tính toán từ epoch 1900
                 const dt = new Date(Math.round((val - 25569) * 86400 * 1000));
                 if (!isNaN(dt.getTime())) {
                     const d = String(dt.getUTCDate()).padStart(2, '0');
@@ -2230,11 +2302,9 @@ async function handleNxExcelFileImport(event) {
                 }
             }
 
-            // 2. Nếu là chuỗi ký tự
             const str = String(val).trim();
             if (!str || str === '-') return null;
 
-            // dd/mm/yyyy hoặc d/m/yyyy hoặc dd/mm/yy
             const ddMmMatch = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
             if (ddMmMatch) {
                 const d = ddMmMatch[1].padStart(2, '0');
@@ -2243,7 +2313,6 @@ async function handleNxExcelFileImport(event) {
                 return `${d}/${m}/${y}`;
             }
 
-            // yyyy-mm-dd hoặc yyyy/mm/dd
             const yyyyMmMatch = str.match(/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/);
             if (yyyyMmMatch) {
                 const y = yyyyMmMatch[1];
@@ -2264,7 +2333,6 @@ async function handleNxExcelFileImport(event) {
         for (let i = 0; i < validRawRows.length; i++) {
             const row = validRawRows[i];
 
-            // 1. Mã VT / Mã Vạch
             const rawCode = getRowVal(
                 row,
                 'mã vt', 'mãvt', 'mã vật tư', 'ma vt', 'mavt', 'ma vat tu',
@@ -2275,9 +2343,8 @@ async function handleNxExcelFileImport(event) {
                 'ma_vach', 'ma_vt'
             );
             const ma_vach = String(rawCode).trim();
-            if (!ma_vach) continue; // Bỏ qua dòng không có mã vạch
+            if (!ma_vach) continue; 
 
-            // 2. Tên hàng hóa từ Excel (người dùng nhập gì cũng được, app tự động map lại theo vật tư)
             const rawTenHangHoa = getRowVal(
                 row,
                 'tên hàng hóa', 'ten hang hoa', 'tên hàng', 'ten hang',
@@ -2287,7 +2354,6 @@ async function handleNxExcelFileImport(event) {
                 'ten_hang_hoa', 'ten_mat_hang', 'ten_san_pham'
             );
 
-            // 3. LOT
             const rawLot = getRowVal(
                 row,
                 'lot', 'lô', 'số lô', 'so lo', 'solo', 'lô sx', 'lo sx',
@@ -2295,7 +2361,6 @@ async function handleNxExcelFileImport(event) {
             );
             const lot = String(rawLot).trim() || '-';
 
-            // 4. Date (hạn dùng định dạng dd/mm/yyyy)
             const rawDate = getRowVal(
                 row,
                 'date', 'date expiry', 'date_expiry', 'expiry', 'exp date', 'exp_date',
@@ -2304,7 +2369,6 @@ async function handleNxExcelFileImport(event) {
             );
             const date_expiry = parseExcelDate(rawDate);
 
-            // 5. Số lượng (>= 0)
             const rawQty = getRowVal(
                 row,
                 'số lượng', 'so luong', 'soluong', 'sl', 'số lượng thực tế',
@@ -2340,7 +2404,6 @@ async function handleNxExcelFileImport(event) {
             return;
         }
 
-        // --- TRA CỨU TÊN HÀNG HÓA TỪ DANH MỤC VẬT TƯ (MASTER DATA) ---
         let allVatTu = [];
         if (typeof vatTuData !== 'undefined' && Array.isArray(vatTuData) && vatTuData.length > 0) {
             allVatTu = vatTuData;
@@ -2367,7 +2430,6 @@ async function handleNxExcelFileImport(event) {
             }
         });
 
-        // Nếu có mã vạch chưa có sẵn trong RAM, truy vấn bảng san_pham Supabase
         if (missingBarcodes.length > 0) {
             const client = getNhapXuatSupabaseClient();
             if (client) {
@@ -2389,10 +2451,9 @@ async function handleNxExcelFileImport(event) {
             }
         }
 
-        // Bổ sung vào danh sách đơn hàng (currentDraftNxItems)
         const currentMaDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || 'ĐƠN-NHÁP';
         const currentLoai = document.getElementById('nx-input-loai')?.value || currentDraftOrder.loai_don || 'Nhập';
-        
+
         const validRows = [];
         const notFoundCodes = [];
 
@@ -2401,7 +2462,7 @@ async function handleNxExcelFileImport(event) {
             const matchedVatTu = vatTuLookupMap.get(qLower);
 
             if (matchedVatTu) {
-                // TỰ ĐỘNG LẤY TÊN THEO MÃ VẠCH TỪ VIEW VẬT TƯ
+
                 const officialName = matchedVatTu.ten_mat_hang || matchedVatTu.ten_hoa_don || matchedVatTu.ten_san_pham || row.excel_ten_hang_hoa || 'Vật tư y tế';
                 const officialBarcode = matchedVatTu.ma_vach || row.ma_vach;
                 validRows.push({
@@ -2418,7 +2479,6 @@ async function handleNxExcelFileImport(event) {
             }
         });
 
-        // Hàm nạp các dòng hợp lệ vào đơn
         const applyValidRowsToDraft = (rowsToApply) => {
             if (!rowsToApply || rowsToApply.length === 0) {
                 if (typeof showToast === 'function') {
@@ -2435,7 +2495,6 @@ async function handleNxExcelFileImport(event) {
                 const cleanDate = row.date_expiry || null;
                 const qty = row.so_luong;
 
-                // Kiểm tra xem sản phẩm đã có trong bảng chưa (trùng mã vạch + lot + date)
                 const existingIndex = currentDraftNxItems.findIndex(item => {
                     const sameBarcode = item.ma_vach === row.ma_vach;
                     const sameLot = (item.lot || '-') === cleanLot;
@@ -2462,7 +2521,6 @@ async function handleNxExcelFileImport(event) {
                 totalImportedQty += qty;
             });
 
-            // Ghi nhật ký thao tác
             logNxOrderAction(
                 currentMaDon,
                 currentLoai,
@@ -2470,19 +2528,16 @@ async function handleNxExcelFileImport(event) {
                 `Nạp file Excel [${file.name}] thêm ${importedCount} dòng (Tổng SL: ${totalImportedQty})`
             );
 
-            // Lưu đơn nháp và cập nhật bảng hiển thị
             currentDraftOrder.items = currentDraftNxItems;
             saveNxDraftToStorage();
             renderNxDraftItemsTable();
             renderNhapXuatOrderList(filteredNhapXuatData);
             checkNxOrderModified();
 
-            // Âm thanh thông báo
             if (typeof playScanSuccessSound === 'function') {
                 playScanSuccessSound();
             }
 
-            // Thông báo đơn giản: Đã thêm ... sản phẩm : tổng số lượng: ...
             if (typeof showVatTuNoticeModal === 'function') {
                 showVatTuNoticeModal('success', 'Nhập Excel Thành Công', `Đã thêm <strong>${importedCount}</strong> sản phẩm : Tổng số lượng: <strong style="color: #10b981;">${totalImportedQty.toLocaleString('vi-VN')}</strong>`);
             } else if (typeof showToast === 'function') {
@@ -2490,7 +2545,6 @@ async function handleNxExcelFileImport(event) {
             }
         };
 
-        // Nếu có mã vạch không tìm thấy -> Hiển thị cửa sổ nổi báo lỗi (Hủy / OK bỏ qua)
         if (notFoundCodes.length > 0) {
             if (typeof playScanErrorSound === 'function') {
                 playScanErrorSound();
@@ -2528,7 +2582,7 @@ async function handleNxExcelFileImport(event) {
                 }
             );
         } else {
-            // Tất cả hợp lệ
+
             applyValidRowsToDraft(validRows);
         }
 
@@ -2544,7 +2598,6 @@ async function handleNxExcelFileImport(event) {
     }
 }
 
-// Render Draft Order Items Table
 function renderNxDraftItemsTable() {
     const tbody = document.getElementById('nx-items-table-body');
     const emptyNotice = document.getElementById('nx-empty-items-notice');
@@ -2578,7 +2631,6 @@ function renderNxDraftItemsTable() {
 
         let barcodeStyle = '';
 
-        // TỒN DƯỚI MÃ VẠCH: LUÔN XUẤT HIỆN KỂ CẢ NHẬP HAY XUẤT
         const availableStock = getAvailableStockInNx(item.ma_vach, item.lot, item.date_expiry, branchCode, currentMaDon);
 
         if (currentLoai === 'Xuất') {
@@ -2615,8 +2667,22 @@ function renderNxDraftItemsTable() {
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                </button>`;
 
+        const allVatTu = (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData)) ? window.vatTuData : (typeof vatTuData !== 'undefined' ? vatTuData : []);
+        const matchedProduct = allVatTu.find(x => x.ma_vach === item.ma_vach);
+        const itemImg = item.anh || (matchedProduct ? matchedProduct.anh : '');
+        const imgCellHtml = itemImg ? `
+            <div class="vattu-img-cell-wrap" style="justify-content: center;">
+                <div class="vattu-img-thumb-wrap" style="width: 44px; height: 44px;" onclick="event.stopPropagation(); if(typeof openVatTuImageLightbox==='function') openVatTuImageLightbox('${escapeHtml(itemImg)}', '${nameEscaped}', '${escapeHtml(item.ma_vach || '')}', '${matchedProduct ? matchedProduct.id : ''}')" title="Click để xem ảnh lớn">
+                    <img src="${escapeHtml(itemImg)}" alt="" class="vattu-img-thumb" loading="lazy" />
+                </div>
+            </div>
+        ` : `<span style="color: var(--text-muted); font-size: 11px;">-</span>`;
+
         tr.innerHTML = `
             <td style="text-align: center; font-weight: 600;">${idx + 1}</td>
+            <td style="text-align: center; vertical-align: middle; padding: 2px;">
+                ${imgCellHtml}
+            </td>
             <td style="text-align: center; vertical-align: middle;">
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 3px 0;">
                     <code class="vattu-barcode-code" style="margin: 0; text-align: center; ${barcodeStyle}">${escapeHtml(item.ma_vach || '-')}</code>
@@ -2728,11 +2794,10 @@ function resetNxOrderForm() {
     createNewNhapXuatOrderForm();
 }
 
-// Generic Confirm Modal Helper
 function showGenericConfirmModal(badgeText, title, textHtml, subtextHtml, badgeColor, okBtnText, onConfirmCallback) {
     const modal = document.getElementById('generic-confirm-modal');
     if (!modal) {
-        // Fallback to native confirm if modal doesn't exist
+
         const isConfirmed = confirm(`${title}\n\n${textHtml.replace(/<[^>]*>?/gm, '')}`);
         if (isConfirmed && typeof onConfirmCallback === 'function') onConfirmCallback();
         return;
@@ -2777,10 +2842,8 @@ function showGenericConfirmModal(badgeText, title, textHtml, subtextHtml, badgeC
         });
     }
 
-    // Force show - override any inline display:none
     modal.style.setProperty('display', 'flex', 'important');
-    
-    // Add show class slightly after display:flex to trigger transition
+
     setTimeout(() => {
         modal.classList.add('show');
     }, 10);
@@ -2794,7 +2857,6 @@ function closeGenericConfirmModal() {
     }
 }
 
-// Requirement: Save / Update Order & AUTOMATICALLY SYNC TO THẺ KHO (the_kho)
 async function saveNxOrderToSystem() {
     const loaiSelect = document.getElementById('nx-input-loai');
     const loaiDon = loaiSelect ? loaiSelect.value : '';
@@ -2825,7 +2887,6 @@ async function saveNxOrderToSystem() {
         return;
     }
 
-
     if (!currentDraftNxItems || currentDraftNxItems.length === 0) {
         if (typeof showVatTuNoticeModal === 'function') {
             showVatTuNoticeModal('warning', 'Chưa Có Sản Phẩm', 'Vui lòng quét QR hoặc nhập sản phẩm vào đơn trước khi lưu!');
@@ -2849,7 +2910,6 @@ async function saveNxOrderToSystem() {
         return;
     }
 
-    // NEW: For pending orders ('Chờ'), ALL items must be fully scanned before saving!
     const isPendingOrder = currentDraftOrder && currentDraftOrder.trang_thai === 'Chờ';
     if (isPendingOrder) {
         let isFullyScanned = true;
@@ -2861,7 +2921,7 @@ async function saveNxOrderToSystem() {
                 break;
             }
         }
-        
+
         if (!isFullyScanned) {
             if (typeof showVatTuNoticeModal === 'function') {
                 showVatTuNoticeModal('warning', 'Chưa Quét Đủ', 'Đơn hàng yêu cầu quét ĐỦ SỐ LƯỢNG tất cả sản phẩm mới được phép Cập Nhật!');
@@ -2873,8 +2933,7 @@ async function saveNxOrderToSystem() {
     }
 
     const userName = document.getElementById('nx-input-user')?.value || 'Thái Trung Tín - CN1';
-    
-    // NEW: Prevent negative stock for 'Xuất' orders
+
     if (loaiDon === 'Xuất' && currentDraftNxItems.length > 0) {
         const branchCode = extractCNCodeFromBranchString(userName);
         const client = getNhapXuatSupabaseClient();
@@ -2885,17 +2944,17 @@ async function saveNxOrderToSystem() {
                     .from('the_kho')
                     .select('ma_don, ma_vach, lot, date_expiry, loai, so_luong, user_name')
                     .in('ma_vach', maVachList);
-                    
+
                 if (!tkError && theKhoDataDb) {
                     const branchData = theKhoDataDb.filter(x => extractCNCodeFromBranchString(x.user_name) === branchCode && x.ma_don !== maDon);
-                    
+
                     for (const item of currentDraftNxItems) {
                         const scannedQty = Number(item.so_luong) || 0;
                         if (scannedQty <= 0) continue;
-                        
+
                         const lot = item.lot || '-';
                         const date_expiry = item.date_expiry ? parseDateToYyyyMmDd(item.date_expiry) : null;
-                        
+
                         let currentStock = 0;
                         for (const tk of branchData) {
                             if (tk.ma_vach === item.ma_vach && (tk.lot || '-') === lot) {
@@ -2906,7 +2965,7 @@ async function saveNxOrderToSystem() {
                                 }
                             }
                         }
-                        
+
                         if (currentStock < scannedQty) {
                             if (typeof showVatTuNoticeModal === 'function') {
                                 showVatTuNoticeModal('error', 'Lỗi Xuất Âm', `Mã <strong>${item.ma_vach}</strong> (LOT: ${lot}) chỉ còn tồn <strong>${currentStock}</strong> ở ${branchCode}, không thể xuất <strong>${scannedQty}</strong>!`);
@@ -2949,9 +3008,6 @@ async function saveNxOrderToSystem() {
     let saveSuccess = false;
 
     if (selectedNxOrderId !== null) {
-        // ==========================================
-        // UPDATE EXISTING SAVED ORDER (selectedNxOrderId)
-        // ==========================================
         if (typeof hasUnsavedNxChanges === 'function' && !hasUnsavedNxChanges()) {
             if (typeof showToast === 'function') {
                 showToast('warning', 'Chưa Có Thay Đổi', 'Đơn kho này chưa có bất kỳ sự thay đổi nào để cập nhật!');
@@ -2987,7 +3043,7 @@ async function saveNxOrderToSystem() {
 
                 try {
                     if (client) {
-                        // Update Supabase row matching ma_don or ID
+
                         const { error: err1 } = await client
                             .from('nhap_xuat')
                             .update(updatePayload)
@@ -3016,7 +3072,6 @@ async function saveNxOrderToSystem() {
                     saveSuccess = true;
                 }
 
-                // Re-sync to Thẻ Kho (pass isUpdate = true to clean up old entries and re-insert)
                 await syncNxOrderToTheKhoEntries({ ...updatePayload, ma_don: maDon, created_at: new Date().toISOString() }, true);
 
                 if (saveSuccess) {
@@ -3044,14 +3099,11 @@ async function saveNxOrderToSystem() {
                     renderNxDraftItemsTable();
                     applyNhapXuatFilters();
                     renderNhapXuatOrderList(filteredNhapXuatData);
-                    updateNxSaveButtonState(false); // Dim button after successful update!
+                    updateNxSaveButtonState(false); 
                 }
             }
         );
     } else {
-        // ==========================================
-        // CREATE NEW ORDER (selectedNxOrderId === null)
-        // ==========================================
         orderPayload.ngay_tao = new Date().toISOString();
         orderPayload.created_at = new Date().toISOString();
 
@@ -3079,7 +3131,6 @@ async function saveNxOrderToSystem() {
             saveSuccess = true;
         }
 
-        // AUTOMATICALLY CREATE THẺ KHO (the_kho) ENTRIES FOR ALL ITEMS IN ORDER
         await syncNxOrderToTheKhoEntries(orderPayload, false);
 
         if (saveSuccess) {
@@ -3105,9 +3156,6 @@ async function saveNxOrderToSystem() {
     }
 }
 
-// =========================================================================
-// XÓA / HỦY ĐƠN VÀ KHÔI PHỤC ĐƠN (áp dụng cho tất cả các đơn)
-// =========================================================================
 async function cancelNxOrder() {
     if (!selectedNxOrderId || !currentDraftOrder) {
         if (typeof showToast === 'function') {
@@ -3133,8 +3181,7 @@ async function cancelNxOrder() {
         async () => {
             try {
                 const client = getNhapXuatSupabaseClient();
-                
-                // 1. Đưa số lượng quét về 0 cho tất cả sản phẩm (nhưng lưu lại số cũ để khôi phục nếu cần)
+
                 currentDraftNxItems = (currentDraftNxItems || []).map(item => ({
                     ...item,
                     so_luong_truoc_khi_huy: item.so_luong || 0,
@@ -3142,7 +3189,6 @@ async function cancelNxOrder() {
                 }));
                 const tongSoLuong = 0;
 
-                // 2. Thu hồi trong Thẻ Kho (the_kho) nếu đã từng đồng bộ
                 if (client && maDon) {
                     try {
                         await client.from('the_kho').delete().eq('ma_don', maDon);
@@ -3151,7 +3197,6 @@ async function cancelNxOrder() {
                     }
                 }
 
-                // 3. Cập nhật trạng thái 'Đã hủy' trong Supabase
                 const updatePayload = {
                     trang_thai: 'Đã hủy',
                     chi_tiet_san_pham: currentDraftNxItems,
@@ -3172,7 +3217,6 @@ async function cancelNxOrder() {
                     }
                 }
 
-                // 4. Cập nhật bộ nhớ cục bộ
                 const idx = nhapXuatData.findIndex(x => String(x.id) === String(selectedNxOrderId) || x.ma_don === maDon);
                 if (idx !== -1) {
                     nhapXuatData[idx] = { ...nhapXuatData[idx], ...updatePayload };
@@ -3181,7 +3225,6 @@ async function cancelNxOrder() {
                 currentDraftOrder.chi_tiet_san_pham = currentDraftNxItems;
                 currentDraftOrder.tong_so_luong = 0;
 
-                // 5. Ghi log lịch sử thao tác
                 await logNxOrderAction(
                     maDon,
                     loaiDon,
@@ -3193,11 +3236,9 @@ async function cancelNxOrder() {
                     showToast('success', 'Đã Hủy Đơn', `Đã hủy đơn ${maDon} thành công. Đã đưa số lượng quét về 0 và lưu vào lịch sử.`);
                 }
 
-                // 6. Cập nhật giao diện
                 _doSelectNxOrderForView(currentDraftOrder);
                 applyNhapXuatFilters();
 
-                // Kích hoạt làm mới Thẻ kho và Vật tư
                 if (typeof fetchTheKhoData === 'function') fetchTheKhoData();
                 if (typeof fetchVatTuData === 'function') fetchVatTuData();
 
@@ -3211,7 +3252,6 @@ async function cancelNxOrder() {
     );
 }
 
-// HỦY XÓA / KHÔI PHỤC ĐƠN ĐÃ HỦY
 async function restoreCancelledNxOrder() {
     if (!selectedNxOrderId || !currentDraftOrder || currentDraftOrder.trang_thai !== 'Đã hủy') {
         if (typeof showToast === 'function') {
@@ -3223,7 +3263,6 @@ async function restoreCancelledNxOrder() {
     const maDon = document.getElementById('nx-input-madon')?.value || currentDraftOrder.ma_don || '';
     const loaiDon = document.getElementById('nx-input-loai')?.value || currentDraftOrder.loai_don || 'Nhập';
 
-    // Build custom modal HTML
     const modalHtml = `
     <div id="custom-restore-modal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 99999;">
         <div style="background: var(--app-bg, white); padding: 24px; border-radius: 12px; width: 450px; max-width: 90vw; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border: 1px solid var(--sidebar-border, #e5e7eb);">
@@ -3245,7 +3284,6 @@ async function restoreCancelledNxOrder() {
     </div>
     `;
 
-    // Append to body
     const div = document.createElement('div');
     div.innerHTML = modalHtml;
     document.body.appendChild(div);
@@ -3262,7 +3300,7 @@ async function restoreCancelledNxOrder() {
         closeModal();
         try {
             const client = getNhapXuatSupabaseClient();
-            // Xử lý số lượng
+
             currentDraftNxItems = (currentDraftNxItems || []).map(item => ({
                 ...item,
                 so_luong: restoreQuantity ? (item.so_luong_truoc_khi_huy || 0) : 0
@@ -3296,7 +3334,6 @@ async function restoreCancelledNxOrder() {
                 await syncNxOrderToTheKhoEntries(fullOrderPayload, true);
             }
 
-            // Cập nhật bộ nhớ
             const idx = nhapXuatData.findIndex(x => String(x.id) === String(selectedNxOrderId) || x.ma_don === maDon);
             if (idx !== -1) {
                 nhapXuatData[idx] = { ...nhapXuatData[idx], ...updatePayload };
@@ -3305,7 +3342,6 @@ async function restoreCancelledNxOrder() {
             currentDraftOrder.chi_tiet_san_pham = currentDraftNxItems;
             currentDraftOrder.tong_so_luong = tongSoLuong;
 
-            // Ghi log lịch sử
             const modeText = restoreQuantity ? 'toàn bộ (bao gồm số lượng cũ)' : 'chỉ danh sách sản phẩm (số lượng = 0)';
             await logNxOrderAction(
                 maDon,
@@ -3333,7 +3369,6 @@ async function restoreCancelledNxOrder() {
     document.getElementById('btn-restore-sp').addEventListener('click', () => executeRestore(false));
 }
 
-// XÓA VĨNH VIỄN ĐƠN PDF BỊ LỖI
 async function hardDeleteNxOrder() {
     if (!selectedNxOrderId || !currentDraftOrder) return;
 
@@ -3360,16 +3395,14 @@ async function hardDeleteNxOrder() {
                     if (error) throw error;
                 }
 
-                // Xóa khỏi UI
                 nhapXuatData = nhapXuatData.filter(x => String(x.id) !== String(selectedNxOrderId) && x.ma_don !== maDon);
-                
+
                 if (typeof showToast === 'function') {
                     showToast('success', 'Đã Xóa', `Đã xóa vĩnh viễn đơn ${maDon}.`);
                 }
 
-                // Đóng form
                 createNewNhapXuatOrderForm();
-                
+
             } catch (err) {
                 console.error("Lỗi khi xóa vĩnh viễn đơn:", err);
                 if (typeof showToast === 'function') {
@@ -3390,7 +3423,6 @@ function parseDateToYyyyMmDd(dateStr) {
     let str = String(dateStr).trim();
     if (!str) return null;
 
-    // Định dạng DD/MM/YYYY (ví dụ: 31/12/2026)
     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
         const parts = str.split('/');
         const day = parts[0].padStart(2, '0');
@@ -3399,7 +3431,6 @@ function parseDateToYyyyMmDd(dateStr) {
         return `${year}-${month}-${day}`;
     }
 
-    // Định dạng YYYY-MM-DD (ví dụ: 2026-12-31)
     if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
         return str.substring(0, 10);
     }
@@ -3417,7 +3448,6 @@ function parseDateToYyyyMmDd(dateStr) {
     return null;
 }
 
-// Sync Nx Order Items to Thẻ Kho (the_kho) Table in Supabase
 async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
     const maDon = order.ma_don || '';
     const normalizedLoai = (order.loai_don && String(order.loai_don).includes('Xuất')) ? 'Xuất' : 'Nhập';
@@ -3426,7 +3456,7 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
         .filter(item => Number(item.so_luong) > 0)
         .map(item => {
             let itemMaQr = (item.ma_qr || '').trim();
-            // Sanitize trailing empty delimiters like `;-;` or `;-`
+
             itemMaQr = itemMaQr.replace(/;-;?$/g, '').replace(/;-$/g, '');
             if (!itemMaQr) {
                 itemMaQr = buildMaQr(item.ma_vach || '', item.lot, item.date_expiry);
@@ -3438,7 +3468,7 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
                 lot: (item.lot && item.lot !== 'null' && item.lot !== 'undefined') ? item.lot : '-',
                 date_expiry: parseDateToYyyyMmDd(item.date_expiry),
                 ten_hang_hoa: item.ten_hang_hoa || 'Sản phẩm kho',
-                loai: normalizedLoai, // Khớp chính xác CHECK (loai IN ('Nhập', 'Xuất'))
+                loai: normalizedLoai, 
                 so_luong: Number(item.so_luong),
                 muc_dich: order.muc_dich || '',
                 user_name: order.user_name || 'Thái Trung Tín - CN1',
@@ -3449,7 +3479,7 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
     const client = getNhapXuatSupabaseClient();
     try {
         if (client) {
-            // If updating an existing order, clean up previous Thẻ Kho entries for this order first
+
             if (isUpdate && maDon) {
                 const { error: delErr } = await client
                     .from('the_kho')
@@ -3475,7 +3505,6 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
         console.error("NhapXuat: Exception syncing to the_kho:", e);
     }
 
-    // Trigger realtime refresh on Thẻ Kho and Vật Tư / Kiểm Kho modules
     if (typeof fetchTheKhoData === 'function') {
         fetchTheKhoData();
     }
@@ -3484,8 +3513,6 @@ async function syncNxOrderToTheKhoEntries(order, isUpdate = false) {
     }
 }
 
-
-// Helpers
 function formatNxDateTime(dateStr) {
     if (!dateStr) return '-';
     try {
@@ -3507,7 +3534,6 @@ function formatDateForNx(dateStr) {
     const str = String(dateStr).trim();
     if (!str || str === '-') return '-';
 
-    // 1. Already in DD/MM/YYYY or DD/MM/YY format
     const ddMmYyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (ddMmYyyyMatch) {
         const d = ddMmYyyyMatch[1].padStart(2, '0');
@@ -3516,7 +3542,6 @@ function formatDateForNx(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 2. In YYYY-MM-DD or YYYY/MM/DD format (ISO date)
     const yyyyMmDdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (yyyyMmDdMatch) {
         const y = yyyyMmDdMatch[1];
@@ -3525,7 +3550,6 @@ function formatDateForNx(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 3. In DD-MM-YYYY format
     const ddMmYyyyDashMatch = str.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
     if (ddMmYyyyDashMatch) {
         const d = ddMmYyyyDashMatch[1].padStart(2, '0');
@@ -3534,7 +3558,6 @@ function formatDateForNx(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 4. Standard JS Date parsing for ISO timestamps
     try {
         const dt = new Date(str);
         if (!isNaN(dt.getTime())) {
@@ -3557,7 +3580,6 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-// Global Window Exports
 window.fetchNhapXuatData = fetchNhapXuatData;
 window.createNewNhapXuatOrderForm = createNewNhapXuatOrderForm;
 window.applyNhapXuatFilters = applyNhapXuatFilters;
@@ -3565,9 +3587,6 @@ window.handleNxQrScannerAdd = handleNxQrScannerAdd;
 window.handleNxExcelFileImport = handleNxExcelFileImport;
 window.downloadNhapXuatExcelTemplate = downloadNhapXuatExcelTemplate;
 
-// =========================================================================
-// PDF Invoice Batch Processor (Core Logic for Manual Upload & Folder Watcher)
-// =========================================================================
 async function processPdfFilesBatch(files, isAuto = false) {
     if (!files || files.length === 0) return { successCount: 0, duplicateCount: 0 };
 
@@ -3581,7 +3600,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
 
     let successCount = 0;
     let duplicateCount = 0;
-    
+
     if (!isAuto) {
         showGenericConfirmModal('⏳ ĐANG XỬ LÝ', 'Đang đọc File PDF', `Vui lòng đợi, đang bóc tách dữ liệu từ ${files.length} hóa đơn...`, '', '#3b82f6', null, null);
         const modalBtn = document.getElementById('generic-confirm-btn');
@@ -3601,7 +3620,6 @@ async function processPdfFilesBatch(files, isAuto = false) {
         }
         if (!branchCode) branchCode = 'CN1';
 
-        // Preload products once to guarantee matching even if VatTu tab hasn't been loaded
         let allProducts = (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData) && window.vatTuData.length > 0) ? window.vatTuData : [];
         if (allProducts.length === 0) {
             const client = getNhapXuatSupabaseClient();
@@ -3632,8 +3650,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
             const file = fileListArray[i];
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-            
-            // Extract lines from PDF bằng cách gom nhóm theo tọa độ dòng thực tế (Y) và sắp xếp trái sang phải (X)
+
             let rawLines = [];
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                 const page = await pdf.getPage(pageNum);
@@ -3646,7 +3663,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
                     if (!item.str || !item.str.trim()) return;
                     const x = item.transform[4];
                     const y = item.transform[5];
-                    
+
                     let group = lineGroups.find(g => Math.abs(g.y - y) <= 4.0);
                     if (!group) {
                         group = { y: y, items: [] };
@@ -3655,10 +3672,8 @@ async function processPdfFilesBatch(files, isAuto = false) {
                     group.items.push({ x: x, str: item.str });
                 });
 
-                // Sắp xếp dòng từ trên xuống dưới (Y giảm dần)
                 lineGroups.sort((a, b) => b.y - a.y);
 
-                // Trong mỗi dòng sắp xếp từ trái qua phải (X tăng dần)
                 lineGroups.forEach(g => {
                     g.items.sort((a, b) => a.x - b.x);
                     const lineText = g.items.map(it => it.str).join(' ').trim();
@@ -3670,7 +3685,6 @@ async function processPdfFilesBatch(files, isAuto = false) {
 
             const fullTextFromLines = rawLines.join('\n');
 
-            // 1. Extract Invoice Number: Lấy chính xác chuỗi nằm sau "Mã HĐ:"
             let maHoaDon = null;
             const maHoaDonMatch = fullTextFromLines.match(/Mã\s*HĐ\s*[:：]?\s*([^\r\n]+)/i) 
                 || fullTextFromLines.match(/(?:Số hóa đơn|Mã hóa đơn|Số HĐ|Mã đơn)\s*[:：]?\s*([^\r\n]+)/i);
@@ -3691,7 +3705,6 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 maHoaDon = `HD-${Date.now()}`;
             }
 
-            // Check Duplicate by Invoice Number (trong Database và trong cùng đợt Upload hiện tại)
             const isDuplicateInDb = typeof nhapXuatData !== 'undefined' && nhapXuatData.some(order => order.muc_dich && (order.muc_dich === maHoaDon || order.muc_dich.startsWith(maHoaDon + ' ') || order.muc_dich.includes(maHoaDon)));
             const isDuplicateInBatch = processedInvoiceCodesInBatch.has(maHoaDon);
 
@@ -3704,7 +3717,6 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 continue;
             }
 
-            // 2. Extract Pet Name (Tên thú cưng | Thú cưng : Chít)
             let petName = '';
             const petNameMatch = fullTextFromLines.match(/(?:Tên thú cưng|Thú cưng)\s*[:：]?\s*([^\r\n]+)/i);
             if (petNameMatch) {
@@ -3713,19 +3725,17 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 petName = splitParts[0].trim();
             }
 
-            // Nếu không có tên thú cưng thực tế hoặc là tên GAIA / Bệnh viện -> Mục đích chỉ lấy đúng Mã HĐ
             const invalidKeywords = ['không tên', 'khong ten', 'gaia', 'bệnh viện', 'phòng khám', 'tp.hcm', 'tphcm', 'hospital'];
             let finalMucDich = maHoaDon;
             if (petName && !invalidKeywords.some(kw => petName.toLowerCase().includes(kw))) {
                 finalMucDich = `${maHoaDon} - ${petName}`;
             }
 
-            // 3. Extract items: Đối soát với Tên Hàng Hóa / Tên Mặt Hàng trong View Vật Tư
             const items = [];
 
             function findVatTuInStore(queryName) {
                 if (!queryName || !allProducts || allProducts.length === 0) return null;
-                
+
                 const norm = (str) => {
                     if (!str) return '';
                     return str.toLowerCase()
@@ -3739,7 +3749,6 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 const normQuery = norm(queryName);
                 if (!normQuery) return null;
 
-                // 1. So sánh trực tiếp hoặc chứa chuỗi 2 chiều
                 for (const vt of allProducts) {
                     const t1 = norm(vt.ten_mat_hang);
                     const t2 = norm(vt.ten_hoa_don);
@@ -3751,7 +3760,6 @@ async function processPdfFilesBatch(files, isAuto = false) {
                     }
                 }
 
-                // 2. Khớp theo từng từ khóa đặc trưng (token matching)
                 for (const vt of allProducts) {
                     for (const name of [vt.ten_mat_hang, vt.ten_hoa_don]) {
                         if (!name) continue;
@@ -3763,7 +3771,6 @@ async function processPdfFilesBatch(files, isAuto = false) {
                     }
                 }
 
-                // 3. Khớp tương tự (fuzzy/similarity)
                 const queryTokens = normQuery.split(' ').filter(w => w.length > 1);
                 let bestMatch = null;
                 let bestScore = 0;
@@ -3800,10 +3807,10 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 if (/^[\-\=\_\.\s]{3,}$/.test(line)) {
                     continue;
                 }
-                
+
                 line = line.replace(/^\d+[\.\-]\s+/, '');
                 let currentItemName = line;
-                
+
                 if (j + 1 < rawLines.length) {
                     const nextLine = rawLines[j+1].trim();
                     if (/^[\d,\.\s]+$/.test(nextLine)) {
@@ -3815,7 +3822,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
                             } else {
                                 qty = parseInt(numbers[0], 10) || 1;
                             }
-                            
+
                             let matchedVatTu = findVatTuInStore(currentItemName);
 
                             if (!matchedVatTu && j > 0) {
@@ -3825,7 +3832,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
                                     matchedVatTu = findVatTuInStore(combinedName);
                                 }
                             }
-                            
+
                             if (matchedVatTu) {
                                 items.push({
                                     ma_qr: matchedVatTu.ma_vach || '',
@@ -3864,7 +3871,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 const dateStr = `${yyyy}${mm}${dd}`;
                 const randomSuffix = generateRandom3Chars();
                 const maDon = `XK-${dateStr}-${branchCode}-${randomSuffix}`;
-                
+
                 const payload = {
                     ma_don: maDon,
                     loai_don: 'Xuất',
@@ -3896,7 +3903,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 }
             }
         }
-        
+
         if (!isAuto) {
             closeGenericConfirmModal();
             if (successCount > 0) {
@@ -3925,7 +3932,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 }, 300);
             }
         } else {
-            // Automated Mode
+
             if (successCount > 0) {
                 playNxAutoImportSound();
                 if (typeof showToast === 'function') {
@@ -3955,12 +3962,9 @@ async function handleNhapXuatPdfUpload(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     await processPdfFilesBatch(files, false);
-    event.target.value = ''; // reset input
+    event.target.value = ''; 
 }
 
-// =========================================================================
-// Automated Local Folder Watcher for PDF Invoices (Per-Account Persistence)
-// =========================================================================
 let nxWatchedDirHandle = null;
 let nxWatchedFolderName = '';
 let nxWatchIntervalId = null;
@@ -4065,7 +4069,7 @@ function playNxAutoImportSound() {
         if (!AudioContext) return;
         const ctx = new AudioContext();
         const now = ctx.currentTime;
-        
+
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.type = 'sine';
@@ -4076,7 +4080,7 @@ function playNxAutoImportSound() {
         gain1.connect(ctx.destination);
         osc1.start(now);
         osc1.stop(now + 0.2);
-        
+
         const osc2 = ctx.createOscillator();
         const gain2 = ctx.createGain();
         osc2.type = 'sine';
@@ -4087,7 +4091,7 @@ function playNxAutoImportSound() {
         gain2.connect(ctx.destination);
         osc2.start(now + 0.1);
         osc2.stop(now + 0.35);
-        
+
         const osc3 = ctx.createOscillator();
         const gain3 = ctx.createGain();
         osc3.type = 'sine';
@@ -4169,7 +4173,7 @@ function renderNxFolderWatcherUI(state) {
             </div>
         `;
     } else {
-        // Active
+
         bar.innerHTML = `
             <div class="nx-folder-watcher-badge active" title="Đang tự động theo dõi thư mục: ${escapeHtml(nxWatchedFolderName)} (Đã nạp tự động: ${nxWatchedAutoCount} đơn)">
                 <span class="nx-watcher-indicator active"></span>
@@ -4215,11 +4219,11 @@ async function setupNxWatchFolder() {
         const accountKey = getNxWatcherAccountKey();
 
         await saveFolderHandleToIdb(accountKey, handle, folderName);
-        
+
         nxWatchedDirHandle = handle;
         nxWatchedFolderName = folderName;
         nxIsWatchingPaused = false;
-        
+
         const processedSigs = getNxWatchedSignatures(accountKey);
         const existingPdfFiles = [];
         for await (const entry of handle.values()) {
@@ -4317,12 +4321,10 @@ async function removeNxWatchFolder() {
 
 async function forceSyncNxWatchFolder() {
     if (!nxWatchedDirHandle || nxIsWatchingPaused || nxIsScanningFolder) return;
-    
-    // Clear tracked signatures to force re-evaluation of all files
+
     const accountKey = getNxWatcherAccountKey();
     saveNxWatchedSignatures(accountKey, new Set());
 
-    // Đặt lại bộ đếm về 0 trước khi quét lại
     nxWatchedAutoCount = 0;
     localStorage.setItem('gaia_watched_count_' + accountKey, '0');
     renderNxFolderWatcherUI('active');
@@ -4331,13 +4333,12 @@ async function forceSyncNxWatchFolder() {
         showToast('info', 'Đồng Bộ', 'Đang quét lại toàn bộ thư mục...');
     }
 
-    // Run scan
     await scanNxWatchedFolder();
 }
 
 async function scanNxWatchedFolder() {
     if (!nxWatchedDirHandle || nxIsWatchingPaused || nxIsScanningFolder) return;
-    
+
     try {
         const perm = await nxWatchedDirHandle.queryPermission({ mode: 'read' });
         if (perm !== 'granted') {
@@ -4373,7 +4374,7 @@ async function scanNxWatchedFolder() {
         if (newFilesToProcess.length > 0) {
             console.log(`GAIA Folder Watcher: Phát hiện ${newFilesToProcess.length} file PDF mới trong [${nxWatchedFolderName}]. Đang xử lý...`);
             const res = await processPdfFilesBatch(newFilesToProcess, true);
-            
+
             newSigsToAdd.forEach(s => processedSigs.add(s));
             saveNxWatchedSignatures(accountKey, processedSigs);
 
@@ -4392,8 +4393,7 @@ async function scanNxWatchedFolder() {
 
 async function markNxOrderAsDone() {
     if (!selectedNxOrderId) return;
-    
-    // Check if fully scanned
+
     let isFullyScanned = true;
     for (const item of currentDraftNxItems) {
         const req = item.so_luong_yeu_cau || 0;
@@ -4417,7 +4417,6 @@ async function markNxOrderAsDone() {
 
         if (error) throw error;
 
-        // Log action
         const currentUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
         let userNameFormatted = currentUser ? currentUser.ho_ten || currentUser.email : 'Hệ Thống';
         await supabaseClient.from('nhap_xuat_log').insert([{
@@ -4429,39 +4428,36 @@ async function markNxOrderAsDone() {
         }]);
 
         alert("Đã hoàn tất đơn hàng!");
-        
+
     } catch (e) {
         console.error("Error marking done:", e);
         alert("Lỗi khi cập nhật trạng thái đơn.");
     }
 }
 
-// =========================================================================
-// MULTI-FILE ATTACHMENT SYSTEM FOR NHAP XUAT ORDERS
-// =========================================================================
 let currentNxAttachments = [];
 
 function getNxFileIcon(fileNameOrUrl) {
     if (!fileNameOrUrl) return '📄';
     const str = String(fileNameOrUrl).toLowerCase();
-    
+
     if (str.endsWith('.xlsx') || str.endsWith('.xls') || str.endsWith('.csv') || str.includes('excel')) {
-        return '🟢'; // Excel icon
+        return '🟢'; 
     }
     if (str.endsWith('.docx') || str.endsWith('.doc') || str.includes('word')) {
-        return '📘'; // Word icon
+        return '📘'; 
     }
     if (str.endsWith('.pdf')) {
-        return '📕'; // PDF icon
+        return '📕'; 
     }
     if (str.endsWith('.png') || str.endsWith('.jpg') || str.endsWith('.jpeg') || str.endsWith('.webp') || str.endsWith('.gif') || str.endsWith('.svg')) {
-        return '🖼️'; // Image icon
+        return '🖼️'; 
     }
     if (str.endsWith('.zip') || str.endsWith('.rar') || str.endsWith('.7z')) {
-        return '📦'; // Archive icon
+        return '📦'; 
     }
     if (str.endsWith('.txt') || str.endsWith('.sql') || str.endsWith('.json')) {
-        return '📑'; // Document text icon
+        return '📑'; 
     }
     return '📄';
 }
@@ -4646,3 +4642,75 @@ window.setupNxWatchFolder = setupNxWatchFolder;
 window.resumeNxWatchFolder = resumeNxWatchFolder;
 window.toggleNxWatchFolder = toggleNxWatchFolder;
 window.removeNxWatchFolder = removeNxWatchFolder;
+
+// ==========================================
+// GLOBAL BARCODE SCANNER COMMAND LISTENER FOR NHẬP/XUẤT
+// ==========================================
+let globalNxBarcodeBuffer = '';
+let globalNxBarcodeLastTime = 0;
+
+document.addEventListener('keydown', (e) => {
+    const viewNx = document.getElementById('view-nhap-xuat');
+    if (!viewNx || (!viewNx.classList.contains('active') && window.getComputedStyle(viewNx).display === 'none')) {
+        return;
+    }
+
+    const activeEl = document.activeElement;
+    const isInsideScannerInput = activeEl && activeEl.id === 'nx-qr-scanner-input';
+    const isInsideMucDichInput = activeEl && activeEl.id === 'nx-input-mucdich';
+    const isInsideOtherInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT') && !isInsideScannerInput && !isInsideMucDichInput;
+
+    const now = Date.now();
+    if (now - globalNxBarcodeLastTime > 250) {
+        globalNxBarcodeBuffer = '';
+    }
+    globalNxBarcodeLastTime = now;
+
+    if (e.key === 'Enter') {
+        const scannedCode = globalNxBarcodeBuffer.trim();
+        globalNxBarcodeBuffer = '';
+
+        if (!scannedCode) return;
+
+        const codeUpper = scannedCode.toUpperCase();
+
+        // 1. Quét lệnh XUAT từ bất kỳ đâu trong màn hình Nhập Xuất
+        if (['XUAT', 'XUẤT', 'XUAT KHO', 'XUẤT KHO', 'XK'].includes(codeUpper)) {
+            e.preventDefault();
+            if (isInsideScannerInput) activeEl.value = '';
+            startNewNxOrderWithShortcut('Xuất');
+            return;
+        }
+
+        // 2. Quét lệnh NHAP từ bất kỳ đâu trong màn hình Nhập Xuất
+        if (['NHAP', 'NHẬP', 'NHAP KHO', 'NHẬP KHO', 'NK'].includes(codeUpper)) {
+            e.preventDefault();
+            if (isInsideScannerInput) activeEl.value = '';
+            startNewNxOrderWithShortcut('Nhập');
+            return;
+        }
+
+        // 3. Quét lệnh OK / LUU / SAVE từ bất kỳ đâu trong màn hình Nhập Xuất
+        if (['OK', 'LUU', 'LƯU', 'DONE', 'SAVE', 'HOANTAT', 'HOAN TAT'].includes(codeUpper)) {
+            e.preventDefault();
+            if (isInsideScannerInput) activeEl.value = '';
+            if (typeof saveNxOrderToSystem === 'function') {
+                saveNxOrderToSystem();
+            }
+            return;
+        }
+
+        // 4. Nếu không ở trong ô nhập liệu nào, tự động chuyển mã quét vào ô quét sản phẩm
+        if (!isInsideOtherInput && !isInsideScannerInput && !isInsideMucDichInput) {
+            const scannerInput = document.getElementById('nx-qr-scanner-input');
+            if (scannerInput && !scannerInput.disabled) {
+                e.preventDefault();
+                scannerInput.value = scannedCode;
+                handleNxQrScannerAdd();
+            }
+        }
+    } else if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        globalNxBarcodeBuffer += e.key;
+    }
+});
+

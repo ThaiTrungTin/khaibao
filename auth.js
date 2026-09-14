@@ -1,12 +1,6 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Authentication & Role Permission Engine (auth.js)
-   Login System, Role Access Control, Live Profile Update & Supabase Sync
-   ========================================================================== */
-
 let currentUser = null;
 let supabaseRealtimeChannel = null;
 
-// Initial Fallback Users if database is empty
 const defaultAuthUsers = [
     {
         id: "demo-admin",
@@ -41,14 +35,12 @@ document.addEventListener("DOMContentLoaded", () => {
     initAuthEngine();
 });
 
-// Initialize Auth State
 function initAuthEngine() {
     bindAuthEvents();
     checkSavedUserSession();
     initSupabaseRealtimeSync();
 }
 
-// Get or Initialize Supabase Client
 function getAuthSupabaseClient() {
     if (window.supabaseClient) return window.supabaseClient;
     if (typeof supabaseClient !== 'undefined' && supabaseClient) return supabaseClient;
@@ -63,7 +55,6 @@ function getAuthSupabaseClient() {
     return null;
 }
 
-// Check Local Saved Session
 function checkSavedUserSession() {
     const saved = localStorage.getItem("gaia_logged_user");
     if (saved) {
@@ -78,7 +69,6 @@ function checkSavedUserSession() {
     showLoginScreen();
 }
 
-// Show Login Screen Overlay
 function showLoginScreen() {
     const loginScreen = document.getElementById("login-screen");
     const appWrapper = document.querySelector(".app-wrapper");
@@ -87,7 +77,6 @@ function showLoginScreen() {
     if (appWrapper) appWrapper.style.display = "none";
 }
 
-// Show Main App Interface & Apply Permissions
 function showAppInterface() {
     const loginScreen = document.getElementById("login-screen");
     const appWrapper = document.querySelector(".app-wrapper");
@@ -97,12 +86,21 @@ function showAppInterface() {
 
     updateHeaderProfileWidget();
     applyRolePermissions();
+
+    if (typeof window.fetchAllCaiDatSettings === 'function') {
+        window.fetchAllCaiDatSettings();
+    }
+    if (typeof window.initCaiDatRealtime === 'function') {
+        window.initCaiDatRealtime();
+    }
+    if (typeof window.notifyAllModulesBranchUpdated === 'function') {
+        window.notifyAllModulesBranchUpdated();
+    }
     if (typeof window.initNxFolderWatcher === 'function') {
         window.initNxFolderWatcher();
     }
 }
 
-// Bind Event Listeners
 function bindAuthEvents() {
     const loginForm = document.getElementById("login-form");
     const btnLogout = document.getElementById("btn-app-logout");
@@ -124,7 +122,6 @@ function bindAuthEvents() {
         });
     }
 
-    // Toggle Header Dropdown
     if (widget) {
         widget.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -151,7 +148,6 @@ function bindAuthEvents() {
         });
     }
 
-    // Theme toggle button on login screen
     if (loginThemeToggle) {
         loginThemeToggle.addEventListener("click", () => {
             if (typeof toggleTheme === 'function') {
@@ -166,7 +162,6 @@ function bindAuthEvents() {
     }
 }
 
-// Handle Login Submit
 async function handleLoginSubmit() {
     const emailInput = document.getElementById("login-email");
     const passInput = document.getElementById("login-pass");
@@ -192,7 +187,7 @@ async function handleLoginSubmit() {
 
     try {
         if (client) {
-            // Search in Supabase 'staff' table
+
             const { data, error } = await client
                 .from('staff')
                 .select('*')
@@ -208,7 +203,6 @@ async function handleLoginSubmit() {
         console.warn("Auth: Supabase query exception:", e);
     }
 
-    // Local Storage / Seed Data Fallback Search
     if (!foundUser) {
         let localList = [];
         const saved = localStorage.getItem("gaia_staff_list");
@@ -240,7 +234,6 @@ function showLoginError(msg) {
     }
 }
 
-// Handle Logout
 function handleLogout() {
     currentUser = null;
     localStorage.removeItem("gaia_logged_user");
@@ -249,7 +242,6 @@ function handleLogout() {
     showLoginScreen();
 }
 
-// Update Top-Right Profile Header Widget
 function updateHeaderProfileWidget() {
     if (!currentUser) return;
 
@@ -268,7 +260,6 @@ function updateHeaderProfileWidget() {
         const roleVal = currentUser.role || "Nhân viên";
         roleEl.textContent = roleVal;
 
-        // Reset classes
         roleEl.className = "user-role-badge";
         if (roleVal === "Quản lý") roleEl.classList.add("role-badge-manager");
         else if (roleVal === "Admin") roleEl.classList.add("role-badge-admin");
@@ -282,14 +273,17 @@ function updateHeaderProfileWidget() {
     if (locationBranchEl) {
         locationBranchEl.textContent = currentUser.branch || "Chi Nhánh TP.HCM";
     }
+
+    if (typeof window.applyBranchBranding === 'function') {
+        window.applyBranchBranding(currentUser.branch);
+    }
 }
 
-// Apply Role Permissions (RBAC)
 function applyRolePermissions() {
     if (!currentUser) return;
 
     const roleLower = (currentUser.role || "").toLowerCase().trim();
-    // Only Admin and Quản lý have full access to Staff Management View
+
     const isAdminOrManager = roleLower === "admin" || roleLower.includes("quản lý") || roleLower.includes("quan ly") || roleLower.includes("manager");
     const isEmployee = !isAdminOrManager;
 
@@ -297,17 +291,18 @@ function applyRolePermissions() {
     const staffModuleContent = document.getElementById("staff-module-content");
 
     if (isEmployee) {
-        // Show Access Denied Box and Hide Staff Module Content for all Non-Admin/Manager users
         if (accessDeniedBox) accessDeniedBox.style.display = "flex";
         if (staffModuleContent) staffModuleContent.style.display = "none";
     } else {
-        // Show Staff Module Content for 'Admin' and 'Quản lý'
         if (accessDeniedBox) accessDeniedBox.style.display = "none";
         if (staffModuleContent) staffModuleContent.style.display = "block";
     }
+
+    if (typeof updateCaiDatRolePermissions === 'function') {
+        updateCaiDatRolePermissions();
+    }
 }
 
-// Live update check when staff data changes locally or via DB
 window.checkAndUpdateCurrentUserLive = function (updatedStaff) {
     if (!currentUser || !updatedStaff) return;
 
@@ -321,7 +316,6 @@ window.checkAndUpdateCurrentUserLive = function (updatedStaff) {
         updateHeaderProfileWidget();
         applyRolePermissions();
 
-        // Refresh top control bar branch filter select and sync all count stats live!
         if (typeof initBranchFilterDropdown === 'function') {
             initBranchFilterDropdown();
         }
@@ -334,7 +328,6 @@ window.checkAndUpdateCurrentUserLive = function (updatedStaff) {
     }
 };
 
-// Open Profile Edit Modal
 function openProfileEditModal() {
     if (!currentUser) return;
 
@@ -351,7 +344,7 @@ function openProfileEditModal() {
     document.getElementById("my-input-name").value = currentUser.full_name || "";
     document.getElementById("my-input-email").value = currentUser.email || "";
     document.getElementById("my-input-phone").value = currentUser.phone || "";
-    document.getElementById("my-input-new-pass").value = ""; // Leave blank by default!
+    document.getElementById("my-input-new-pass").value = ""; 
     document.getElementById("my-input-current-pass").value = "";
 
     modal.classList.add("show");
@@ -382,7 +375,6 @@ function showProfileError(inputId, errId, msg) {
     if (err) { err.textContent = msg; err.classList.add("active"); }
 }
 
-// Save Profile Edits (Requires Current Password)
 async function handleSaveMyProfile() {
     if (!currentUser) return;
 
@@ -410,14 +402,12 @@ async function handleSaveMyProfile() {
 
     if (hasError) return;
 
-    // Validate Phone format
     const phoneRegex = /^0\d{9,10}$/;
     if (!phoneRegex.test(phone)) {
         showProfileError("my-input-phone", "err-my-phone", "SĐT phải gồm 10 số (VD: 0918123456)");
         return;
     }
 
-    // New Password is OPTIONAL. If entered, must be >= 6 characters (any characters allowed!)
     let finalPassword = currentUser.password;
     if (newPass) {
         if (newPass.length < 6) {
@@ -470,7 +460,6 @@ async function handleSaveMyProfile() {
         currentUser = updatedUser;
         localStorage.setItem("gaia_logged_user", JSON.stringify(currentUser));
 
-        // Sync with local staff list if available
         let staffList = JSON.parse(localStorage.getItem("gaia_staff_list") || "[]");
         const idx = staffList.findIndex(s => String(s.id) === String(currentUser.id));
         if (idx !== -1) {
@@ -489,7 +478,6 @@ async function handleSaveMyProfile() {
     }
 }
 
-// Silent DB Poll Sync for active logged in user
 async function syncCurrentUserFromDatabase() {
     if (!currentUser || !currentUser.email) return;
 
@@ -505,7 +493,7 @@ async function syncCurrentUserFromDatabase() {
 
         if (!error && data && data[0]) {
             const dbUser = data[0];
-            // If role, name or branch in DB differs from current session, update live!
+
             if (dbUser.role !== currentUser.role || dbUser.full_name !== currentUser.full_name || dbUser.branch !== currentUser.branch) {
                 console.log("GAIA Auth: Silent sync detected DB change for user:", dbUser);
                 window.checkAndUpdateCurrentUserLive(dbUser);
@@ -516,7 +504,6 @@ async function syncCurrentUserFromDatabase() {
     }
 }
 
-// Supabase Realtime Listener (Syncs DB role changes instantly without relogging)
 function initSupabaseRealtimeSync() {
     const client = getAuthSupabaseClient();
     if (!client) return;
@@ -532,7 +519,6 @@ function initSupabaseRealtimeSync() {
                         window.checkAndUpdateCurrentUserLive(payload.new);
                     }
 
-                    // If staff view is open, refresh staff list automatically
                     if (typeof fetchStaffData === 'function') {
                         fetchStaffData();
                     }
@@ -545,7 +531,6 @@ function initSupabaseRealtimeSync() {
         }
     }
 
-    // Also sync on window focus and every 10 seconds as fail-safe fallback
     window.removeEventListener('focus', syncCurrentUserFromDatabase);
     window.addEventListener('focus', syncCurrentUserFromDatabase);
 
@@ -553,12 +538,6 @@ function initSupabaseRealtimeSync() {
         window.gaiaAuthSyncInterval = setInterval(syncCurrentUserFromDatabase, 10000);
     }
 }
-
-/* ==========================================================================
-   Branch Permission & Role Access Control Engine
-   Quản lý: Views ALL data across system
-   Admin & Nhân viên: ONLY view data of their own branch (resolved via User)
-   ========================================================================== */
 
 window.getCurrentLoggedUser = function () {
     if (currentUser) return currentUser;
@@ -621,14 +600,12 @@ if (typeof window.extractCNCode !== 'function') {
 window.canUserAccessRecord = function (record) {
     if (!record) return true;
     const loggedUser = window.getCurrentLoggedUser();
-    if (!loggedUser) return true; // Default show if no login session
+    if (!loggedUser) return true; 
 
-    // Rule 1: Quản Lý (Manager) can view ALL data across all branches
     if (window.isManagerRole(loggedUser)) {
         return true;
     }
 
-    // Rule 2: Admin & Nhân Viên ONLY view data of their own branch
     let userBranchStr = loggedUser.branch || "";
     if (!userBranchStr && typeof window.getUserBranch === 'function') {
         userBranchStr = window.getUserBranch(loggedUser.full_name || loggedUser.email) || "";
@@ -645,7 +622,6 @@ window.canUserAccessRecord = function (record) {
         return true;
     }
 
-    // Determine branch of the record creator/owner
     let recordCN = '';
     if (record.user_name) {
         if (typeof window.extractCNCodeFromBranchString === 'function') {
@@ -679,4 +655,3 @@ window.canUserAccessRecord = function (record) {
 
     return true;
 };
-

@@ -1,19 +1,11 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Thẻ Kho (Stock Movement Log Journal) Module (the_kho.js)
-   Features: Search, Per-Column Interdependent Filters with Filter Badges, 
-   SVG 3-State Sort Icons (identical to Vật Tư), Table Cell Truncation (No Overlap),
-   Pagination identical to Vật Tư, Excel Export, Column Config.
-   Read-only: No Add/Edit/Delete buttons.
-   ========================================================================== */
-
 let theKhoData = [];
 let theKhoFilteredData = [];
 let theKhoCurrentPage = 1;
 let theKhoPageSize = 25;
 let theKhoSortCol = null;
-let theKhoSortDir = null; // 'asc', 'desc', or null
+let theKhoSortDir = null; 
 let theKhoActiveFilterCol = null;
-let theKhoColumnFilters = {}; // { colKey: Set(['val1', 'val2']) }
+let theKhoColumnFilters = {}; 
 let theKhoPopoverTempSelectedValues = new Set();
 
 const theKhoColTitles = {
@@ -30,7 +22,6 @@ const theKhoColTitles = {
     created_at: 'TIME'
 };
 
-// Default Column Definitions for Thẻ Kho
 const defaultTheKhoCols = [
     { key: 'ma_don', title: 'MÃ ĐƠN', width: '160px', minWidth: '120px', align: 'center', visible: true },
     { key: 'ma_qr', title: 'MÃ QR', width: '130px', minWidth: '100px', align: 'center', visible: true },
@@ -47,7 +38,7 @@ const defaultTheKhoCols = [
 
 let currentTheKhoCols = [];
 let pendingTheKhoColsConfig = [];
-let thekhoFixedColsCount = 2; // Default 2 pinned columns for Thẻ Kho
+let thekhoFixedColsCount = 2; 
 
 function initTheKhoFixedColsConfig() {
     try {
@@ -100,7 +91,6 @@ function initTheKhoColumnsConfig() {
 }
 initTheKhoColumnsConfig();
 
-// Supabase Client Initializer
 function getTheKhoSupabaseClient() {
     if (window.supabaseClient) return window.supabaseClient;
     if (typeof supabase !== 'undefined' && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
@@ -114,7 +104,6 @@ function getTheKhoSupabaseClient() {
     return null;
 }
 
-// Module Lifecycle Initialization
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initTheKhoModule);
 } else {
@@ -124,7 +113,6 @@ if (document.readyState === 'loading') {
 function initTheKhoModule() {
     console.log("GAIA TheKho: Initializing Stock Journal Module...");
 
-    // Action Buttons
     const btnRefresh = document.getElementById('btn-refresh-thekho');
     if (btnRefresh) btnRefresh.addEventListener('click', fetchTheKhoData);
 
@@ -136,7 +124,6 @@ function initTheKhoModule() {
         btnConfigCols.addEventListener('click', openTheKhoColumnConfigModal);
     }
 
-    // Filter & Search Listeners
     const searchInput = document.getElementById('thekho-search-input');
     if (searchInput) searchInput.addEventListener('input', () => {
         theKhoCurrentPage = 1;
@@ -149,7 +136,6 @@ function initTheKhoModule() {
         applyTheKhoFilters();
     });
 
-    // Page Size Selector
     const pageSizeSelect = document.getElementById('thekho-page-size-select');
     if (pageSizeSelect) {
         pageSizeSelect.addEventListener('change', (e) => {
@@ -159,7 +145,6 @@ function initTheKhoModule() {
         });
     }
 
-    // Close Column Filter Popover on outside click
     document.addEventListener('click', (e) => {
         const popover = document.getElementById('thekho-col-filter-popover');
         if (!popover || popover.style.display === 'none') return;
@@ -171,7 +156,6 @@ function initTheKhoModule() {
     setupTheKhoRealtimeSubscription();
 }
 
-// Fetch Data from Supabase table 'the_kho'
 async function fetchTheKhoData() {
     showTheKhoLoading(true);
     const client = getTheKhoSupabaseClient();
@@ -199,16 +183,14 @@ async function fetchTheKhoData() {
         showTheKhoLoading(false);
         await initTheKhoBranchFilterForManager();
         applyTheKhoFilters();
-        window.theKhoData = theKhoData; // expose for global search
+        window.theKhoData = theKhoData; 
     }
 }
 
-// Sample Fallback Data (Cleaned - returns empty array by default)
 function getSampleTheKhoData() {
     return [];
 }
 
-// Supabase Realtime Channel
 function setupTheKhoRealtimeSubscription() {
     const client = getTheKhoSupabaseClient();
     if (!client) return;
@@ -225,7 +207,6 @@ function setupTheKhoRealtimeSubscription() {
     }
 }
 
-// Init & Populate Manager Branch Filter for Thẻ Kho View
 async function initTheKhoBranchFilterForManager() {
     const filterBranchSelect = document.getElementById('thekho-filter-branch');
     if (!filterBranchSelect) return;
@@ -281,7 +262,6 @@ async function initTheKhoBranchFilterForManager() {
     filterBranchSelect.style.display = 'inline-block';
 }
 
-// Filters & 3-State A-Z / Z-A Sorting Execution
 function applyTheKhoFilters() {
     const searchInput = document.getElementById('thekho-search-input');
     const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : '';
@@ -291,12 +271,10 @@ function applyTheKhoFilters() {
 
     let result = arraySearchTheKho(theKhoData, searchTerm);
 
-    // Apply Role & Branch Permission Filter: Quản lý sees all data; Admin & Nhân Viên only see data of their branch via User
     result = result.filter(item => {
         return (typeof window.canUserAccessRecord === 'function') ? window.canUserAccessRecord(item) : true;
     });
 
-    // Apply Manager Branch Filter Dropdown
     if (selectedBranch && selectedBranch !== 'all') {
         result = result.filter(x => {
             let itemCN = '';
@@ -309,7 +287,6 @@ function applyTheKhoFilters() {
         });
     }
 
-    // Apply Date Range Filter if active
     if (theKhoDateFilterRange.from || theKhoDateFilterRange.to) {
         result = result.filter(item => {
             const itemTime = item.created_at ? new Date(item.created_at).getTime() : 0;
@@ -319,7 +296,6 @@ function applyTheKhoFilters() {
         });
     }
 
-    // Apply per-column popover filters
     for (const [colKey, selectedSet] of Object.entries(theKhoColumnFilters)) {
         if (!selectedSet || selectedSet.size === 0) continue;
 
@@ -329,8 +305,6 @@ function applyTheKhoFilters() {
         });
     }
 
-
-    // Working 3-State Column A-Z, Z-A Sorting
     if (theKhoSortCol && theKhoSortDir) {
         result.sort((a, b) => {
             let valA = a[theKhoSortCol] ?? '';
@@ -392,7 +366,6 @@ function renderCurrentTheKhoPageData() {
     renderTheKhoPaginationControls(totalItems, totalPages, startIndex, endIndex);
 }
 
-// Requirement 1 & 2: Render Table Header with SVG Sort Arrows & Filter Badges (Identical to Vật Tư)
 function renderTheKhoTableHeader() {
     const thead = document.querySelector('.thekho-table thead tr');
     if (!thead) return;
@@ -442,7 +415,6 @@ function renderTheKhoTableHeader() {
             <div class="col-resizer"></div>
         `;
 
-        // Direct Click Listener for 3-State A-Z / Z-A Sorting
         th.addEventListener('click', (e) => {
             if (e.target.classList.contains('col-resizer') || e.target.closest('.col-filter-btn')) {
                 return;
@@ -450,7 +422,6 @@ function renderTheKhoTableHeader() {
             handleTheKhoHeaderSortClick(col.key);
         });
 
-        // Filter button listener
         const filterBtn = th.querySelector('.col-filter-btn');
         if (filterBtn) {
             filterBtn.addEventListener('click', (e) => {
@@ -465,7 +436,6 @@ function renderTheKhoTableHeader() {
     initTheKhoColumnResizing();
 }
 
-// 3-State Sorting Handler (asc -> desc -> null)
 function handleTheKhoHeaderSortClick(colKey) {
     if (theKhoSortCol !== colKey) {
         theKhoSortCol = colKey;
@@ -479,7 +449,6 @@ function handleTheKhoHeaderSortClick(colKey) {
     applyTheKhoFilters();
 }
 
-// Requirement 3: Render Table Rows with Cell Truncation (Prevents Overlapping)
 function renderTheKhoTable(items) {
     const tbody = document.querySelector('.thekho-table tbody');
     const emptyState = document.getElementById('thekho-empty-state');
@@ -549,7 +518,6 @@ function renderTheKhoTable(items) {
     });
 }
 
-// Requirement 2: Interdependent Column Filter Options & Badge Updates
 let theKhoDateFilterRange = { from: null, to: null };
 
 function formatTheKhoValForFilter(colKey, rawVal) {
@@ -585,12 +553,11 @@ function getAvailableOptionsForTheKhoColumn(colKey) {
     const selectedBranch = filterBranchSelect ? filterBranchSelect.value : 'all';
 
     let subset = theKhoData.filter(item => {
-        // Role & Branch Permission Filter: Quản lý sees all; Admin & Nhân Viên only see their branch
+
         if (typeof window.canUserAccessRecord === 'function' && !window.canUserAccessRecord(item)) {
             return false;
         }
 
-        // Manager Branch Filter Dropdown selection
         if (selectedBranch && selectedBranch !== 'all') {
             let itemCN = '';
             if (typeof extractCNCodeFromBranchString === 'function') {
@@ -601,7 +568,6 @@ function getAvailableOptionsForTheKhoColumn(colKey) {
             if (itemCN.toUpperCase() !== selectedBranch.toUpperCase()) return false;
         }
 
-        // Date Range filter if active
         if (theKhoDateFilterRange.from || theKhoDateFilterRange.to) {
             const itemTime = item.created_at ? new Date(item.created_at).getTime() : 0;
             if (theKhoDateFilterRange.from && itemTime < theKhoDateFilterRange.from) return false;
@@ -623,7 +589,6 @@ function getAvailableOptionsForTheKhoColumn(colKey) {
 
         if (!matchSearch || !matchLoai) return false;
 
-        // Check other active column filters
         for (const [otherCol, selectedSet] of Object.entries(theKhoColumnFilters)) {
             if (otherCol === colKey) continue;
             if (!selectedSet || selectedSet.size === 0) continue;
@@ -674,7 +639,7 @@ function toggleTheKhoColumnFilterDropdown(event, colKey) {
     if (btn) {
         const rect = btn.getBoundingClientRect();
         const popoverWidth = (colKey === 'created_at') ? 300 : 260;
-        let left = rect.left - 90; // Shift leftwards for easy access & clear visibility
+        let left = rect.left - 90; 
         let top = rect.bottom + 6;
 
         if (left + popoverWidth > window.innerWidth - 15) {
@@ -935,7 +900,6 @@ function clearAllTheKhoFilters() {
 window.handleTheKhoDateRangeChange = handleTheKhoDateRangeChange;
 window.setTheKhoDatePreset = setTheKhoDatePreset;
 
-// Pagination Controls & Button Rendering (Identical to Vật Tư)
 function renderTheKhoPaginationControls(totalItems, totalPages, startIdx, endIdx) {
     const rangeTextEl = document.getElementById('thekho-page-range-text');
     const totalTextEl = document.getElementById('thekho-page-total-text');
@@ -954,7 +918,6 @@ function renderTheKhoPaginationControls(totalItems, totalPages, startIdx, endIdx
     if (!btnsContainer) return;
     btnsContainer.innerHTML = '';
 
-    // Prev Button
     const btnPrev = document.createElement('button');
     btnPrev.type = 'button';
     btnPrev.className = `vattu-page-btn ${theKhoCurrentPage <= 1 ? 'disabled' : ''}`;
@@ -968,7 +931,6 @@ function renderTheKhoPaginationControls(totalItems, totalPages, startIdx, endIdx
     };
     btnsContainer.appendChild(btnPrev);
 
-    // Numbered Page Buttons
     let startPage = Math.max(1, theKhoCurrentPage - 2);
     let endPage = Math.min(totalPages, startPage + 4);
     if (endPage - startPage < 4) {
@@ -987,7 +949,6 @@ function renderTheKhoPaginationControls(totalItems, totalPages, startIdx, endIdx
         btnsContainer.appendChild(pageBtn);
     }
 
-    // Next Button
     const btnNext = document.createElement('button');
     btnNext.type = 'button';
     btnNext.className = `vattu-page-btn ${theKhoCurrentPage >= totalPages ? 'disabled' : ''}`;
@@ -1007,7 +968,6 @@ function changeTheKhoPage(newPage) {
     renderCurrentTheKhoPageData();
 }
 
-// Function to dynamically sync sticky column left offsets across headers and rows during/after resize
 function syncTheKhoStickyColumnPositions() {
     const visibleCols = currentTheKhoCols.filter(c => c.visible);
     let leftOffset = 0;
@@ -1041,7 +1001,6 @@ function syncTheKhoStickyColumnPositions() {
     });
 }
 
-// Column Resizing Dragging Handler
 function initTheKhoColumnResizing() {
     const resizers = document.querySelectorAll('.thekho-table .col-resizer');
     resizers.forEach(resizer => {
@@ -1084,7 +1043,6 @@ function initTheKhoColumnResizing() {
     });
 }
 
-// Column Configuration UI Logic
 function openTheKhoColumnConfigModal() {
     pendingTheKhoColsConfig = JSON.parse(JSON.stringify(currentTheKhoCols));
     const modal = document.getElementById('thekho-column-config-modal');
@@ -1106,10 +1064,9 @@ function closeTheKhoColumnConfigModal() {
 function renderTheKhoColConfigList() {
     const listEl = document.getElementById('thekho-column-list');
     if (!listEl) return;
-    
+
     listEl.innerHTML = '';
 
-    // Add Fixed Column Freeze control section at top of modal list
     const freezeHeader = document.createElement('div');
     freezeHeader.style.cssText = 'margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--card-border); display: flex; align-items: center; justify-content: space-between;';
     freezeHeader.innerHTML = `
@@ -1123,14 +1080,14 @@ function renderTheKhoColConfigList() {
         </select>
     `;
     listEl.appendChild(freezeHeader);
-    
+
     pendingTheKhoColsConfig.forEach((col, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === pendingTheKhoColsConfig.length - 1;
-        
+
         const eyeIconVisible = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
         const eyeIconHidden = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
-        
+
         const item = document.createElement('div');
         item.className = `col-config-item${col.visible ? '' : ' hidden-col'}`;
         item.innerHTML = `
@@ -1147,12 +1104,12 @@ function renderTheKhoColConfigList() {
                 </button>
             </div>
         `;
-        
+
         item.querySelector('.col-visibility-toggle').addEventListener('click', function() {
             pendingTheKhoColsConfig[idx].visible = !pendingTheKhoColsConfig[idx].visible;
             renderTheKhoColConfigList();
         });
-        
+
         const moveUpBtn = item.querySelector('[data-move="up"]');
         if (moveUpBtn && !isFirst) {
             moveUpBtn.addEventListener('click', function() {
@@ -1162,7 +1119,7 @@ function renderTheKhoColConfigList() {
                 renderTheKhoColConfigList();
             });
         }
-        
+
         const moveDwnBtn = item.querySelector('[data-move="down"]');
         if (moveDwnBtn && !isLast) {
             moveDwnBtn.addEventListener('click', function() {
@@ -1172,7 +1129,7 @@ function renderTheKhoColConfigList() {
                 renderTheKhoColConfigList();
             });
         }
-        
+
         listEl.appendChild(item);
     });
 }
@@ -1192,7 +1149,6 @@ function saveTheKhoColumnConfig() {
     applyTheKhoFilters();
 }
 
-// Open Export Excel Choice Modal for Thẻ Kho
 function exportTheKhoToExcel() {
     const filteredCount = theKhoFilteredData ? theKhoFilteredData.length : 0;
     const allCount = theKhoData ? theKhoData.length : 0;
@@ -1218,7 +1174,6 @@ function closeTheKhoExcelExportModal() {
     }
 }
 
-// Execute Export based on selected mode ('filtered' or 'all') for Thẻ Kho
 function executeTheKhoExcelExport(type) {
     closeTheKhoExcelExportModal();
 
@@ -1251,20 +1206,20 @@ function executeTheKhoExcelExport(type) {
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(exportRows);
-        
+
         const colWidths = [
-            { wch: 6 },  // STT
-            { wch: 18 }, // Mã Đơn
-            { wch: 16 }, // Mã QR
-            { wch: 18 }, // Mã Vạch
-            { wch: 14 }, // LOT
-            { wch: 14 }, // Date
-            { wch: 32 }, // Tên hàng hóa
-            { wch: 10 }, // Loại
-            { wch: 12 }, // Số lượng
-            { wch: 30 }, // Mục đích
-            { wch: 22 }, // User / Chi Nhánh
-            { wch: 20 }  // Thời Gian
+            { wch: 6 },  
+            { wch: 18 }, 
+            { wch: 16 }, 
+            { wch: 18 }, 
+            { wch: 14 }, 
+            { wch: 14 }, 
+            { wch: 32 }, 
+            { wch: 10 }, 
+            { wch: 12 }, 
+            { wch: 30 }, 
+            { wch: 22 }, 
+            { wch: 20 }  
         ];
         worksheet['!cols'] = colWidths;
 
@@ -1281,7 +1236,6 @@ function executeTheKhoExcelExport(type) {
     }
 }
 
-// QR Modal Dialog Renderer
 function showTheKhoQrModal(qrCodeStr) {
     const formattedQr = formatQrStringWithStandardDate(qrCodeStr);
     showVatTuNoticeModal(
@@ -1301,7 +1255,6 @@ function showTheKhoQrModal(qrCodeStr) {
     }, 100);
 }
 
-// Helper Utilities
 function formatTruncateCell(text, fallback = '-') {
     const cleanText = (text !== null && text !== undefined && String(text).trim() !== '' && String(text).trim() !== '-') 
         ? String(text).trim() 
@@ -1318,7 +1271,6 @@ function formatDate(dateStr) {
     const str = String(dateStr).trim();
     if (!str || str === '-') return '-';
 
-    // 1. Already in DD/MM/YYYY or DD/MM/YY format
     const ddMmYyyyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (ddMmYyyyMatch) {
         const d = ddMmYyyyMatch[1].padStart(2, '0');
@@ -1327,7 +1279,6 @@ function formatDate(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 2. In YYYY-MM-DD or YYYY/MM/DD format (ISO date)
     const yyyyMmDdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (yyyyMmDdMatch) {
         const y = yyyyMmDdMatch[1];
@@ -1336,7 +1287,6 @@ function formatDate(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 3. In DD-MM-YYYY format
     const ddMmYyyyDashMatch = str.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
     if (ddMmYyyyDashMatch) {
         const d = ddMmYyyyDashMatch[1].padStart(2, '0');
@@ -1345,7 +1295,6 @@ function formatDate(dateStr) {
         return `${d}/${m}/${y}`;
     }
 
-    // 4. Standard JS Date parsing for ISO timestamps
     try {
         const dt = new Date(str);
         if (!isNaN(dt.getTime())) {
@@ -1362,7 +1311,7 @@ function formatDate(dateStr) {
 function formatQrStringWithStandardDate(qrStr, dateExpiry) {
     if (!qrStr) return '';
     let str = String(qrStr).trim();
-    // Clean legacy trailing empty delimiters like `;-;` or `;-`
+
     str = str.replace(/;-;?$/g, '').replace(/;-$/g, '');
     if (!str.includes(';')) return str;
     const parts = str.split(';');
@@ -1428,7 +1377,6 @@ function showTheKhoLoading(show) {
     if (spinner) spinner.style.display = show ? 'flex' : 'none';
 }
 
-// Quick filter handler invoked from other modules (Vật Tư quick view)
 function filterTheKhoByBarcodeAndLot(maVach, lot = '', branch = '') {
     clearAllTheKhoFilters();
 
@@ -1459,7 +1407,6 @@ function filterTheKhoByBarcodeAndLot(maVach, lot = '', branch = '') {
     applyTheKhoFilters();
 }
 
-// Global Window Exports
 window.fetchTheKhoData = fetchTheKhoData;
 window.handleTheKhoHeaderSortClick = handleTheKhoHeaderSortClick;
 window.openTheKhoColumnConfigModal = openTheKhoColumnConfigModal;

@@ -1,4 +1,5 @@
 ALTER TABLE public.san_pham 
+ADD COLUMN IF NOT EXISTS anh TEXT,
 ADD COLUMN IF NOT EXISTS phong_ban TEXT,
 ADD COLUMN IF NOT EXISTS ton_dau NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS nhap NUMERIC DEFAULT 0,
@@ -33,6 +34,7 @@ CREATE OR REPLACE VIEW public.view_vattu_tong_hop AS
 SELECT 
     sp.id,
     sp.ma_vach,
+    sp.anh,
     sp.ten_mat_hang,
     sp.ten_hoa_don,
     sp.nha_san_xuat,
@@ -55,6 +57,7 @@ LEFT JOIN public.ton_kho_detail tk
 GROUP BY 
     sp.id,
     sp.ma_vach,
+    sp.anh,
     sp.ten_mat_hang,
     sp.ten_hoa_don,
     sp.nha_san_xuat,

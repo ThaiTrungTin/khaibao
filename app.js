@@ -1,6 +1,3 @@
-/* GAIA Animal Hospital Ho Chi Minh City Intake Form Application Logic */
-
-// --- Translation Dictionary ---
 const translations = {
     vi: {
         title: "Thông tin Chủ & Thú cưng",
@@ -188,7 +185,6 @@ let currentLang = "vi";
 let currentStep = 1;
 const totalSteps = 4;
 
-// --- DOM Elements ---
 const form = document.getElementById("gaia-intake-form");
 const steps = document.querySelectorAll(".wizard-step");
 const stepDots = document.querySelectorAll(".step-dot");
@@ -199,12 +195,10 @@ const submitBtn = document.getElementById("submit-btn");
 const langButtons = document.querySelectorAll(".lang-btn");
 const formDateInput = document.getElementById("form-date");
 
-// Success Modal Elements
 const successModal = document.getElementById("success-modal");
 const modalCloseBtn = document.getElementById("modal-close-btn");
 const modalDownloadBtn = document.getElementById("modal-download-btn");
 
-// Canvas Signature Pad Elements
 const canvas = document.getElementById("signature-canvas");
 const ctx = canvas.getContext("2d");
 const clearSigBtn = document.getElementById("clear-sig-btn");
@@ -212,23 +206,21 @@ const sigErrorMsg = document.getElementById("sig-error-msg");
 
 let isDrawing = false;
 let hasSigned = false;
-let petPhotoDataUrl = ""; // Stores JSON stringified array of pet photos
-let petPhotosArray = [];  // Array of base64 image strings
+let petPhotoDataUrl = ""; 
+let petPhotosArray = [];  
 
-// --- Anti-Spam Protection State ---
 const SPAM_CONFIG = {
-    MIN_FILL_TIME_MS: 15000,       // Min 15 seconds to fill the form (bots are instant)
-    MAX_SUBMISSIONS_PER_HOUR: 3,   // Max 3 submissions per hour per device
-    COOLDOWN_BETWEEN_SUBMIT_MS: 120000, // 2 minutes mandatory cooldown between submissions
-    RATE_LIMIT_WINDOW_MS: 3600000  // 1 hour sliding window for rate limiting
+    MIN_FILL_TIME_MS: 15000,       
+    MAX_SUBMISSIONS_PER_HOUR: 3,   
+    COOLDOWN_BETWEEN_SUBMIT_MS: 120000, 
+    RATE_LIMIT_WINDOW_MS: 3600000  
 };
-let formStartTime = null; // Timestamp when user first interacted with form
+let formStartTime = null; 
 
-// --- Supabase Client Initialization ---
 let supabaseClient = null;
 if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_PROJECT_URL') {
     try {
-        // supabase.createClient comes from the loaded @supabase/supabase-js library CDN
+
         supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
         console.log("GAIA: Supabase Client initialized successfully!");
         initFormPresence();
@@ -239,11 +231,9 @@ if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url && SUPABASE_CO
     console.warn("GAIA: Supabase credentials are not configured in env.js. Operating in local Mock Mode.");
 }
 
-// Join Supabase real-time broadcast & presence so Admin dashboard shows accurate live form user count globally
 function initFormPresence() {
     const clientId = 'customer_' + Math.random().toString(36).substring(2, 10);
 
-    // 1. Local cross-tab heartbeat (same PC/browser)
     function pingLocalPresence() {
         try {
             localStorage.setItem('gaia_live_form_ping', Date.now());
@@ -256,7 +246,6 @@ function initFormPresence() {
     pingLocalPresence();
     setInterval(pingLocalPresence, 2000);
 
-    // 2. Supabase Realtime Unified Channel (Broadcast + Presence across all devices worldwide)
     if (!supabaseClient) return;
     try {
         const liveRoom = supabaseClient.channel('gaia_live_form_room_v1', {
@@ -274,7 +263,6 @@ function initFormPresence() {
             }
         });
 
-        // Continuously send broadcast pings every 2 seconds
         setInterval(() => {
             try {
                 liveRoom.send({
@@ -307,14 +295,13 @@ function initFormPresence() {
     }
 }
 
-// --- Auto-expanding Textareas with > 3 Lines Expand/Collapse Toggle ---
 function updateTextareaResize(textarea) {
     if (!textarea) return;
     const inputGroup = textarea.closest(".input-group");
     if (!inputGroup) return;
 
     const toggleBtn = inputGroup.querySelector(".btn-textarea-toggle");
-    const MAX_3_LINES_HEIGHT = 98; // 3 lines threshold (~98px)
+    const MAX_3_LINES_HEIGHT = 98; 
     const COLLAPSED_HEIGHT = 98;
 
     const isCollapsed = textarea.dataset.collapsed === "true";
@@ -330,7 +317,7 @@ function updateTextareaResize(textarea) {
             toggleBtn.style.display = "inline-flex";
             updateToggleButtonState(toggleBtn, !isCollapsed);
         }
-        // Add bottom padding so text doesn't overlap the toggle button inside
+
         textarea.style.paddingBottom = "28px";
 
         if (isCollapsed) {
@@ -412,7 +399,6 @@ function initAutoExpandingTextareas() {
     });
 }
 
-// --- Speech-to-Text Voice Input for ALL Text Input Fields ---
 let activeVoiceRecognition = null;
 let activeVoiceMicBtn = null;
 let activeVoiceField = null;
@@ -433,7 +419,7 @@ function getSpeechLang() {
 function stopAllVoiceRecording() {
     voiceIsRecording = false;
     if (activeVoiceRecognition) {
-        try { activeVoiceRecognition.stop(); } catch (e) { /* ignore */ }
+        try { activeVoiceRecognition.stop(); } catch (e) {  }
         activeVoiceRecognition = null;
     }
     if (activeVoiceMicBtn) {
@@ -443,7 +429,7 @@ function stopAllVoiceRecording() {
     if (activeVoiceField) {
         activeVoiceField.style.borderColor = "";
         activeVoiceField.style.boxShadow = "";
-        // Auto-expand if textarea
+
         if (activeVoiceField.tagName === "TEXTAREA" && typeof updateTextareaResize === "function") {
             updateTextareaResize(activeVoiceField);
         }
@@ -460,13 +446,11 @@ function parseSpeechNumber(text) {
     if (!text) return "";
     let s = text.trim().toLowerCase();
 
-    // Clean up decimals & rưỡi
     s = s.replace(/,/g, ".")
          .replace(/phẩy|chấm|point|dot/g, ".")
          .replace(/\s*\.\s*/g, ".")
          .replace(/rưỡi/g, ".5");
 
-    // Word mapping for Vietnamese & English numbers
     const numMap = {
         "không": "0", "zero": "0",
         "một": "1", "mốt": "1", "one": "1",
@@ -486,7 +470,6 @@ function parseSpeechNumber(text) {
         s = s.replace(regex, digit);
     }
 
-    // Extract first valid integer or decimal number
     const match = s.match(/(\d+(?:\.\d+)?)/);
     if (match) {
         return match[1];
@@ -498,7 +481,6 @@ function startVoiceRecording(field, micBtn) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
-    // Stop any existing recording first
     if (voiceIsRecording) {
         stopAllVoiceRecording();
     }
@@ -518,7 +500,6 @@ function startVoiceRecording(field, micBtn) {
     micBtn.classList.add("recording");
     micBtn.setAttribute("aria-label", translations[currentLang]?.voice_listening || "Đang nghe...");
 
-    // Visual feedback on the field
     field.style.borderColor = "#dc2626";
     field.style.boxShadow = "0 0 0 3px rgba(220, 38, 38, 0.15)";
 
@@ -549,10 +530,8 @@ function startVoiceRecording(field, micBtn) {
             field.value = rawText;
         }
 
-        // Dispatch events so form saves and validates instantly
         field.dispatchEvent(new Event("input", { bubbles: true }));
 
-        // Trigger auto-expand for textareas
         if (field.tagName === "TEXTAREA" && typeof updateTextareaResize === "function") {
             field.dataset.collapsed = "false";
             updateTextareaResize(field);
@@ -585,12 +564,11 @@ function startVoiceRecording(field, micBtn) {
 function initVoiceInput() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        // Browser does not support Speech Recognition — do nothing
+
         console.warn("GAIA: Speech Recognition not supported.");
         return;
     }
 
-    // Select all eligible text input fields (not checkboxes, radios, selects, file, date, hidden)
     const eligibleFields = form.querySelectorAll(
         "input[type='text'], input[type='tel'], input[type='number'], textarea"
     );
@@ -599,13 +577,10 @@ function initVoiceInput() {
         const inputGroup = field.closest(".input-group");
         if (!inputGroup) return;
 
-        // Skip if already has a mic button
         if (inputGroup.querySelector(".btn-voice-input")) return;
 
-        // Add has-voice-input class for CSS padding
         inputGroup.classList.add("has-voice-input");
 
-        // Create mic button
         const micBtn = document.createElement("button");
         micBtn.type = "button";
         micBtn.className = "btn-voice-input";
@@ -613,7 +588,6 @@ function initVoiceInput() {
         micBtn.setAttribute("aria-label", translations[currentLang]?.voice_tooltip || "Nhập bằng giọng nói");
         micBtn.innerHTML = MIC_SVG_HTML;
 
-        // Insert mic button after the field's label
         const label = inputGroup.querySelector("label");
         if (label) {
             label.insertAdjacentElement("afterend", micBtn);
@@ -621,7 +595,6 @@ function initVoiceInput() {
             inputGroup.appendChild(micBtn);
         }
 
-        // Click handler: toggle recording
         micBtn.addEventListener("click", (e) => {
             e.preventDefault();
             if (voiceIsRecording && activeVoiceField === field) {
@@ -631,7 +604,6 @@ function initVoiceInput() {
             }
         });
 
-        // Auto-stop mic when user moves to another field (Tab, click, etc.)
         field.addEventListener("focus", () => {
             if (voiceIsRecording && activeVoiceField !== field) {
                 stopAllVoiceRecording();
@@ -640,7 +612,6 @@ function initVoiceInput() {
     });
 }
 
-// --- GAIA Daily Intake ID System (STT.DDMMYY.4SốĐuôiSĐT) ---
 function getDateStringDDMMYY(dateObj = new Date()) {
     const d = String(dateObj.getDate()).padStart(2, '0');
     const m = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -703,39 +674,30 @@ function updateIntakeID() {
     return fullId;
 }
 
-// --- Initialize App ---
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Autofill today's date
+
     const today = new Date().toISOString().split('T')[0];
     formDateInput.value = today;
 
-    // 2. Load draft if exists
     loadDraft();
 
-    // 3. Set up event listeners
     setupEventListeners();
-    
-    // 4. Set up high-DPI signature canvas
+
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
 
-    // 5. Apply default language translations
     updateLanguage(currentLang);
 
-    // Initialize auto-expanding textareas and expand/collapse buttons
     initAutoExpandingTextareas();
 
-    // Initialize voice input for address field
     initVoiceInput();
 
-    // Initialize GAIA Intake ID and listen to phone number input changes
     updateIntakeID();
     const ownerPhoneEl = document.getElementById("owner-phone");
     if (ownerPhoneEl) {
         ownerPhoneEl.addEventListener("input", updateIntakeID);
     }
 
-    // 6. Track form start time on first interaction (for bot fill-time check)
     const startTrackingInputs = ["owner-phone", "owner-name", "owner-address", "pet-name"];
     startTrackingInputs.forEach(id => {
         const el = document.getElementById(id);
@@ -748,16 +710,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Inject the spam-block overlay into the DOM if not already present
     injectSpamBlockOverlay();
 
-    // 7. Check and synchronize any pending offline form submissions in the background
     setTimeout(() => {
         sendPendingSubmissions();
-    }, 2000); // 2-second delay to avoid blocking initial UI rendering
+    }, 2000); 
 });
 
-// --- Event Listeners Setup ---
 function setupEventListeners() {
     const fabLang = document.getElementById("fab-lang");
     const fabTrigger = document.getElementById("fab-lang-trigger");
@@ -830,7 +789,6 @@ function setupEventListeners() {
         });
     }
 
-    // Language buttons
     langButtons.forEach(btn => {
         btn.addEventListener("click", () => {
             langButtons.forEach(b => b.classList.remove("active"));
@@ -841,7 +799,6 @@ function setupEventListeners() {
         });
     });
 
-    // Floating scroll buttons
     const scrollTopBtn = document.getElementById("fab-scroll-top");
     const scrollBottomBtn = document.getElementById("fab-scroll-bottom");
 
@@ -882,16 +839,15 @@ function setupEventListeners() {
         });
     }
 
-    // Step dots navigation (only allow moving to completed or current steps)
     stepDots.forEach(dot => {
         dot.addEventListener("click", () => {
             const clickedStep = parseInt(dot.getAttribute("data-step"));
             if (clickedStep < currentStep) {
                 goToStep(clickedStep);
             } else if (clickedStep > currentStep) {
-                // If moving forward, validate current step first
+
                 if (validateStep(currentStep)) {
-                    // Check if steps in-between are valid
+
                     let allValid = true;
                     for (let s = currentStep; s < clickedStep; s++) {
                         if (!validateStep(s)) {
@@ -908,7 +864,6 @@ function setupEventListeners() {
         });
     });
 
-    // Navigation buttons
     prevBtn.addEventListener("click", () => {
         if (currentStep > 1) {
             goToStep(currentStep - 1);
@@ -923,11 +878,9 @@ function setupEventListeners() {
         }
     });
 
-    // Form submit
     form.addEventListener("submit", (e) => {
         e.preventDefault();
-        
-        // Final validation
+
         let allStepsValid = true;
         for (let s = 1; s <= totalSteps; s++) {
             if (!validateStep(s)) {
@@ -942,7 +895,6 @@ function setupEventListeners() {
         }
     });
 
-    // Inputs value change listeners for autosave and instant validation reset
     form.querySelectorAll("input, textarea").forEach(input => {
         input.addEventListener("input", () => {
             saveDraft();
@@ -954,7 +906,6 @@ function setupEventListeners() {
         });
     });
 
-    // Clear validation error instantly when any radio button is checked
     form.querySelectorAll("input[type='radio']").forEach(radio => {
         radio.addEventListener("change", () => {
             const container = radio.closest(".segmented-control, .radio-cards");
@@ -967,11 +918,10 @@ function setupEventListeners() {
         });
     });
 
-    // Click delegation for Autofill buttons (btn-autofill-unknown & btn-autofill-none)
     form.addEventListener("click", (e) => {
         const btnUnknown = e.target.closest(".btn-autofill-unknown");
         const btnNone = e.target.closest(".btn-autofill-none");
-        
+
         if (btnUnknown || btnNone) {
             e.preventDefault();
             const btn = btnUnknown || btnNone;
@@ -979,42 +929,36 @@ function setupEventListeners() {
             if (inputGroup) {
                 const input = inputGroup.querySelector("input, textarea");
                 if (input) {
-                    // Get translated value based on which button was clicked
+
                     const fillText = btnUnknown 
                         ? ((translations[currentLang] && translations[currentLang].choice_unknown) ? translations[currentLang].choice_unknown : "Không rõ")
                         : ((translations[currentLang] && translations[currentLang].choice_none) ? translations[currentLang].choice_none : "Không");
                     input.value = fillText;
-                    
-                    // Trigger input and change events to save draft and clear validation error
+
                     input.dispatchEvent(new Event("input", { bubbles: true }));
                     input.dispatchEvent(new Event("change", { bubbles: true }));
-                    
-                    // Trigger dynamic pulse effect
+
                     triggerAutofillEffect(input);
                 }
             }
         }
     });
 
-    // Phone Number Autocomplete from past registrations (using 'input' for instant keystroke feedback!)
     const ownerPhoneInput = document.getElementById("owner-phone");
     if (ownerPhoneInput) {
         let fetchTimeout = null;
-        
+
         ownerPhoneInput.addEventListener("input", () => {
             const phone = ownerPhoneInput.value.trim();
             const ownerNameInput = document.getElementById("owner-name");
             const ownerAddressInput = document.getElementById("owner-address");
-            
-            // Instantly clear the name and address the moment they modify the phone number
+
             if (ownerNameInput) ownerNameInput.value = "";
             if (ownerAddressInput) ownerAddressInput.value = "";
             saveDraft();
-            
-            // Clear any pending database queries to debounce keystrokes
+
             if (fetchTimeout) clearTimeout(fetchTimeout);
-            
-            // If the phone number reaches a valid length (9 to 15 digits), query Supabase after a short debounce (300ms)
+
             if (/^[0-9\s\-\+\(\)]{9,15}$/.test(phone)) {
                 fetchTimeout = setTimeout(async () => {
                     if (supabaseClient) {
@@ -1025,10 +969,9 @@ function setupEventListeners() {
                                 .eq('owner_phone', phone)
                                 .order('created_at', { ascending: false })
                                 .limit(1);
-                            
+
                             if (error) throw error;
-                            
-                            // Race-condition guard: check if the phone input hasn't changed since the query started
+
                             if (ownerPhoneInput.value.trim() === phone && data && data.length > 0) {
                                 const match = data[0];
                                 if (ownerNameInput) {
@@ -1045,7 +988,7 @@ function setupEventListeners() {
                             console.error("Error auto-fetching owner data:", err);
                         }
                     }
-                }, 300); // 300ms debounce to prevent spamming database on every keystroke
+                }, 300); 
             }
         });
     }
@@ -1054,12 +997,12 @@ function setupEventListeners() {
         if (element && element.tagName === "TEXTAREA" && typeof updateTextareaResize === "function") {
             updateTextareaResize(element);
         }
-        // Subtle and gorgeous emerald-green pulse on autofilled fields
+
         element.style.transition = "none";
         element.style.boxShadow = "0 0 0 4px rgba(16, 185, 129, 0.4)";
         element.style.borderColor = "#10b981";
         element.style.backgroundColor = "rgba(16, 185, 129, 0.05)";
-        
+
         setTimeout(() => {
             element.style.transition = "all 0.3s ease";
             element.style.boxShadow = "";
@@ -1068,10 +1011,8 @@ function setupEventListeners() {
         }, 1500);
     }
 
-    // Clear signature button
     clearSigBtn.addEventListener("click", clearSignature);
 
-    // Modal action buttons
     modalCloseBtn.addEventListener("click", () => {
         successModal.classList.remove("show");
         resetForm();
@@ -1079,18 +1020,17 @@ function setupEventListeners() {
 
     modalDownloadBtn.addEventListener("click", () => {
         populatePrintForm();
-        
+
         const petName = document.getElementById("pet-name").value.trim() || "Pet";
         const rawDate = document.getElementById("form-date").value || new Date().toISOString().split("T")[0];
         const dateParts = rawDate.split("-");
         const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : rawDate;
-        
+
         const originalTitle = document.title;
         document.title = `Tờ Khai Khám Bệnh - ${petName} - ${formattedDate} _ GAIA Animal Hospital Ho Chi Minh City`;
-        
+
         window.print();
-        
-        // Restore title after print dialog closes
+
         setTimeout(() => { document.title = originalTitle; }, 1000);
     });
 
@@ -1101,7 +1041,7 @@ function setupEventListeners() {
         document.getElementById("print-owner-name").textContent = document.getElementById("owner-name").value.trim() || "-";
         document.getElementById("print-owner-phone").textContent = document.getElementById("owner-phone").value.trim() || "-";
         document.getElementById("print-owner-address").textContent = document.getElementById("owner-address").value.trim() || "-";
-        
+
         document.getElementById("print-pet-name").textContent = document.getElementById("pet-name").value.trim() || "-";
         const weightVal = document.getElementById("pet-weight").value.trim();
         document.getElementById("print-pet-weight").textContent = weightVal ? `${weightVal} kg` : "-";
@@ -1110,55 +1050,46 @@ function setupEventListeners() {
         const petAgeVal = document.getElementById("pet-age")?.value.trim() || "";
         const petGenderVal = document.querySelector('input[name="petGender"]:checked')?.value || "";
         document.getElementById("print-pet-age-gender").textContent = petAgeVal && petGenderVal ? `${petAgeVal} tuổi / ${petGenderVal}` : "-";
-        
-        // Neutered representation
+
         const neuteredVal = document.querySelector('input[name="petNeutered"]:checked')?.value || 'unknown';
         document.getElementById("print-pet-neutered-yes").textContent = neuteredVal === "yes" ? "☑" : "☐";
         document.getElementById("print-pet-neutered-no").textContent = neuteredVal === "no" ? "☑" : "☐";
-        
-        // Vaccine Core
+
         const vacCoreVal = document.querySelector('input[name="vaccineCore"]:checked')?.value || 'unknown';
         document.getElementById("print-vac-core-yes").textContent = vacCoreVal === "yes" ? "☑" : "☐";
         document.getElementById("print-vac-core-no").textContent = vacCoreVal === "no" ? "☑" : "☐";
         document.getElementById("print-vac-core-unknown").textContent = vacCoreVal === "unknown" ? "☑" : "☐";
-        
-        // Vaccine Rabies
+
         const vacRabiesVal = document.querySelector('input[name="vaccineRabies"]:checked')?.value || 'unknown';
         document.getElementById("print-vac-rabies-yes").textContent = vacRabiesVal === "yes" ? "☑" : "☐";
         document.getElementById("print-vac-rabies-no").textContent = vacRabiesVal === "no" ? "☑" : "☐";
         document.getElementById("print-vac-rabies-unknown").textContent = vacRabiesVal === "unknown" ? "☑" : "☐";
-        
-        // Parasite
+
         const parasiteVal = document.querySelector('input[name="parasitePrev"]:checked')?.value || 'unknown';
         document.getElementById("print-parasite-yes").textContent = parasiteVal === "yes" ? "☑" : "☐";
         document.getElementById("print-parasite-no").textContent = parasiteVal === "no" ? "☑" : "☐";
         document.getElementById("print-parasite-unknown").textContent = parasiteVal === "unknown" ? "☑" : "☐";
-        
-        // Medical
+
         const medHistory = document.getElementById("medical-history").value.trim();
         const allergies = document.getElementById("allergies").value.trim();
         const currentMeds = document.getElementById("current-meds").value.trim();
-        
+
         document.getElementById("print-med-history").textContent = medHistory || "Không ghi nhận";
         document.getElementById("print-allergies").textContent = allergies || "Không ghi nhận";
         document.getElementById("print-meds").textContent = currentMeds || "Không ghi nhận";
-        
-        // Diet
+
         document.getElementById("print-diet-wet").textContent = document.getElementById("diet-wet").checked ? "☑" : "☐";
         document.getElementById("print-diet-dry").textContent = document.getElementById("diet-dry").checked ? "☑" : "☐";
         document.getElementById("print-diet-homemade").textContent = document.getElementById("diet-homemade").checked ? "☑" : "☐";
-        
-        // Consent
+
         document.getElementById("print-consent-accuracy").textContent = document.getElementById("consent-accuracy").checked ? "☑" : "☐";
         document.getElementById("print-consent-storage").textContent = document.getElementById("consent-storage").checked ? "☑" : "☐";
-        
-        // Signature
+
         const printSigImg = document.getElementById("print-sig-img");
         if (printSigImg) {
             printSigImg.src = canvas.toDataURL();
         }
-        
-        // Date
+
         const printDate = document.getElementById("print-date");
         if (printDate) {
             printDate.textContent = new Date().toLocaleDateString('vi-VN', { 
@@ -1170,8 +1101,7 @@ function setupEventListeners() {
                 hour12: false 
             });
         }
-        
-        // Photos
+
         const printPhotosSection = document.getElementById("print-photos-section");
         const printPhotosGrid = document.getElementById("print-photos-grid");
         if (printPhotosSection && printPhotosGrid) {
@@ -1190,7 +1120,6 @@ function setupEventListeners() {
         }
     }
 
-    // Client-side Image Compression Helper using HTML5 Canvas
     function compressImage(base64Str, maxWidth = 900, maxHeight = 900, quality = 0.7) {
         return new Promise((resolve) => {
             const img = new Image();
@@ -1199,7 +1128,6 @@ function setupEventListeners() {
                 let width = img.width;
                 let height = img.height;
 
-                // Scale keeping aspect ratio
                 if (width > height) {
                     if (width > maxWidth) {
                         height = Math.round((height * maxWidth) / width);
@@ -1218,15 +1146,13 @@ function setupEventListeners() {
                 const ctx = canvas.getContext("2d");
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Convert to compressed JPEG format
                 const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
                 resolve(compressedBase64);
             };
-            img.onerror = () => resolve(base64Str); // Fallback to original
+            img.onerror = () => resolve(base64Str); 
         });
     }
 
-    // Pet Photo Upload Events (Supports multiple photos up to 5)
     const photoInput = document.getElementById("pet-photo-input");
     const photoUploadBox = document.getElementById("photo-upload-box");
     const previewsGrid = document.getElementById("photo-previews-grid");
@@ -1253,7 +1179,6 @@ function setupEventListeners() {
                 return;
             }
 
-            // Read all selected files in parallel as Base64 strings
             const readPromises = files.map(file => {
                 return new Promise((resolve) => {
                     const reader = new FileReader();
@@ -1264,14 +1189,12 @@ function setupEventListeners() {
 
             try {
                 const base64Results = await Promise.all(readPromises);
-                
-                // Compress each image to save bandwidth and storage, speeding up submit times 10x-50x!
+
                 const compressPromises = base64Results.map(base64 => compressImage(base64, 900, 900, 0.7));
                 const compressedResults = await Promise.all(compressPromises);
-                
+
                 petPhotosArray = petPhotosArray.concat(compressedResults);
-                
-                // Clear file input value to allow re-uploading the same file
+
                 photoInput.value = "";
 
                 renderPetPhotoPreviews();
@@ -1282,27 +1205,21 @@ function setupEventListeners() {
         });
     }
 
-    // Drawing Canvas events for both mouse and touch devices
     setupSignatureDrawing();
 }
 
-// --- Multi-step Wizard Navigation ---
 function goToStep(stepNum) {
     if (stepNum < 1 || stepNum > totalSteps) return;
 
-    // Stop any active voice recording when switching steps
     if (typeof stopAllVoiceRecording === "function" && voiceIsRecording) {
         stopAllVoiceRecording();
     }
 
-    // Slide transition classes handled by CSS animation
     steps.forEach(step => step.classList.remove("active"));
     document.getElementById(`step-${stepNum}`).classList.add("active");
 
-    // Update steps state tracker
     currentStep = stepNum;
 
-    // Update steps dots
     stepDots.forEach(dot => {
         const dStep = parseInt(dot.getAttribute("data-step"));
         dot.classList.remove("active");
@@ -1316,11 +1233,9 @@ function goToStep(stepNum) {
         }
     });
 
-    // Update progress bar
     const progressPercent = (stepNum / totalSteps) * 100;
     progressBarFill.style.width = `${progressPercent}%`;
 
-    // Button states
     if (stepNum === 1) {
         prevBtn.style.display = "none";
         nextBtn.style.display = "flex";
@@ -1335,14 +1250,12 @@ function goToStep(stepNum) {
         submitBtn.style.display = "none";
     }
 
-    // Special handling for Step 4: Signature Canvas needs to resize/initialize when it becomes display: block
     if (stepNum === 4) {
         setTimeout(() => {
             resizeCanvas();
         }, 80);
     }
 
-    // Update auto-expanding textareas when switching steps
     setTimeout(() => {
         const currentStepEl = document.getElementById(`step-${stepNum}`);
         if (currentStepEl) {
@@ -1354,16 +1267,14 @@ function goToStep(stepNum) {
         }
     }, 40);
 
-    // Scroll top with smooth behavior
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// --- Interactive Signature Drawing Pad ---
 function setupSignatureDrawing() {
-    // Get mouse/touch coordinate relative to canvas in CSS pixels
+
     function getCoordinates(e) {
         const rect = canvas.getBoundingClientRect();
-        
+
         let clientX, clientY;
         if (e.touches && e.touches.length > 0) {
             clientX = e.touches[0].clientX;
@@ -1372,7 +1283,7 @@ function setupSignatureDrawing() {
             clientX = e.clientX;
             clientY = e.clientY;
         }
-        
+
         return {
             x: clientX - rect.left,
             y: clientY - rect.top
@@ -1384,22 +1295,21 @@ function setupSignatureDrawing() {
         hasSigned = true;
         sigErrorMsg.style.display = "none";
         document.querySelector(".signature-pad-wrap").classList.remove("invalid");
-        
+
         const coords = getCoordinates(e);
         ctx.beginPath();
         ctx.moveTo(coords.x, coords.y);
-        
-        // Prevent touch scroll on mobile while signing
+
         if (e.cancelable) e.preventDefault();
     }
 
     function draw(e) {
         if (!isDrawing) return;
-        
+
         const coords = getCoordinates(e);
         ctx.lineTo(coords.x, coords.y);
         ctx.stroke();
-        
+
         if (e.cancelable) e.preventDefault();
     }
 
@@ -1408,12 +1318,10 @@ function setupSignatureDrawing() {
         ctx.closePath();
     }
 
-    // Desktop Mouse Events
     canvas.addEventListener("mousedown", startDrawing);
     canvas.addEventListener("mousemove", draw);
     window.addEventListener("mouseup", stopDrawing);
 
-    // Mobile Touch Events
     canvas.addEventListener("touchstart", startDrawing, { passive: false });
     canvas.addEventListener("touchmove", draw, { passive: false });
     window.addEventListener("touchend", stopDrawing);
@@ -1427,40 +1335,34 @@ function clearSignature() {
 }
 
 function resizeCanvas() {
-    // Keep canvas drawing crisp on retina and pixel-dense mobile screens
+
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    
-    // Ignore resizing if dimensions are 0 (e.g. element is display: none)
+
     if (rect.width === 0 || rect.height === 0) return;
-    
+
     const newWidth = rect.width * dpr;
     const newHeight = rect.height * dpr;
-    
-    // Only apply resize if dimensions actually changed (prevents clearing when re-opening Step 4)
+
     if (canvas.width !== newWidth || canvas.height !== newHeight) {
         canvas.width = newWidth;
         canvas.height = newHeight;
-        
+
         ctx.scale(dpr, dpr);
-        
-        // Style line parameters
-        ctx.strokeStyle = "#1b4332"; // Deep Forest Green ink
+
+        ctx.strokeStyle = "#1b4332"; 
         ctx.lineWidth = 2.5;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        
-        // Clear signed flag since canvas backing store was rebuilt
+
         hasSigned = false;
     }
 }
 
-// --- Validation Logic ---
 function validateStep(stepNum) {
     let isValid = true;
     const stepEl = document.getElementById(`step-${stepNum}`);
-    
-    // 1. Validate required standard inputs (text, number, tel, textarea, checkbox)
+
     const standardInputs = stepEl.querySelectorAll("input[required]:not([type='radio']), textarea[required]");
     standardInputs.forEach(input => {
         if (!validateInput(input)) {
@@ -1468,7 +1370,6 @@ function validateStep(stepNum) {
         }
     });
 
-    // 2. Validate required radio button groups (segmented controls, radio cards)
     const radioNames = new Set();
     stepEl.querySelectorAll("input[type='radio'][required]").forEach(radio => {
         radioNames.add(radio.name);
@@ -1479,7 +1380,7 @@ function validateStep(stepNum) {
         const groupParent = stepEl.querySelector(`input[name="${name}"]`)?.closest(".radio-card-group, .segmented-control-group");
         const container = stepEl.querySelector(`input[name="${name}"]`)?.closest(".segmented-control, .radio-cards");
         const errorMsg = groupParent?.querySelector(".error-msg");
-        
+
         if (!groupChecked) {
             isValid = false;
             if (container) {
@@ -1498,7 +1399,6 @@ function validateStep(stepNum) {
         }
     });
 
-    // 3. Step 2 custom validation (Pet Photos - at least 1 photo required)
     if (stepNum === 2) {
         const photoGroup = document.querySelector(".input-photo-group");
         const photoError = document.getElementById("photo-error-msg");
@@ -1515,7 +1415,6 @@ function validateStep(stepNum) {
         }
     }
 
-    // 4. Step 4 custom validation (Signature Canvas)
     if (stepNum === 4) {
         if (!hasSigned) {
             isValid = false;
@@ -1537,19 +1436,18 @@ function validateInput(input) {
     let isInputValid = true;
     let customErrorMsg = null;
 
-    // Checkbox consent validation
     if (input.type === "checkbox") {
         if (!input.checked) {
             isInputValid = false;
             customErrorMsg = translations[currentLang].error_consent;
         }
     }
-    // Text and textarea empty check
+
     else if (!input.value.trim()) {
         isInputValid = false;
         customErrorMsg = translations[currentLang].error_required;
     }
-    // Pattern phone validation
+
     else if (input.type === "tel") {
         const phonePattern = /^[0-9\s\-\+\(\)]{9,15}$/;
         if (!phonePattern.test(input.value.trim())) {
@@ -1557,7 +1455,7 @@ function validateInput(input) {
             customErrorMsg = translations[currentLang].error_phone;
         }
     }
-    // Numeric fields check (Weight, Age)
+
     else if (input.id === "pet-weight" || input.id === "pet-age" || input.getAttribute("data-numeric") === "true" || input.type === "number") {
         const cleanVal = input.value.trim().replace(/,/g, ".");
         const numVal = Number(cleanVal);
@@ -1587,7 +1485,6 @@ function clearValidationError(input) {
     }
 }
 
-// --- Multilingual Switching Manager ---
 function updateLanguage(lang) {
     currentLang = lang;
     document.documentElement.lang = lang;
@@ -1602,20 +1499,19 @@ function updateLanguage(lang) {
         fabCurrent.innerHTML = `${flagSVGs[lang] || flagSVGs.vi} <span>${lang.toUpperCase()}</span>`;
     }
 
-    // Update all components containing data-key
     const transElements = document.querySelectorAll("[data-key]");
     transElements.forEach(el => {
         const key = el.getAttribute("data-key");
         if (translations[lang] && translations[lang][key]) {
-            // If the element has active elements like input or button inside, handle carefully
+
             if (el.tagName === "INPUT" && el.type === "button") {
                 el.value = translations[lang][key];
             } else {
-                // Keep inline children (like icons/SVG) if we are replacing text nodes
+
                 const svgIcon = el.querySelector("svg");
                 if (svgIcon) {
                     const iconHTML = svgIcon.outerHTML;
-                    // Replace label
+
                     const textNode = translations[lang][key];
                     el.innerHTML = iconHTML + ` <span>${textNode}</span>`;
                 } else {
@@ -1625,7 +1521,6 @@ function updateLanguage(lang) {
         }
     });
 
-    // Update dynamic error labels for invalid inputs
     document.querySelectorAll(".input-group.invalid, .consent-checkbox-wrap.invalid").forEach(parent => {
         const input = parent.querySelector("input, textarea");
         const errorEl = parent.querySelector(".error-msg");
@@ -1645,20 +1540,17 @@ function updateLanguage(lang) {
     }
 }
 
-// --- Autosave & Load Draft System ---
 function saveDraft() {
     const formData = {};
-    // Extract textual data including numbers
+
     form.querySelectorAll("input[type='text'], input[type='tel'], input[type='number'], input[type='date'], textarea").forEach(el => {
         formData[el.name] = el.value;
     });
 
-    // Extract radio selections
     form.querySelectorAll("input[type='radio']:checked").forEach(el => {
         formData[el.name] = el.value;
     });
 
-    // Extract checkboxes
     const checkboxes = {};
     form.querySelectorAll("input[type='checkbox']").forEach(el => {
         checkboxes[el.id] = el.checked;
@@ -1675,8 +1567,7 @@ function loadDraft() {
 
     try {
         const formData = JSON.parse(draftData);
-        
-        // Populate text fields
+
         for (const [name, value] of Object.entries(formData)) {
             if (name === "checkboxes") continue;
 
@@ -1691,7 +1582,6 @@ function loadDraft() {
             }
         }
 
-        // Populate checkboxes
         if (formData.checkboxes) {
             for (const [id, checked] of Object.entries(formData.checkboxes)) {
                 const checkbox = document.getElementById(id);
@@ -1699,7 +1589,6 @@ function loadDraft() {
             }
         }
 
-        // Restore pet photos previews from draft
         if (formData.petPhotoDataUrl) {
             petPhotoDataUrl = formData.petPhotoDataUrl;
             try {
@@ -1721,10 +1610,6 @@ function loadDraft() {
         console.error("Error parsing autosaved draft", e);
     }
 }
-
-// ============================================================
-// ANTI-SPAM PROTECTION SYSTEM
-// ============================================================
 
 function injectSpamBlockOverlay() {
     if (document.getElementById("spam-block-overlay")) return;
@@ -1807,7 +1692,6 @@ function recordSpamSubmission() {
 function checkAntiSpam() {
     const now = Date.now();
 
-    // --- 1. HONEYPOT CHECK: bot filled invisible fields ---
     const hpWebsite = document.getElementById("hp-website");
     const hpEmail = document.getElementById("hp-email");
     if ((hpWebsite && hpWebsite.value.trim() !== "") || (hpEmail && hpEmail.value.trim() !== "")) {
@@ -1821,7 +1705,6 @@ function checkAntiSpam() {
         return false;
     }
 
-    // --- 2. MINIMUM FILL TIME CHECK: form filled too quickly ---
     if (formStartTime && (now - formStartTime) < SPAM_CONFIG.MIN_FILL_TIME_MS) {
         const remainMs = SPAM_CONFIG.MIN_FILL_TIME_MS - (now - formStartTime);
         const remainSecs = Math.ceil(remainMs / 1000);
@@ -1835,7 +1718,6 @@ function checkAntiSpam() {
         return false;
     }
 
-    // --- 3. COOLDOWN CHECK: too soon after previous submission ---
     const history = getSpamHistory();
     if (history.length > 0) {
         const lastSubmit = history[history.length - 1];
@@ -1855,7 +1737,6 @@ function checkAntiSpam() {
         }
     }
 
-    // --- 4. RATE LIMIT CHECK: too many submissions this hour ---
     const recentHistory = history.filter(t => now - t < SPAM_CONFIG.RATE_LIMIT_WINDOW_MS);
     if (recentHistory.length >= SPAM_CONFIG.MAX_SUBMISSIONS_PER_HOUR) {
         const oldestInWindow = recentHistory[0];
@@ -1871,24 +1752,21 @@ function checkAntiSpam() {
         return false;
     }
 
-    return true; // All checks passed ✓
+    return true; 
 }
 
-// --- Form Submit and Reset ---
 async function submitForm() {
-    // --- Anti-Spam Gate: Run all 4 checks before allowing submission ---
+
     if (!checkAntiSpam()) {
-        return; // Blocked by spam protection
+        return; 
     }
 
-    // Show spinner loading state
     submitBtn.disabled = true;
     submitBtn.style.opacity = "0.7";
     const submitTextSpan = submitBtn.querySelector("span");
     const originalText = submitTextSpan.textContent;
     submitTextSpan.textContent = currentLang === "vi" ? "Đang gửi..." : (currentLang === "en" ? "Submitting..." : "送信中...");
 
-    // Gather form data
     const formData = {
         intake_id: updateIntakeID(),
         owner_name: document.getElementById("owner-name").value.trim(),
@@ -1911,23 +1789,18 @@ async function submitForm() {
         diet_homemade: document.getElementById("diet-homemade").checked,
         consent_accuracy: document.getElementById("consent-accuracy").checked,
         consent_storage: document.getElementById("consent-storage").checked,
-        signature_data: canvas.toDataURL(), // Base64 data URI of the customer's signature
-        pet_photo: petPhotoDataUrl || "", // Base64 image data of the pet's photo
+        signature_data: canvas.toDataURL(), 
+        pet_photo: petPhotoDataUrl || "", 
         date_signed: document.getElementById("form-date").value,
-        id_local: Date.now() // Unique timestamp for background queue tracking
+        id_local: Date.now() 
     };
 
-    // 1. Instantly show success message to the client (high-fidelity UX, no waiting)
     finalizeSubmission(originalText);
 
-    // 2. Add to localStorage backup queue to prevent any data loss
     addToPendingQueue(formData);
 
-    // 3. Initiate silent background synchronization in parallel
     sendPendingSubmissions();
 }
-
-// --- Background Sync Queue Helpers ---
 
 function addToPendingQueue(data) {
     try {
@@ -1943,7 +1816,7 @@ function addToPendingQueue(data) {
 let isSendingQueue = false;
 async function sendPendingSubmissions() {
     if (isSendingQueue) return;
-    
+
     try {
         const queue = JSON.parse(localStorage.getItem("gaia_pending_queue") || "[]");
         if (queue.length === 0) return;
@@ -1955,13 +1828,11 @@ async function sendPendingSubmissions() {
 
         for (let i = 0; i < queue.length; i++) {
             const item = queue[i];
-            
-            // Clean local metadata before sending to Supabase
+
             const dataToInsert = { ...item };
             delete dataToInsert.id_local;
             delete dataToInsert.intake_id;
 
-            // Auto-populate cn column from chi_nhanh if present
             if (dataToInsert.chi_nhanh && !dataToInsert.cn) {
                 const str = String(dataToInsert.chi_nhanh).trim();
                 if (str.includes("-")) {
@@ -1980,16 +1851,15 @@ async function sendPendingSubmissions() {
                         .select();
 
                     if (error) throw error;
-                    
+
                     const insertedRow = data && data.length > 0 ? data[0] : null;
 
-                    // Push to Google Sheets Webhook if configured, using inserted row with id and trang_thai
                     if (insertedRow && typeof GOOGLE_SHEET_WEBHOOK_URL !== 'undefined' && GOOGLE_SHEET_WEBHOOK_URL) {
                         try {
                             const sheetData = { ...insertedRow };
                             delete sheetData.signature_data;
                             delete sheetData.pet_photo;
-                            
+
                             await fetch(GOOGLE_SHEET_WEBHOOK_URL, {
                                 method: 'POST',
                                 mode: 'no-cors',
@@ -2005,23 +1875,21 @@ async function sendPendingSubmissions() {
                     }
 
                     console.log(`GAIA Queue: Silent sync successful for pet: ${item.pet_name}`);
-                    
-                    // Remove from local tracking queue after successful database insert
+
                     const idx = remainingQueue.findIndex(r => r.id_local === item.id_local);
                     if (idx !== -1) {
                         remainingQueue.splice(idx, 1);
                     }
                     localStorage.setItem("gaia_pending_queue", JSON.stringify(remainingQueue));
-                    
-                    // Mark rate limiting
+
                     recordSpamSubmission();
                 } catch (err) {
                     console.error(`GAIA Queue: Failed to sync pet ${item.pet_name}:`, err);
-                    // Network down or write failure, halt synchronization pipeline to try later
+
                     break;
                 }
             } else {
-                // Mock Mode fallback: instantly resolve the queue
+
                 console.warn("GAIA Queue: Operating in Mock Mode. Resolving submission instantly.", item);
                 const idx = remainingQueue.findIndex(r => r.id_local === item.id_local);
                 if (idx !== -1) {
@@ -2038,55 +1906,44 @@ async function sendPendingSubmissions() {
     }
 }
 
-// Helper to finish form state changes and trigger success modal
 function finalizeSubmission(originalBtnText) {
     submitBtn.disabled = false;
     submitBtn.style.opacity = "1";
     const submitTextSpan = submitBtn.querySelector("span");
     if (submitTextSpan) submitTextSpan.textContent = originalBtnText;
 
-    // Clear local storage draft
     localStorage.removeItem("gaia_form_draft");
 
-    // Increment daily sequence number for the next customer
     incrementDailySeqNumber();
     updateIntakeID();
 
-    // Trigger Success Modal
     successModal.classList.add("show");
 }
 
 function resetForm() {
     form.reset();
     clearSignature();
-    
-    // Reset pet photo upload elements
+
     petPhotosArray = [];
     renderPetPhotoPreviews();
     const photoInput = document.getElementById("pet-photo-input");
     if (photoInput) photoInput.value = "";
 
-    // Autofill date again
     const today = new Date().toISOString().split('T')[0];
     formDateInput.value = today;
 
-    // Refresh Intake ID for new form
     updateIntakeID();
 
-    // Reset form start time so next fill is fresh
     formStartTime = null;
 
-    // Clear honeypot fields
     const hpWebsite = document.getElementById("hp-website");
     const hpEmail = document.getElementById("hp-email");
     if (hpWebsite) hpWebsite.value = "";
     if (hpEmail) hpEmail.value = "";
 
-    // Scroll to step 1
     goToStep(1);
 }
 
-// Render multiple photo previews grid in Step 2 of the form
 function renderPetPhotoPreviews() {
     const previewsGrid = document.getElementById("photo-previews-grid");
     const uploadBox = document.getElementById("photo-upload-box");
@@ -2094,7 +1951,6 @@ function renderPetPhotoPreviews() {
 
     previewsGrid.innerHTML = "";
 
-    // Clear validation error instantly if photos exist
     const photoGroup = document.querySelector(".input-photo-group");
     const photoError = document.getElementById("photo-error-msg");
     if (petPhotosArray.length > 0) {
@@ -2110,15 +1966,13 @@ function renderPetPhotoPreviews() {
     }
 
     previewsGrid.style.display = "grid";
-    
-    // Limit to max 5 photos
+
     if (petPhotosArray.length >= 5) {
         uploadBox.style.display = "none";
     } else {
         uploadBox.style.display = "flex";
     }
 
-    // Set serialized JSON string to send to database
     petPhotoDataUrl = JSON.stringify(petPhotosArray);
 
     petPhotosArray.forEach((photoSrc, index) => {
@@ -2130,7 +1984,7 @@ function renderPetPhotoPreviews() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px;"><line x1="18" x2="6" y1="6" y2="18"></line><line x1="6" x2="18" y1="6" y2="18"></line></svg>
             </button>
         `;
-        
+
         item.querySelector(".btn-delete-photo-item").addEventListener("click", () => {
             petPhotosArray.splice(index, 1);
             renderPetPhotoPreviews();

@@ -1,8 +1,3 @@
-/* ==========================================================================
-   GAIA Animal Hospital - Global Search Module (global_search.js)
-   Inline dropdown search attached to header input. No modal.
-   ========================================================================== */
-
 (function () {
     'use strict';
 
@@ -11,7 +6,6 @@
     let gsCurrentResults = [];
     let gsDropdownVisible = false;
 
-    // ── Init ──────────────────────────────────────────────────────────────────
     function initGlobalSearch() {
         const tryAttach = () => {
             const input = document.getElementById('gs-header-input');
@@ -50,7 +44,6 @@
         });
     }
 
-    // ── Dropdown visibility ────────────────────────────────────────────────────
     function showDropdownHint() {
         const dd = document.getElementById('gs-inline-dropdown');
         if (!dd) return;
@@ -67,13 +60,11 @@
         gsCurrentResults = [];
     }
 
-    // Legacy compat
     window.openGlobalSearch = function () {
         const inp = document.getElementById('gs-header-input');
         if (inp) { inp.focus(); inp.select(); }
     };
 
-    // ── Search Logic ───────────────────────────────────────────────────────────
     function performSearch(query) {
         const dd = document.getElementById('gs-inline-dropdown');
         if (!dd) return;
@@ -82,7 +73,6 @@
         const q = query.toLowerCase();
         const results = [];
 
-        // 1. Vat Tu
         const rawVatTu = getDataSafe('vatTuData');
         const vatTuHits = rawVatTu.filter(item =>
             strMatch(item.ten_mat_hang, q) || strMatch(item.ma_vach, q) ||
@@ -99,7 +89,6 @@
             }));
         }
 
-        // 2. Nhap Xuat
         const rawNx = getDataSafe('nhapXuatData');
         const nxHits = rawNx.filter(ord =>
             strMatch(ord.ma_don, q) || strMatch(ord.muc_dich, q) ||
@@ -119,7 +108,6 @@
             });
         }
 
-        // 3. The Kho
         const rawTK = getDataSafe('theKhoData');
         const tkHits = rawTK.filter(tk =>
             strMatch(tk.ten_hang_hoa, q) || strMatch(tk.ma_vach, q) ||
@@ -136,7 +124,6 @@
             }));
         }
 
-        // 4. Ca Kham
         const rawIntakes = getDataSafe('intakesData');
         const intakeHits = rawIntakes.filter(r =>
             strMatch(r.pet_name, q) || strMatch(r.owner_name, q) ||
@@ -153,7 +140,6 @@
             }));
         }
 
-        // 5. Nhan Su
         const rawStaff = getDataSafe('staffData');
         const staffHits = rawStaff.filter(s =>
             strMatch(s.full_name, q) || strMatch(s.role, q) ||
@@ -209,7 +195,6 @@
         hideDropdown();
     }
 
-    // ── Keyboard nav ──────────────────────────────────────────────────────────
     function moveGsSelection(dir) {
         const dd = document.getElementById('gs-inline-dropdown');
         if (!dd) return;
@@ -229,7 +214,6 @@
         if (gsCurrentResults[idx]) gsCurrentResults[idx].action();
     };
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
     function getDataSafe(key) { try { const v = window[key]; return Array.isArray(v) ? v : []; } catch { return []; } }
     function strMatch(val, q) { if (!val) return false; return String(val).toLowerCase().includes(q); }
     function escH(str) { if (!str) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -243,7 +227,6 @@
         try { const d = new Date(iso); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); } catch { return '-'; }
     }
 
-    // ── Boot ──────────────────────────────────────────────────────────────────
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initGlobalSearch);
     else initGlobalSearch();
 

@@ -5,22 +5,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GAIA Animal Hospital Ho Chi Minh City - Admin Realtime Dashboard</title>
-    <!-- Google Fonts -->
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
-    <!-- Favicon -->
+
     <link rel="icon" type="image/png" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQfZlyZoMKUpHV2xiHp5ye-OgqCT0_MYlHEIA&s">
-    <!-- CSS Style sheets -->
+
     <link rel="stylesheet" href="admin-style.css?v=3">
 </head>
 
 <body>
     <div class="dashboard-container">
 
-        <!-- Header / Topbar Section -->
         <header class="dashboard-header">
             <div class="brand-section">
                 <div class="logo-wrap">
@@ -33,9 +32,8 @@
                 </div>
             </div>
 
-            <!-- Header Controls -->
             <div class="header-controls">
-                <!-- FB / Zalo style Live Active Users Typing Indicator -->
+
                 <div id="live-typing-widget" class="live-typing-widget">
                     <div class="live-typing-pill" title="Trạng thái thực tế: Có khách hàng đang truy cập và điền tờ khai khám bệnh">
                         <div class="live-avatar-wrap">
@@ -54,7 +52,6 @@
                     </div>
                 </div>
 
-                <!-- Connection status lamp -->
                 <div class="status-indicator-wrap">
                     <div class="status-indicator live">
                         <span class="status-pulse"></span>
@@ -64,9 +61,8 @@
             </div>
         </header>
 
-        <!-- Main Stats Summary Bar (STICKY) -->
         <section class="stats-summary-grid sticky-stats">
-            <!-- Status Filter Tabs -->
+
             <div class="stats-card status-filter-card">
                 <div class="status-filter-tabs">
                     <button class="status-tab active" data-filter="all" id="tab-all">
@@ -84,14 +80,13 @@
                 </div>
             </div>
 
-            <!-- Clickable Date Navigator Card -->
             <div class="stats-card date-nav-card" id="date-nav-card">
                 <button class="date-nav-arrow" id="date-prev-btn" title="Ngày trước">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </button>
-                <!-- Calendar icon wraps hidden date input for native picker -->
+
                 <div class="date-nav-icon-wrap" title="Chọn ngày">
                     <div class="stats-icon bg-blue date-nav-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -117,7 +112,6 @@
                 </button>
             </div>
 
-            <!-- Branch Filter Dropdown Card -->
             <div class="stats-card branch-filter-card" id="branch-filter-card" style="padding: 8px 12px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
                 <div class="stats-icon bg-emerald" style="width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(16, 185, 129, 0.15); color: #10b981;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
@@ -135,7 +129,6 @@
                 </div>
             </div>
 
-            <!-- Search Bar Card -->
             <div class="stats-card search-card-wrap">
                 <div class="search-input-group">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
@@ -146,7 +139,6 @@
                 </div>
             </div>
 
-            <!-- More Options Dropdown (3 Vertical Dots) -->
             <div class="more-options-wrap" style="position: relative;">
                 <button type="button" id="btn-more-options" class="btn-more-options" title="Tùy chọn khác">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -180,8 +172,6 @@
             </div>
         </section>
 
-
-        <!-- Main Cards Grid Area -->
         <main class="cards-grid-section">
             <div id="loading-spinner" class="spinner-container">
                 <div class="glow-spinner"></div>
@@ -199,18 +189,15 @@
                 <p>Mở trang đăng ký gửi form!</p>
             </div>
 
-            <!-- Dynamic grid container -->
             <div id="intakes-list" class="intakes-grid"></div>
 
-            <!-- Pagination Container -->
             <div id="pagination-container" class="pagination-wrap"></div>
         </main>
     </div>
 
-    <!-- Details View Modal -->
     <div id="details-modal" class="modal-overlay">
         <div class="modal-card detail-view-card">
-            <!-- Modal Header -->
+
             <div class="modal-header">
                 <div class="modal-header-title">
                     <span class="patient-id" id="modal-patient-id">#ID</span>
@@ -234,7 +221,6 @@
                 </div>
             </div>
 
-            <!-- Modal Content (Two Columns Intake Form View) -->
             <div class="modal-content print-area" id="print-content">
                 <div class="print-header-brand" style="display: none;">
                     <img src="Form - G22_files/image002.png" alt="GAIA Logo" style="max-height: 50px;">
@@ -245,11 +231,11 @@
                 </div>
 
                 <div class="detail-two-col">
-                    <!-- Left Stack: Owner Info & Pet Info Stacks + Pet Photos below -->
+
                     <div class="detail-left-stack">
-                        <!-- Top Row: Info grids -->
+
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%;">
-                            <!-- Owner Info -->
+
                             <div class="detail-col">
                                 <h3 class="col-title">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -302,7 +288,6 @@
                                 </div>
                             </div>
 
-                            <!-- Pet Info -->
                             <div class="detail-col">
                                 <h3 class="col-title">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -402,7 +387,6 @@
                             </div>
                         </div>
 
-                        <!-- Bottom Row: Pet Photos Gallery Horizontal -->
                         <div class="detail-col" id="detail-pet-photo-container" style="display: none; margin-top: 20px;">
                             <h3 class="col-title">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -422,7 +406,6 @@
                         </div>
                     </div>
 
-                    <!-- Right Column: History Only -->
                     <div class="detail-right-history" style="display: flex; flex-direction: column;">
                         <div class="detail-history-box" id="detail-history-container" style="padding: 24px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: 18px; height: 100%;">
                             <h3 class="col-title" style="margin-bottom: 20px; color: #10b981; display: flex; align-items: center; gap: 8px;">
@@ -437,7 +420,6 @@
                     </div>
                 </div>
 
-                <!-- Section 3: Medical and Vaccines -->
                 <div class="detail-full-col">
                     <h3 class="col-title">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -523,7 +505,6 @@
                     </div>
                 </div>
 
-                <!-- Section 4: Daily Diet -->
                 <div class="detail-full-col">
                     <h3 class="col-title">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -535,11 +516,10 @@
                         Chế độ dinh dưỡng hằng ngày
                     </h3>
                     <div id="detail-diet-tags" class="diet-tags-wrap">
-                        <!-- Diet tags dynamically injected -->
+
                     </div>
                 </div>
 
-                <!-- Section 5: Consent & Client Signature -->
                 <div class="detail-signature-block">
                     <div class="consent-info-list">
                         <div class="consent-info-item">
@@ -579,9 +559,8 @@
         </div>
     </div>
 
-    <!-- Dedicated High-Fidelity Print Template (Hidden on screen, shown in print) -->
     <div id="print-form-container" class="print-only-layout">
-        <!-- Brand Header -->
+
         <div class="print-brand-header" style="position: relative !important; width: 100% !important; display: inline-block !important;">
             <img src="Form - G22_files/image002.png" alt="GAIA Logo" class="print-brand-logo" style="width: 100% !important; height: auto !important; display: block !important;">
             <div class="banner-id-badge" id="print-banner-id" style="position: absolute !important; top: 4.5% !important; right: 0.8% !important; min-width: 18.5% !important; background: #ffffff !important; color: #9B1530 !important; font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 11pt !important; padding: 14px 12px !important; border-radius: 26px !important; border: 1.5px solid #9B1530 !important; display: flex !important; align-items: center !important; justify-content: center !important; white-space: nowrap !important; z-index: 9999 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">ID: --.------.----</div>
@@ -589,7 +568,7 @@
 
         <table class="print-table"
             style="width: 100%; border-collapse: collapse; border: 1.5px solid #000000; font-family: 'Times New Roman', Times, serif;">
-            <!-- Section 1: Owner Info Header -->
+
             <tr class="table-header-row">
                 <td colspan="9"
                     style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
@@ -618,7 +597,6 @@
                 </td>
             </tr>
 
-            <!-- Section 2: Pet Info Header -->
             <tr class="table-header-row">
                 <td colspan="9"
                     style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
@@ -677,7 +655,6 @@
                 </td>
             </tr>
 
-            <!-- Section 3: Vaccines -->
             <tr>
                 <td rowspan="2" colspan="1"
                     style="width: 25%; vertical-align: middle; border: 1px solid #000000; padding: 6px 10px;">
@@ -783,7 +760,6 @@
                 </td>
             </tr>
 
-            <!-- Section 4: Medical History -->
             <tr>
                 <td colspan="9" style="vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
                     <strong>Các vấn đề sức khoẻ:</strong>
@@ -815,7 +791,6 @@
                 </td>
             </tr>
 
-            <!-- Section 5: Diet -->
             <tr>
                 <td colspan="1" style="width: 25%; vertical-align: top; border: 1px solid #000000; padding: 6px 10px;">
                     <strong>Thức ăn hàng ngày:</strong>
@@ -844,7 +819,6 @@
                 </td>
             </tr>
 
-            <!-- Section 6: Consent -->
             <tr class="table-header-row">
                 <td colspan="9"
                     style="background-color: #9B1530 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 6px 10px; border: 1px solid #000000;">
@@ -855,7 +829,7 @@
             </tr>
             <tr>
                 <td colspan="9" style="padding: 12px 15px; vertical-align: top; border: 1px solid #000000;">
-                    <!-- Consent 1 -->
+
                     <div style="margin-bottom: 12px; line-height: 1.4;">
                         <span id="print-consent-accuracy"
                             style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px; vertical-align: middle;">☐</span>
@@ -867,7 +841,6 @@
                         </div>
                     </div>
 
-                    <!-- Consent 2 -->
                     <div style="margin-bottom: 20px; line-height: 1.4;">
                         <span id="print-consent-storage"
                             style="font-family: monospace; font-size: 12pt; font-weight: bold; margin-right: 4px; vertical-align: middle;">☐</span>
@@ -882,7 +855,6 @@
                         </div>
                     </div>
 
-                    <!-- Signatures Grid -->
                     <div
                         style="border-top: 1px solid #000000; margin-top: 15px; padding-top: 15px; display: flex; justify-content: space-between; align-items: flex-start;">
                         <div style="width: 45%;">
@@ -904,25 +876,22 @@
             </tr>
         </table>
 
-        <!-- Dedicated Attachment Page for Pet Photos (Prints if photos are loaded) -->
         <div id="print-photos-section" style="margin-top: 30px; page-break-before: auto;">
             <h4
                 style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; text-align: left; border-bottom: 2px solid #000000; padding-bottom: 6px; margin-bottom: 15px; text-transform: uppercase; font-weight: bold; color: #000000;">
                 HÌNH ẢNH THÚ CƯNG ĐÍNH KÈM / ATTACHED PET PHOTOS</h4>
             <div id="print-photos-grid" style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: flex-start;">
-                <!-- Photos dynamically injected by JS -->
+
             </div>
         </div>
     </div>
 
-    <!-- Floating Back to Top Button -->
     <button id="back-to-top-btn" class="back-to-top-btn" title="Trở lại đầu trang">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="18 15 12 9 6 15"></polyline>
         </svg>
     </button>
 
-    <!-- Custom Confirm Delete Modal -->
     <div id="confirm-delete-modal" class="modal-overlay" style="z-index: 1100;">
         <div class="modal-card confirm-delete-card">
             <div class="modal-header" style="border-bottom: none; padding-bottom: 5px;">
@@ -942,7 +911,6 @@
         </div>
     </div>
 
-    <!-- QR Code Modal Dialog -->
     <div id="qr-modal" class="modal-overlay" style="z-index: 1100;">
         <div class="modal-card qr-modal-card" style="max-width: 420px; text-align: center; padding: 25px; position: relative;">
             <button type="button" id="qr-modal-close-btn" class="modal-close-btn" style="position: absolute; top: 15px; right: 15px; width: 32px; height: 32px; z-index: 10;">
@@ -951,22 +919,20 @@
                     <line x1="6" x2="18" y1="6" y2="18"></line>
                 </svg>
             </button>
-            <!-- Modal Header -->
+
             <div class="modal-header" style="border-bottom: none; padding-bottom: 5px; padding-top: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                 <div class="modal-header-title" style="align-items: center; gap: 8px;">
                     <span class="patient-id" style="background: rgba(16, 185, 129, 0.15); color: var(--primary); border-color: rgba(16, 185, 129, 0.2); font-weight: 700;">GAIA QR</span>
                     <h2 style="font-size: 18px; text-align: center;">Mã QR Khai Báo</h2>
                 </div>
             </div>
-            
-            <!-- Modal Content -->
+
             <div class="modal-content" style="padding-top: 15px; padding-bottom: 15px; display: flex; flex-direction: column; align-items: center; gap: 20px;">
-                <!-- QR Code Display Box -->
+
                 <div id="qr-code-container" style="background: #ffffff; padding: 16px; border-radius: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; width: 232px; height: 232px;">
-                    <!-- QR Image generated by library will go here -->
+
                 </div>
-                
-                <!-- URL Link Display and Copy Section -->
+
                 <div style="width: 100%;">
                     <div style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); border-radius: 12px; padding: 8px 12px; gap: 8px; justify-content: space-between;">
                         <span id="qr-declaration-url" style="font-size: 12.5px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex-grow: 1; font-weight: 500;"></span>
@@ -976,8 +942,7 @@
                     </div>
                 </div>
             </div>
-            
-            <!-- Action buttons at the bottom -->
+
             <div style="display: flex; gap: 12px; margin-top: 10px; width: 100%;">
                 <button type="button" id="qr-download-btn" class="modal-action-btn btn-print" style="flex: 1; justify-content: center; border-radius: 12px; height: 42px; font-weight: 700; font-size: 14px;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px; height:16px;">
@@ -991,7 +956,6 @@
         </div>
     </div>
 
-    <!-- Image Lightbox Viewer -->
     <div id="image-lightbox" class="image-lightbox-overlay">
         <div class="lightbox-toolbar">
             <button type="button" id="lightbox-zoom-out" class="lightbox-btn" title="Thu nhỏ">
@@ -1017,7 +981,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="24" height="24"><polyline points="9 18 15 12 9 6"></polyline></svg>
             </button>
         </div>
-    <!-- Custom UI Confirmation Modal for Branch Address Update -->
+
     <div id="branch-confirm-modal" class="modal-overlay" style="z-index: 10005;">
         <div class="modal-card" style="max-width: 480px; padding: 24px; border-radius: 16px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px;">
@@ -1056,15 +1020,14 @@
         </div>
     </div>
 
-    <!-- Supabase CDN Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- html2pdf.js CDN -->
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <!-- QR Code Generator Library -->
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- Environmental Configuration -->
+
     <script src="env.js"></script>
-    <!-- Script Logic Dashboard -->
+
     <script src="admin.js?v=3"></script>
 </body>
 
