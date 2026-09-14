@@ -1011,7 +1011,9 @@ function renderRecentWarehouseTimeline(orders) {
     let html = `<div class="tq-timeline-list">`;
 
     orders.forEach(ord => {
-        const isNhap = (ord.loai_don || '').toLowerCase().includes('nhap');
+        const rawLoai = String(ord.loai_don || '').trim();
+        const normalizedLoai = rawLoai.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const isNhap = normalizedLoai.includes('nhap');
         const iconSvg = isNhap 
             ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>`
             : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
