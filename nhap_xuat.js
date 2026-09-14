@@ -424,9 +424,13 @@ async function fetchNhapXuatData() {
     } finally {
         await initNhapXuatBranchFilterForManager();
         applyNhapXuatFilters();
-        window.nhapXuatData = nhapXuatData; 
+        window.nhapXuatData = nhapXuatData;
+        if (typeof nxWatchedDirHandle !== 'undefined' && nxWatchedDirHandle) {
+            renderNxFolderWatcherUI(nxIsWatchingPaused ? 'paused' : 'active');
+        }
     }
 }
+
 
 function getSampleNhapXuatData() {
     return [];
@@ -1035,7 +1039,11 @@ function renderNhapXuatOrderList(orders) {
         if (isCancelled) {
             statusBadgeHtml = '<span style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">❌ Đã Hủy</span>';
         } else if (isPending) {
-            statusBadgeHtml = '<span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">⏳ Chờ</span>';
+            let ratioText = '';
+            if (order.so_dong_hoa_don && order.so_dong_hoa_don > 0) {
+                ratioText = ` (${orderItems.length}/${order.so_dong_hoa_don})`;
+            }
+            statusBadgeHtml = `<span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">⏳ Chờ${ratioText}</span>`;
         }
 
         const card = document.createElement('div');
@@ -1323,8 +1331,12 @@ async function _doSelectNxOrderForView(order) {
             statusBadge.style.color = '#ef4444';
             statusBadge.onclick = null;
         } else if (isPending) {
+            let ratioText = '';
+            if (order.so_dong_hoa_don && order.so_dong_hoa_don > 0) {
+                ratioText = ` (${currentDraftNxItems.length}/${order.so_dong_hoa_don})`;
+            }
             statusBadge.style.display = 'inline-block';
-            statusBadge.textContent = '⏳ Đang Chờ Quét';
+            statusBadge.textContent = `⏳ Đang Chờ Quét${ratioText}`;
             statusBadge.style.background = 'rgba(245, 158, 11, 0.2)';
             statusBadge.style.color = '#f59e0b';
             statusBadge.onclick = null;
@@ -1763,14 +1775,14 @@ function handleNxScannerInputSearch(event) {
                             const safeLot = String(lotStr).replace(/'/g, "\\'");
                             const safeDate = dateStr !== '-' ? String(dateStr).replace(/'/g, "\\'") : '';
                             return `
-                                <div class="nx-search-subitem" onclick="event.stopPropagation(); addNxItemFromSearch('${p.id}', '${safeLot}', '${safeDate}')" title="Chọn nhánh LOT: ${escapeHtml(lotStr)} (Tồn: ${stockNum})">
+                                <div class="nx-search-subitem" onclick="event.stopPropagation(); addNxItemFromSearch('${p.id}', '${safeLot}', '${safeDate}')" title="Chọn nhánh LOT: ${escapeHtml(lotStr)} (Tồn: ${(typeof formatQuantity === 'function' ? formatQuantity(stockNum) : stockNum)})">
                                     <div style="display: flex; align-items: center; gap: 6px;">
                                         <span style="color: #3b82f6; font-weight: bold;">↳</span>
                                         <span class="badge-lot">LOT: ${escapeHtml(lotStr)}</span>
                                         <span class="badge-date">HSD: ${escapeHtml(dateStr)}</span>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 6px;">
-                                        <span class="stock-tag" style="color: ${stockColor}; font-size: 11.5px;">Tồn: ${stockNum.toLocaleString('vi-VN')}</span>
+                                        <span class="stock-tag" style="color: ${stockColor}; font-size: 11.5px;">Tồn: ${(typeof formatQuantity === 'function' ? formatQuantity(stockNum) : stockNum.toLocaleString('vi-VN'))}</span>
                                         <span class="branch-tag">${escapeHtml(d.chi_nhanh || branchCode)}</span>
                                     </div>
                                 </div>
@@ -2765,18 +2777,21 @@ function renderNxDraftItemsTable() {
             stockColor = '#f59e0b';
         }
 
-        const stockLabel = `<span style="font-size: 11px; font-weight: 600; color: ${stockColor}; line-height: 1.2; text-align: center; display: block; white-space: nowrap;">Tồn: ${availableStock}</span>`;
+        const fmtAvailable = typeof formatQuantity === 'function' ? formatQuantity(availableStock) : availableStock;
+        const stockLabel = `<span style="font-size: 11px; font-weight: 600; color: ${stockColor}; line-height: 1.2; text-align: center; display: block; white-space: nowrap;">Tồn: ${fmtAvailable}</span>`;
 
-        let qtyDisplay = `<input type="number" min="0" class="form-control-sm" style="width: 75px; text-align: right; font-weight: 700; color: #10b981;" value="${qty}" onchange="updateNxDraftItemQty(${idx}, this.value)">`;
+        let qtyDisplay = `<input type="number" min="0" step="any" class="form-control-sm" style="width: 75px; text-align: right; font-weight: 700; color: #10b981;" value="${qty}" onchange="updateNxDraftItemQty(${idx}, this.value)">`;
         if (currentDraftOrder.trang_thai === 'Đã hủy') {
             const prevQty = item.so_luong_truoc_khi_huy != null ? item.so_luong_truoc_khi_huy : item.so_luong;
+            const fmtPrev = typeof formatQuantity === 'function' ? formatQuantity(prevQty) : prevQty;
             qtyDisplay = `<div style="display: flex; align-items: center; justify-content: flex-end;">
-                            <span style="text-decoration: line-through; color: #ef4444; font-size: 13.5px; font-weight: 700; padding-right: 8px;">${prevQty}</span>
+                            <span style="text-decoration: line-through; color: #ef4444; font-size: 13.5px; font-weight: 700; padding-right: 8px;">${fmtPrev}</span>
                           </div>`;
         } else if (currentDraftOrder.trang_thai === 'Chờ' && item.so_luong_yeu_cau) {
+            const fmtReq = typeof formatQuantity === 'function' ? formatQuantity(item.so_luong_yeu_cau) : item.so_luong_yeu_cau;
             qtyDisplay = `<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
-                            <span style="font-size: 11px; color: var(--text-muted);">Cần quét: <strong style="color: var(--text-primary);">${item.so_luong_yeu_cau}</strong></span>
-                            <input type="number" min="0" max="${item.so_luong_yeu_cau}" class="form-control-sm" style="width: 75px; text-align: right; font-weight: 700; color: ${qty >= item.so_luong_yeu_cau ? '#10b981' : '#ef4444'};" value="${qty}" onchange="updateNxDraftItemQty(${idx}, this.value)">
+                            <span style="font-size: 11px; color: var(--text-muted);">Cần quét: <strong style="color: var(--text-primary);">${fmtReq}</strong></span>
+                            <input type="number" min="0" step="any" max="${item.so_luong_yeu_cau}" class="form-control-sm" style="width: 75px; text-align: right; font-weight: 700; color: ${qty >= item.so_luong_yeu_cau ? '#10b981' : '#ef4444'};" value="${qty}" onchange="updateNxDraftItemQty(${idx}, this.value)">
                           </div>`;
         }
 
@@ -2824,7 +2839,8 @@ function renderNxDraftItemsTable() {
     });
 
     if (totalQtyEl) {
-        totalQtyEl.innerHTML = `Tổng <strong style="color: #10b981; font-size: 15px;">${totalRows}</strong> sản phẩm - Số Lượng: <strong style="color: #10b981; font-size: 15px;">${totalQty.toLocaleString('vi-VN')}</strong>`;
+        const fmtTotal = typeof formatQuantity === 'function' ? formatQuantity(totalQty) : totalQty.toLocaleString('vi-VN');
+        totalQtyEl.innerHTML = `Tổng <strong style="color: #10b981; font-size: 15px;">${totalRows}</strong> sản phẩm - Số Lượng: <strong style="color: #10b981; font-size: 15px;">${fmtTotal}</strong>`;
     }
 }
 
@@ -2834,15 +2850,16 @@ function updateNxDraftItemQty(idx, newQty) {
     if (!item) return;
 
     const oldQty = item.so_luong;
-    const parsed = parseInt(newQty, 10);
-    let finalQty = (isNaN(parsed) || parsed < 0) ? 0 : parsed;
+    const parsed = parseFloat(newQty);
+    let finalQty = (isNaN(parsed) || parsed < 0) ? 0 : Math.round(parsed * 10000) / 10000;
 
     const isPendingOrder = currentDraftOrder && currentDraftOrder.trang_thai === 'Chờ';
     if (isPendingOrder && item.so_luong_yeu_cau && finalQty > item.so_luong_yeu_cau) {
+        const fmtReq = typeof formatQuantity === 'function' ? formatQuantity(item.so_luong_yeu_cau) : item.so_luong_yeu_cau;
         if (typeof showVatTuNoticeModal === 'function') {
-            showVatTuNoticeModal('warning', 'Vượt Quá Yêu Cầu', `Sản phẩm đã vượt quá số lượng yêu cầu (${item.so_luong_yeu_cau}). Đã tự động điều chỉnh lại mức tối đa!`);
+            showVatTuNoticeModal('warning', 'Vượt Quá Yêu Cầu', `Sản phẩm đã vượt quá số lượng yêu cầu (${fmtReq}). Đã tự động điều chỉnh lại mức tối đa!`);
         } else {
-            alert(`Sản phẩm đã vượt quá số lượng yêu cầu (${item.so_luong_yeu_cau}).`);
+            alert(`Sản phẩm đã vượt quá số lượng yêu cầu (${fmtReq}).`);
         }
         finalQty = item.so_luong_yeu_cau;
     }
@@ -3072,8 +3089,7 @@ async function saveNxOrderToSystem() {
             }
         }
     }
-
-    const tongSoLuong = currentDraftNxItems.reduce((acc, x) => acc + (Number(x.so_luong) || 0), 0);
+    const tongSoLuong = Math.round(currentDraftNxItems.reduce((acc, x) => acc + (Number(x.so_luong) || 0), 0) * 10000) / 10000;
 
     let finalFileUrl = null;
     if (currentNxAttachments && currentNxAttachments.length > 0) {
@@ -3394,7 +3410,7 @@ async function restoreCancelledNxOrder() {
                 ...item,
                 so_luong: restoreQuantity ? (item.so_luong_truoc_khi_huy || 0) : 0
             }));
-            const tongSoLuong = currentDraftNxItems.reduce((sum, item) => sum + (Number(item.so_luong) || 0), 0);
+            const tongSoLuong = Math.round(currentDraftNxItems.reduce((sum, item) => sum + (Number(item.so_luong) || 0), 0) * 10000) / 10000;
 
             const newStatus = tongSoLuong > 0 ? 'Done' : 'Chờ';
 
@@ -3734,47 +3750,61 @@ async function processPdfFilesBatch(files, isAuto = false) {
 
         const processedInvoiceCodesInBatch = new Set();
         const fileListArray = Array.from(files);
+        const failedFiles = [];
 
         for (let i = 0; i < fileListArray.length; i++) {
             const file = fileListArray[i];
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-
             let rawLines = [];
-            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                const page = await pdf.getPage(pageNum);
-                const textContent = await page.getTextContent();
-                const pageItems = textContent.items || [];
-                if (pageItems.length === 0) continue;
+            let maHoaDon = null;
+            let finalMucDich = '';
 
-                const lineGroups = [];
-                pageItems.forEach(item => {
-                    if (!item.str || !item.str.trim()) return;
-                    const x = item.transform[4];
-                    const y = item.transform[5];
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
 
-                    let group = lineGroups.find(g => Math.abs(g.y - y) <= 4.0);
-                    if (!group) {
-                        group = { y: y, items: [] };
-                        lineGroups.push(group);
-                    }
-                    group.items.push({ x: x, str: item.str });
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const textContent = await page.getTextContent();
+                    const pageItems = textContent.items || [];
+                    if (pageItems.length === 0) continue;
+
+                    const lineGroups = [];
+                    pageItems.forEach(item => {
+                        if (!item.str || !item.str.trim()) return;
+                        const x = item.transform[4];
+                        const y = item.transform[5];
+
+                        let group = lineGroups.find(g => Math.abs(g.y - y) <= 4.0);
+                        if (!group) {
+                            group = { y: y, items: [] };
+                            lineGroups.push(group);
+                        }
+                        group.items.push({ x: x, str: item.str });
+                    });
+
+                    lineGroups.sort((a, b) => b.y - a.y);
+
+                    lineGroups.forEach(g => {
+                        g.items.sort((a, b) => a.x - b.x);
+                        const lineText = g.items.map(it => it.str).join(' ').trim();
+                        if (lineText) {
+                            rawLines.push(lineText);
+                        }
+                    });
+                }
+            } catch (pdfErr) {
+                console.warn("Lỗi phân tích cấu trúc PDF file:", file.name, pdfErr);
+                failedFiles.push({
+                    fileName: file.name,
+                    maHoaDon: 'Không rõ',
+                    reason: 'File PDF lỗi hoặc không thể phân tích văn bản (' + (pdfErr.message || '') + ')',
+                    time: new Date().toLocaleTimeString('vi-VN')
                 });
-
-                lineGroups.sort((a, b) => b.y - a.y);
-
-                lineGroups.forEach(g => {
-                    g.items.sort((a, b) => a.x - b.x);
-                    const lineText = g.items.map(it => it.str).join(' ').trim();
-                    if (lineText) {
-                        rawLines.push(lineText);
-                    }
-                });
+                continue;
             }
 
             const fullTextFromLines = rawLines.join('\n');
 
-            let maHoaDon = null;
             const maHoaDonMatch = fullTextFromLines.match(/Mã\s*HĐ\s*[:：]?\s*([^\r\n]+)/i) 
                 || fullTextFromLines.match(/(?:Số hóa đơn|Mã hóa đơn|Số HĐ|Mã đơn)\s*[:：]?\s*([^\r\n]+)/i);
             if (maHoaDonMatch) {
@@ -3815,112 +3845,292 @@ async function processPdfFilesBatch(files, isAuto = false) {
             }
 
             const invalidKeywords = ['không tên', 'khong ten', 'gaia', 'bệnh viện', 'phòng khám', 'tp.hcm', 'tphcm', 'hospital'];
-            let finalMucDich = maHoaDon;
+            finalMucDich = maHoaDon;
             if (petName && !invalidKeywords.some(kw => petName.toLowerCase().includes(kw))) {
                 finalMucDich = `${maHoaDon} - ${petName}`;
             }
 
             const items = [];
 
+            // Detect typical medical services / non-inventory procedures to prevent false matching
+            function isClinicServiceOrFee(str) {
+                if (!str) return false;
+                const s = str.toLowerCase().trim();
+                const servicePatterns = [
+                    /^(công|dịch vụ|dich vu|phí|tiền công|tien cong|khám|kham|siêu âm|sieu am|x-?quang|xquang|x quang|xét nghiệm|xet nghiem|nội soi|noi soi|chụp|chup|phẫu thuật|phau thuat|mổ|mo|tiêm truyền|truyền dịch|truyen dich|lưu chuồng|luu chuong|nội trú|noi tru|chăm sóc|cham soc|tắm|spa|cắt tỉa|cat tia|vệ sinh|ve sinh|cấp cứu|cap cuu|tẩy giun|tay giun|tiêm phòng|tiem phong|chích|chich|gửi thú|gui thu|lưu bệnh|luu benh)\b/i,
+                    /(khám bệnh|kham benh|tái khám|tai kham|tiêm thuốc|tiem thuoc|truyền tĩnh mạch|tiêm bắp|tiêm dưới da|cắt chỉ|thay băng|bó bột|rửa vết thương|nặn tuyến hôi|lấy cao răng|triệt sản|đỡ đẻ|cắt đuôi|cắt tai|đốt mụn|cạo lông|khám tổng quát|khám da|khám mắt|khám tai)/i
+                ];
+                return servicePatterns.some(p => p.test(s));
+            }
+
+            // Robust extractor for quantity (integers and decimals like 0.01, 0.5, 1.25)
+            function extractQuantityFromInvoiceLine(text) {
+                if (!text) return 1;
+                const trimmed = text.trim();
+                const rawTokens = trimmed.split(/\s+/).filter(Boolean);
+                const parsedList = [];
+
+                for (const tok of rawTokens) {
+                    const clean = tok
+                        .replace(/^(stt|đvt|vnd|đ|k|\%)+/i, '')
+                        .replace(/(ml|l|gam|g|kg|viên|vien|chai|lo|lọ|ống|ong|túi|tui|vỉ|vi|liều|lieu|lần|lan|hộp|hop|cái|cai|bộ|bo|\%|vnd|đ|k)$/i, '')
+                        .trim();
+                    if (!clean || !/\d/.test(clean)) continue;
+
+                    let num = 0;
+                    if (clean.includes(',') && clean.includes('.')) {
+                        if (clean.lastIndexOf('.') > clean.lastIndexOf(',')) {
+                            num = parseFloat(clean.replace(/,/g, '')) || 0;
+                        } else {
+                            num = parseFloat(clean.replace(/\./g, '').replace(',', '.')) || 0;
+                        }
+                    } else if (clean.includes(',')) {
+                        const parts = clean.split(',');
+                        if (parts.length === 2 && parts[1].length === 3 && parts[0].length >= 1 && parseInt(parts[0]) >= 1) {
+                            num = parseFloat(clean.replace(/,/g, '')) || 0;
+                        } else {
+                            num = parseFloat(clean.replace(',', '.')) || 0;
+                        }
+                    } else if (clean.includes('.')) {
+                        const parts = clean.split('.');
+                        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parseInt(parts[0]) >= 1)) {
+                            num = parseFloat(clean.replace(/\./g, '')) || 0;
+                        } else {
+                            num = parseFloat(clean) || 0;
+                        }
+                    } else {
+                        num = parseFloat(clean) || 0;
+                    }
+
+                    if (num > 0) {
+                        parsedList.push(num);
+                    }
+                }
+
+                if (parsedList.length === 0) return 1;
+
+                // If 3 columns [Giá bán, Số lượng, Thành tiền], quantity is ALWAYS the middle column (index 1)
+                if (parsedList.length === 3) {
+                    const q = parsedList[1];
+                    return q > 0 ? (Math.round(q * 10000) / 10000) : 1;
+                }
+
+                // If 2 columns [Giá bán, Số lượng] or [Số lượng, Đơn giá]
+                if (parsedList.length === 2) {
+                    const [n0, n1] = parsedList;
+                    if (n0 > 0 && n0 < 1) return Math.round(n0 * 10000) / 10000;
+                    if (n1 > 0 && n1 < 1) return Math.round(n1 * 10000) / 10000;
+                    if (n1 >= 500 && n0 > 0 && n0 < 500) return Math.round(n0 * 10000) / 10000;
+                    if (n0 >= 500 && n1 > 0 && n1 < 500) return Math.round(n1 * 10000) / 10000;
+                    return n0 > 0 ? (Math.round(n0 * 10000) / 10000) : (Math.round(n1 * 10000) / 10000);
+                }
+
+                // If > 3 columns
+                if (parsedList.length > 3) {
+                    for (let idx = 1; idx < parsedList.length - 1; idx++) {
+                        const v = parsedList[idx];
+                        if (v > 0 && v < 500) {
+                            return Math.round(v * 10000) / 10000;
+                        }
+                    }
+                }
+
+                return parsedList[0] > 0 ? (Math.round(parsedList[0] * 10000) / 10000) : 1;
+            }
+
             function findVatTuInStore(queryName) {
                 if (!queryName || !allProducts || allProducts.length === 0) return null;
 
+                const cleanUnits = (s) => {
+                    if (!s) return '';
+                    let prev = '';
+                    let curr = s.trim();
+                    while (prev !== curr) {
+                        prev = curr;
+                        curr = curr.replace(/\s*[\-\–\—\−\/\.\,\_]+\s*(ml|l|gam|g|kg|viên|vien|chai|lo|lọ|ống|ong|túi|tui|vỉ|vi|liều|lieu|lần|lan|hộp|hop|cái|cai|bộ|bo)\s*$/i, '').trim();
+                    }
+                    return curr;
+                };
+
                 const norm = (str) => {
                     if (!str) return '';
-                    return str.toLowerCase()
-                        .replace(/\s*-\s*(túi|lon|chai|gói|hộp|tuýp|viên|lần|cái|vỉ|bình|miếng|ống|cây|cuộn|cặp|kg|liều|lọ|set|bộ)$/i, '')
-                        .replace(/,/g, '.')
-                        .replace(/[\(\)\[\]\-\_\:\/]/g, ' ')
+                    let s = str.trim();
+                    s = s.replace(/[\u2010-\u2015\u2212\uFF0D]/g, ' ');
+                    s = cleanUnits(s);
+                    return s.toLowerCase()
+                        .replace(/(\d+)\s*(ml|l|g|kg|mg)/gi, '$1$2')
+                        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
                         .replace(/\s+/g, ' ')
                         .trim();
                 };
 
                 const normQuery = norm(queryName);
-                if (!normQuery) return null;
+                if (!normQuery || normQuery.length < 2) return null;
 
+                // If query is identified as clinic service / medical procedure, do not match goods
+                if (isClinicServiceOrFee(queryName)) {
+                    for (const vt of allProducts) {
+                        const t1 = norm(vt.ten_mat_hang);
+                        const t2 = norm(vt.ten_hoa_don);
+                        if ((t1 && t1 === normQuery) || (t2 && t2 === normQuery)) return vt;
+                    }
+                    return null;
+                }
+
+                // 1. Exact Match (Highest Confidence)
                 for (const vt of allProducts) {
                     const t1 = norm(vt.ten_mat_hang);
                     const t2 = norm(vt.ten_hoa_don);
-                    if (t1 && (t1 === normQuery || normQuery.includes(t1) || t1.includes(normQuery))) {
-                        return vt;
-                    }
-                    if (t2 && (t2 === normQuery || normQuery.includes(t2) || t2.includes(normQuery))) {
-                        return vt;
-                    }
+                    if (t1 && t1 === normQuery) return vt;
+                    if (t2 && t2 === normQuery) return vt;
                 }
 
+                // 2. High-confidence Substring / Prefix / Suffix Match (>= 75% coverage)
                 for (const vt of allProducts) {
                     for (const name of [vt.ten_mat_hang, vt.ten_hoa_don]) {
                         if (!name) continue;
                         const normName = norm(name);
-                        const tokens = normName.split(' ').filter(w => w.length > 1 && !/^(cho|dành|mèo|chó|thuốc|loại)$/i.test(w));
-                        if (tokens.length >= 2 && tokens.every(tok => normQuery.includes(tok))) {
-                            return vt;
+                        if (normName.length < 3) continue;
+
+                        if (normQuery === normName) return vt;
+                        if (normQuery.startsWith(normName) || normName.startsWith(normQuery) || normQuery.includes(normName) || normName.includes(normQuery)) {
+                            const minLen = Math.min(normQuery.length, normName.length);
+                            const maxLen = Math.max(normQuery.length, normName.length);
+                            if (minLen / maxLen >= 0.75) {
+                                return vt;
+                            }
                         }
                     }
                 }
 
-                const queryTokens = normQuery.split(' ').filter(w => w.length > 1);
+                // 3. Strict Keyword / Token Inclusion (Exact word matching, >= 80% coverage)
+                const stopWords = new Set(['cho', 'danh', 'dành', 'meo', 'mèo', 'cho', 'chó', 'thuoc', 'thuốc', 'loai', 'loại', 'va', 'và', 'la', 'là']);
+                const queryTokens = normQuery.split(' ').filter(w => w.length > 1 && !stopWords.has(w));
+                if (queryTokens.length === 0) return null;
+
                 let bestMatch = null;
                 let bestScore = 0;
+
                 for (const vt of allProducts) {
                     for (const name of [vt.ten_mat_hang, vt.ten_hoa_don]) {
                         if (!name) continue;
                         const normName = norm(name);
-                        const vtTokens = normName.split(' ').filter(w => w.length > 1);
+                        const vtTokens = normName.split(' ').filter(w => w.length > 1 && !stopWords.has(w));
                         if (vtTokens.length === 0) continue;
+
                         let matchCount = 0;
                         for (const tok of vtTokens) {
-                            if (queryTokens.includes(tok) || queryTokens.some(q => q.includes(tok) || tok.includes(q))) {
+                            if (queryTokens.includes(tok)) {
                                 matchCount++;
                             }
                         }
-                        const score = matchCount / vtTokens.length;
-                        if (score >= 0.6 && score > bestScore) {
-                            bestScore = score;
+
+                        const coverage = matchCount / vtTokens.length;
+                        const queryCoverage = matchCount / queryTokens.length;
+                        const isValidMatch = (coverage >= 0.80 && queryCoverage >= 0.50 && matchCount >= 2) || 
+                                             (coverage === 1.0 && vtTokens.length === 1 && vtTokens[0].length >= 5 && queryTokens.includes(vtTokens[0]));
+
+                        if (isValidMatch && coverage > bestScore) {
+                            bestScore = coverage;
                             bestMatch = vt;
                         }
                     }
                 }
+
                 return bestMatch;
             }
+
+            function parseLineNumbersTail(line) {
+                if (!line) return { hasNumbersTail: false, namePart: '', numbersText: '' };
+                const trimmed = line.trim();
+                if (/^[\-\=\_\.\s]{3,}$/.test(trimmed)) {
+                    return { hasNumbersTail: false, namePart: '', numbersText: '' };
+                }
+
+                const tokens = trimmed.split(/\s+/).filter(Boolean);
+                if (tokens.length === 0) {
+                    return { hasNumbersTail: false, namePart: '', numbersText: '' };
+                }
+
+                function isNumToken(tok) {
+                    if (!tok) return false;
+                    const clean = tok
+                        .replace(/^(stt|đvt|vnd|đ|k|\%)+/i, '')
+                        .replace(/(ml|l|gam|g|kg|viên|vien|chai|lo|lọ|ống|ong|túi|tui|vỉ|vi|liều|lieu|lần|lan|hộp|hop|cái|cai|bộ|bo|\%|vnd|đ|k)$/i, '')
+                        .trim();
+                    return /^\d+(?:[.,]\d+)*$/.test(clean) || /^(?:đ|vnd|k|\%|đvt)$/i.test(tok);
+                }
+
+                let tailIdx = tokens.length - 1;
+                const numTokensReversed = [];
+
+                while (tailIdx >= 0) {
+                    const tok = tokens[tailIdx];
+                    if (isNumToken(tok)) {
+                        numTokensReversed.push(tok);
+                        tailIdx--;
+                        if (numTokensReversed.length >= 5) break;
+                    } else {
+                        break;
+                    }
+                }
+
+                const hasActualDigits = numTokensReversed.some(tok => /\d/.test(tok));
+
+                if (numTokensReversed.length >= 1 && hasActualDigits) {
+                    const numbersTokens = numTokensReversed.reverse();
+                    const numbersText = numbersTokens.join(' ');
+                    const nameTokens = tokens.slice(0, tailIdx + 1);
+                    const namePart = nameTokens.join(' ').trim();
+
+                    return {
+                        hasNumbersTail: true,
+                        namePart: namePart,
+                        numbersText: numbersText
+                    };
+                }
+
+                return {
+                    hasNumbersTail: false,
+                    namePart: trimmed,
+                    numbersText: ''
+                };
+            }
+
+            let totalInvoiceLinesOnPdf = 0;
+            let pendingItemName = '';
 
             for (let j = 0; j < rawLines.length; j++) {
                 let line = rawLines[j].trim();
                 if (!line) continue;
 
-                if (/(?:Tổng tiền|Tổng thanh toán|Khách trả|Tiền thừa|Điểm tích lũy|5% VAT|8% VAT|Hình thức thanh toán)/i.test(line)) {
+                // Stop at invoice totals / footer
+                if (/(?:Tổng tiền|Tổng thanh toán|Khách trả|Tiền thừa|Điểm tích lũy|5% VAT|8% VAT|Hình thức thanh toán|Chữ ký|Người lập|Cảm ơn quý khách)/i.test(line)) {
                     break;
                 }
 
+                // Skip horizontal separators
                 if (/^[\-\=\_\.\s]{3,}$/.test(line)) {
                     continue;
                 }
 
+                // Skip header lines
+                if (/(?:Mã HĐ|Ngày|Người tạo|Khách hàng|SĐT|Thú cưng|Cân nặng|Loài|Giống|Tổng điểm|Giá bán\s+Số lượng)/i.test(line)) {
+                    continue;
+                }
+
                 line = line.replace(/^\d+[\.\-]\s+/, '');
-                let currentItemName = line;
+                const tailResult = parseLineNumbersTail(line);
 
-                if (j + 1 < rawLines.length) {
-                    const nextLine = rawLines[j+1].trim();
-                    if (/^[\d,\.\s]+$/.test(nextLine)) {
-                        const numbers = nextLine.replace(/,/g, '').match(/\d+/g);
-                        if (numbers && numbers.length >= 2) {
-                            let qty = 1;
-                            if (numbers.length >= 3) {
-                                qty = parseInt(numbers[1], 10) || 1;
-                            } else {
-                                qty = parseInt(numbers[0], 10) || 1;
-                            }
+                if (tailResult.hasNumbersTail) {
+                    const fullItemName = (pendingItemName ? (pendingItemName + ' ' + tailResult.namePart) : tailResult.namePart).trim();
+                    const parsedQty = extractQuantityFromInvoiceLine(tailResult.numbersText);
 
-                            let matchedVatTu = findVatTuInStore(currentItemName);
+                    if (fullItemName && fullItemName.length >= 2) {
+                        totalInvoiceLinesOnPdf++;
 
-                            if (!matchedVatTu && j > 0) {
-                                const prevLine = rawLines[j-1].trim();
-                                if (prevLine && !/^[\d,\.\s]+$/.test(prevLine) && !/^[\-\=\_\.\s]{3,}$/.test(prevLine) && !/(?:Mã HĐ|Ngày|Khách hàng|Thú cưng|Loài|Giống|Tổng|Giá bán|Đơn giá)/i.test(prevLine)) {
-                                    const combinedName = prevLine + ' ' + currentItemName;
-                                    matchedVatTu = findVatTuInStore(combinedName);
-                                }
-                            }
+                        if (parsedQty !== null && parsedQty > 0) {
+                            const matchedVatTu = findVatTuInStore(fullItemName);
 
                             if (matchedVatTu) {
                                 items.push({
@@ -3928,12 +4138,19 @@ async function processPdfFilesBatch(files, isAuto = false) {
                                     ma_vach: matchedVatTu.ma_vach || '',
                                     lot: '-',
                                     ten_hang_hoa: matchedVatTu.ten_mat_hang || matchedVatTu.ten_hoa_don,
-                                    so_luong_yeu_cau: qty,
+                                    so_luong_yeu_cau: parsedQty,
                                     so_luong: 0
                                 });
+                            } else {
+                                console.log(`[PDF Import] Bỏ qua mục không có trong kho hoặc dịch vụ: "${fullItemName}" (SL: ${parsedQty})`);
                             }
                         }
                     }
+
+                    pendingItemName = '';
+                } else {
+                    // Line does not have numbers tail -> it is product name or wrapped continuation
+                    pendingItemName = (pendingItemName ? (pendingItemName + ' ' + line) : line).trim();
                 }
             }
 
@@ -3970,12 +4187,27 @@ async function processPdfFilesBatch(files, isAuto = false) {
                     file_url: file_url,
                     user_name: userNameFormatted,
                     chi_tiet_san_pham: items,
-                    tong_so_luong: items.reduce((acc, curr) => acc + curr.so_luong_yeu_cau, 0)
+                    tong_so_luong: Math.round(items.reduce((acc, curr) => acc + (Number(curr.so_luong_yeu_cau) || 0), 0) * 10000) / 10000,
+                    so_dong_hoa_don: totalInvoiceLinesOnPdf || items.length
                 };
 
-                const { data, error } = await supabaseClient.from('nhap_xuat').insert([payload]);
+                let { data, error } = await supabaseClient.from('nhap_xuat').insert([payload]);
+                if (error && error.message && (error.message.includes('so_dong_hoa_don') || error.message.includes('column'))) {
+                    console.warn("Supabase bảng nhap_xuat chưa có cột so_dong_hoa_don, đang thử lại bỏ cột này...", error.message);
+                    delete payload.so_dong_hoa_don;
+                    const retryRes = await supabaseClient.from('nhap_xuat').insert([payload]);
+                    data = retryRes.data;
+                    error = retryRes.error;
+                }
+
                 if (error) {
                     console.error("Error creating order from PDF:", error);
+                    failedFiles.push({
+                        fileName: file.name,
+                        maHoaDon: maHoaDon,
+                        reason: 'Lỗi Database: ' + error.message,
+                        time: new Date().toLocaleTimeString('vi-VN')
+                    });
                 } else {
                     processedInvoiceCodesInBatch.add(maHoaDon);
                     if (typeof nhapXuatData !== 'undefined') {
@@ -3990,6 +4222,14 @@ async function processPdfFilesBatch(files, isAuto = false) {
                     }]);
                     successCount++;
                 }
+            } else {
+                // No valid goods found
+                failedFiles.push({
+                    fileName: file.name,
+                    maHoaDon: maHoaDon || 'Không rõ',
+                    reason: 'Không tìm thấy vật tư nào trong kho (chỉ chứa dịch vụ khám/chữa bệnh hoặc tên hàng chưa có trong kho)',
+                    time: new Date().toLocaleTimeString('vi-VN')
+                });
             }
         }
 
@@ -4009,6 +4249,13 @@ async function processPdfFilesBatch(files, isAuto = false) {
                             }
                         }, 800);
                     }
+                    if (failedFiles.length > 0) {
+                        setTimeout(() => {
+                            if (typeof showToast === 'function') {
+                                showToast('warning', 'Đơn Lỗi / Bỏ Qua', `Có ${failedFiles.length} file không thể tạo đơn kho do không có sản phẩm trong kho.`);
+                            }
+                        }, 1600);
+                    }
                     fetchNhapXuatData();
                 }, 300);
             } else if (duplicateCount === 0) {
@@ -4021,7 +4268,6 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 }, 300);
             }
         } else {
-
             if (successCount > 0) {
                 playNxAutoImportSound();
                 if (typeof showToast === 'function') {
@@ -4031,7 +4277,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
             }
         }
 
-        return { successCount, duplicateCount };
+        return { successCount, duplicateCount, failedFiles };
 
     } catch (error) {
         console.error("PDF Parse error", error);
@@ -4043,7 +4289,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 alert("Có lỗi xảy ra khi đọc file PDF.");
             }
         }
-        return { successCount: 0, duplicateCount: 0 };
+        return { successCount: 0, duplicateCount: 0, failedFiles: [] };
     }
 }
 
@@ -4194,6 +4440,159 @@ function playNxAutoImportSound() {
     } catch (e) {}
 }
 
+let nxFailedOrdersList = [];
+
+function loadNxFailedOrders() {
+    try {
+        const stored = sessionStorage.getItem('gaia_nx_failed_orders');
+        if (stored) {
+            nxFailedOrdersList = JSON.parse(stored);
+        }
+    } catch (e) {}
+}
+
+function saveNxFailedOrders() {
+    try {
+        sessionStorage.setItem('gaia_nx_failed_orders', JSON.stringify(nxFailedOrdersList.slice(0, 100)));
+    } catch (e) {}
+}
+
+loadNxFailedOrders();
+
+async function moveFileToErrorFolder(fileName, dirHandle) {
+    if (!dirHandle || !fileName) return false;
+    try {
+        let perm = 'denied';
+        try {
+            perm = await dirHandle.queryPermission({ mode: 'readwrite' });
+            if (perm !== 'granted') {
+                perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+            }
+        } catch (pe) {}
+
+        if (perm !== 'granted') {
+            console.warn("Chưa có quyền ghi (readwrite) để chuyển file vào thư mục _DON_LOI");
+            return false;
+        }
+
+        // 1. Get or create _DON_LOI subfolder
+        const errDirHandle = await dirHandle.getDirectoryHandle('_DON_LOI', { create: true });
+
+        // 2. Read source file
+        const srcFileHandle = await dirHandle.getFileHandle(fileName);
+        const srcFile = await srcFileHandle.getFile();
+
+        // 3. Write into _DON_LOI
+        const destFileHandle = await errDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await destFileHandle.createWritable();
+        await writable.write(await srcFile.arrayBuffer());
+        await writable.close();
+
+        // 4. Remove original file from parent folder
+        await dirHandle.removeEntry(fileName);
+        console.log(`GAIA Folder Watcher: Đã chuyển file lỗi "${fileName}" vào thư mục _DON_LOI`);
+        return true;
+    } catch (err) {
+        console.warn(`Lỗi khi chuyển file "${fileName}" vào thư mục _DON_LOI:`, err);
+        return false;
+    }
+}
+
+function showNxFailedOrdersModal() {
+    let existingModal = document.getElementById('modal-nx-failed-orders');
+    if (existingModal) existingModal.remove();
+
+    if (!nxFailedOrdersList || nxFailedOrdersList.length === 0) {
+        if (typeof showToast === 'function') {
+            showToast('info', 'Thông Báo', 'Hiện không có đơn lỗi nào.');
+        }
+        return;
+    }
+
+    const rowsHtml = nxFailedOrdersList.map((item, idx) => `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+            <td style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 12px;">${idx + 1}</td>
+            <td style="padding: 10px; font-weight: 600; color: #f8fafc; font-size: 12.5px; word-break: break-all;">
+                📄 ${escapeHtml(item.fileName || '-')}
+            </td>
+            <td style="padding: 10px; color: #60a5fa; font-weight: 500; font-size: 12px;">
+                ${escapeHtml(item.maHoaDon || '-')}
+            </td>
+            <td style="padding: 10px; color: #fca5a5; font-size: 12px; line-height: 1.4;">
+                ${escapeHtml(item.reason || 'Lỗi không xác định')}
+            </td>
+            <td style="padding: 10px; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; text-align: center;">
+                ${escapeHtml(item.time || '-')}
+            </td>
+        </tr>
+    `).join('');
+
+    const modalHtml = `
+        <div id="modal-nx-failed-orders" class="modal-backdrop" style="display: flex; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center;">
+            <div class="modal-box" style="background: #0f172a; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 12px; width: 95%; max-width: 820px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.6); animation: modalFadeIn 0.2s ease;">
+                <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">⚠️</span>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #f87171;">Danh Sách Đơn Lỗi / Không Thể Nạp (${nxFailedOrdersList.length})</h3>
+                    </div>
+                    <button type="button" onclick="closeNxFailedOrdersModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; line-height: 1;">✕</button>
+                </div>
+                
+                <div style="padding: 16px 20px; overflow-y: auto; flex: 1;">
+                    <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-size: 12.5px; color: #fca5a5; line-height: 1.5;">
+                        📁 <strong>Cơ chế tự động:</strong> Các file lỗi trong thư mục tự động đã được chuyển vào thư mục con <code>_DON_LOI/</code> để tránh quét lặp và giúp bạn dễ dàng kiểm tra lại file gốc trên máy tính.
+                    </div>
+
+                    <div style="border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.2);">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08);">
+                                    <th style="padding: 10px; width: 45px; text-align: center; color: var(--text-muted); font-size: 11.5px;">STT</th>
+                                    <th style="padding: 10px; color: var(--text-muted); font-size: 11.5px; width: 220px;">Tên File</th>
+                                    <th style="padding: 10px; color: var(--text-muted); font-size: 11.5px; width: 140px;">Mã HĐ</th>
+                                    <th style="padding: 10px; color: var(--text-muted); font-size: 11.5px;">Lý Do Không Nạp Được</th>
+                                    <th style="padding: 10px; color: var(--text-muted); font-size: 11.5px; width: 85px; text-align: center;">Thời Gian</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2);">
+                    <button type="button" class="btn-nx-icon danger" onclick="clearNxFailedOrdersList()" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                        🗑️ Xóa Danh Sách Lỗi
+                    </button>
+                    <button type="button" onclick="closeNxFailedOrdersModal()" style="padding: 6px 16px; font-size: 12px; font-weight: 600; border-radius: 6px; background: #334155; color: #fff; border: none; cursor: pointer;">
+                        Đóng
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeNxFailedOrdersModal() {
+    const m = document.getElementById('modal-nx-failed-orders');
+    if (m) m.remove();
+}
+
+function clearNxFailedOrdersList() {
+    nxFailedOrdersList = [];
+    saveNxFailedOrders();
+    closeNxFailedOrdersModal();
+    if (nxWatchedDirHandle) {
+        renderNxFolderWatcherUI(nxIsWatchingPaused ? 'paused' : 'active');
+    }
+    if (typeof showToast === 'function') {
+        showToast('info', 'Đã Xóa', 'Đã xóa toàn bộ danh sách đơn lỗi.');
+    }
+}
+
 async function initNxFolderWatcher() {
     const bar = document.getElementById('nx-folder-watcher-bar');
     if (!bar) return;
@@ -4236,21 +4635,37 @@ async function initNxFolderWatcher() {
     }
 }
 
+function getNxSuccessOrdersCount() {
+    let count = 0;
+    if (typeof nhapXuatData !== 'undefined' && Array.isArray(nhapXuatData)) {
+        count = nhapXuatData.filter(o => o.nguon_don === 'auto_folder' || o.nguon_don === 'pdf_import' || (o.file_url && o.loai_don === 'Xuất')).length;
+    }
+    return Math.max(nxWatchedAutoCount || 0, count);
+}
+
 function renderNxFolderWatcherUI(state) {
     const bar = document.getElementById('nx-folder-watcher-bar');
     if (!bar) return;
+
+    const failedBadgeHtml = nxFailedOrdersList.length > 0 
+        ? `<button type="button" class="btn-nx-icon nx-failed-badge" onclick="showNxFailedOrdersModal()" title="Có ${nxFailedOrdersList.length} đơn lỗi không thể nạp (Nhấn xem chi tiết)">⚠️ ${nxFailedOrdersList.length}</button>` 
+        : '';
+
+    const successCount = getNxSuccessOrdersCount();
 
     if (state === 'none' || !nxWatchedDirHandle) {
         bar.innerHTML = `
             <button type="button" class="btn-nx-watch-folder" onclick="setupNxWatchFolder()" title="Gán thư mục (ví dụ Downloads) để tự động nạp đơn khi có file PDF mới">
                 📁 Gán Thư Mục
             </button>
+            ${failedBadgeHtml}
         `;
     } else if (state === 'prompt') {
         bar.innerHTML = `
             <button type="button" class="btn-nx-watch-folder warning" onclick="resumeNxWatchFolder()" title="Nhấn để kích hoạt lại quyền đọc thư mục: ${escapeHtml(nxWatchedFolderName)}">
                 ⚡ Tiếp tục (${escapeHtml(nxWatchedFolderName)})
             </button>
+            ${failedBadgeHtml}
         `;
     } else if (state === 'paused') {
         bar.innerHTML = `
@@ -4260,21 +4675,23 @@ function renderNxFolderWatcherUI(state) {
                 <button type="button" class="btn-nx-icon" onclick="toggleNxWatchFolder()" title="Tiếp tục quét">▶</button>
                 <button type="button" class="btn-nx-icon danger" onclick="removeNxWatchFolder()" title="Hủy gán thư mục">✕</button>
             </div>
+            ${failedBadgeHtml}
         `;
     } else {
-
         bar.innerHTML = `
-            <div class="nx-folder-watcher-badge active" title="Đang tự động theo dõi thư mục: ${escapeHtml(nxWatchedFolderName)} (Đã nạp tự động: ${nxWatchedAutoCount} đơn)">
+            <div class="nx-folder-watcher-badge active" title="Đang tự động theo dõi thư mục: ${escapeHtml(nxWatchedFolderName)} (Đã nạp tự động thành công: ${successCount} đơn)">
                 <span class="nx-watcher-indicator active"></span>
                 <span class="nx-folder-name-tag">📁 ${escapeHtml(nxWatchedFolderName)}</span>
-                <span class="nx-folder-count-pill" title="Số đơn đã nạp tự động">${nxWatchedAutoCount}</span>
+                <span class="nx-folder-count-pill" title="Số đơn đã nạp thành công">✓ ${successCount}</span>
                 <button type="button" class="btn-nx-icon" onclick="forceSyncNxWatchFolder()" title="Đồng bộ lại (tìm và nạp các file PDF chưa có trên hệ thống hoặc đã bị xóa vĩnh viễn)">🔄</button>
                 <button type="button" class="btn-nx-icon" onclick="setupNxWatchFolder()" title="Đổi thư mục khác">✏️</button>
                 <button type="button" class="btn-nx-icon danger" onclick="removeNxWatchFolder()" title="Hủy gán thư mục">✕</button>
             </div>
+            ${failedBadgeHtml}
         `;
     }
 }
+
 
 function startNxWatchInterval() {
     if (nxWatchIntervalId) clearInterval(nxWatchIntervalId);
@@ -4299,7 +4716,7 @@ async function setupNxWatchFolder() {
     try {
         const handle = await window.showDirectoryPicker({
             id: 'gaia_invoice_folder',
-            mode: 'read'
+            mode: 'readwrite'
         });
 
         if (!handle) return;
@@ -4352,7 +4769,13 @@ async function setupNxWatchFolder() {
 async function resumeNxWatchFolder() {
     if (!nxWatchedDirHandle) return;
     try {
-        const perm = await nxWatchedDirHandle.requestPermission({ mode: 'read' });
+        let perm = 'denied';
+        try {
+            perm = await nxWatchedDirHandle.requestPermission({ mode: 'readwrite' });
+        } catch (pe) {
+            perm = await nxWatchedDirHandle.requestPermission({ mode: 'read' });
+        }
+
         if (perm === 'granted') {
             nxIsWatchingPaused = false;
             renderNxFolderWatcherUI('active');
@@ -4363,7 +4786,7 @@ async function resumeNxWatchFolder() {
             }
         } else {
             if (typeof showToast === 'function') {
-                showToast('warning', 'Chưa Cấp Quyền', 'Bạn chưa cấp quyền đọc thư mục.');
+                showToast('warning', 'Chưa Cấp Quyền', 'Bạn chưa cấp quyền truy cập thư mục.');
             }
         }
     } catch (e) {
@@ -4470,8 +4893,25 @@ async function scanNxWatchedFolder() {
             if (res.successCount > 0) {
                 nxWatchedAutoCount += res.successCount;
                 localStorage.setItem('gaia_watched_count_' + accountKey, String(nxWatchedAutoCount));
-                renderNxFolderWatcherUI('active');
             }
+
+            if (res.failedFiles && res.failedFiles.length > 0) {
+                for (const failedItem of res.failedFiles) {
+                    const exists = nxFailedOrdersList.some(x => x.fileName === failedItem.fileName);
+                    if (!exists) {
+                        nxFailedOrdersList.unshift(failedItem);
+                    }
+                    // Attempt to move the file into _DON_LOI folder
+                    await moveFileToErrorFolder(failedItem.fileName, nxWatchedDirHandle);
+                }
+                saveNxFailedOrders();
+
+                if (typeof showToast === 'function') {
+                    showToast('warning', 'Phát Hiện Đơn Lỗi', `Có ${res.failedFiles.length} file không thể nạp (Đã chuyển vào thư mục _DON_LOI). Nhấn vào huy hiệu lỗi để xem chi tiết.`);
+                }
+            }
+
+            renderNxFolderWatcherUI('active');
         }
     } catch (scanErr) {
         console.warn("GAIA Folder Watcher scan error:", scanErr);

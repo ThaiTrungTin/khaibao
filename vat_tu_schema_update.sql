@@ -46,10 +46,10 @@ SELECT
     sp.cach_dung,
     sp.gia_von_ton_kho_trung_binh,
     COALESCE(tk.chi_nhanh, 'Tất cả chi nhánh') AS chi_nhanh,
-    COALESCE(SUM(GREATEST(0, (tk.ton_kho - tk.tong_nhap + tk.tong_xuat))), 0)::BIGINT AS ton_dau,
-    COALESCE(SUM(tk.tong_nhap), 0)::BIGINT AS nhap,
-    COALESCE(SUM(tk.tong_xuat), 0)::BIGINT AS xuat,
-    COALESCE(SUM(tk.ton_kho), 0)::BIGINT AS ton_cuoi
+    COALESCE(SUM(GREATEST(0, (tk.ton_kho - tk.tong_nhap + tk.tong_xuat))), 0)::NUMERIC AS ton_dau,
+    COALESCE(SUM(tk.tong_nhap), 0)::NUMERIC AS nhap,
+    COALESCE(SUM(tk.tong_xuat), 0)::NUMERIC AS xuat,
+    COALESCE(SUM(tk.ton_kho), 0)::NUMERIC AS ton_cuoi
 FROM public.san_pham sp
 LEFT JOIN public.ton_kho_detail tk 
     ON LOWER(TRIM(sp.ma_vach)) = LOWER(TRIM(tk.ma_vach)) 

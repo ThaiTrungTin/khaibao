@@ -535,13 +535,13 @@ function computeProductBranchStats(item) {
     });
 
     if (matchingDetails.length > 0) {
-        const sumNhap = matchingDetails.reduce((acc, r) => acc + (Number(r.tong_nhap) || 0), 0);
-        const sumXuat = matchingDetails.reduce((acc, r) => acc + (Number(r.tong_xuat) || 0), 0);
-        const sumTonCuoi = matchingDetails.reduce((acc, r) => acc + (Number(r.ton_kho) || 0), 0);
-        const sumTonDau = sumTonCuoi - sumNhap + sumXuat;
+        const sumNhap = Math.round(matchingDetails.reduce((acc, r) => acc + (Number(r.tong_nhap) || 0), 0) * 10000) / 10000;
+        const sumXuat = Math.round(matchingDetails.reduce((acc, r) => acc + (Number(r.tong_xuat) || 0), 0) * 10000) / 10000;
+        const sumTonCuoi = Math.round(matchingDetails.reduce((acc, r) => acc + (Number(r.ton_kho) || 0), 0) * 10000) / 10000;
+        const sumTonDau = Math.round(Math.max(0, sumTonCuoi - sumNhap + sumXuat) * 10000) / 10000;
 
         return {
-            ton_dau: Math.max(0, sumTonDau),
+            ton_dau: sumTonDau,
             nhap: sumNhap,
             xuat: sumXuat,
             ton_cuoi: sumTonCuoi,
@@ -562,7 +562,7 @@ function computeProductBranchStats(item) {
     const tonDau = Number(item.ton_dau) || 0;
     const nhap = Number(item.nhap) || 0;
     const xuat = Number(item.xuat) || 0;
-    const tonCuoi = Number(item.ton_cuoi) ?? (tonDau + nhap - xuat);
+    const tonCuoi = Number(item.ton_cuoi) ?? Math.round((tonDau + nhap - xuat) * 10000) / 10000;
     return {
         ton_dau: tonDau,
         nhap: nhap,
@@ -750,7 +750,7 @@ function renderVatTuStats(allData) {
     });
 
     if (totalItemsEl) totalItemsEl.textContent = totalItems.toLocaleString('vi-VN');
-    if (totalQtyEl) totalQtyEl.textContent = totalQty.toLocaleString('vi-VN');
+    if (totalQtyEl) totalQtyEl.textContent = formatQuantity(totalQty);
     if (totalValEl) totalValEl.textContent = formatVND(totalVal);
     if (warningCountEl) warningCountEl.textContent = warningCount.toLocaleString('vi-VN');
 }
@@ -1553,17 +1553,18 @@ function renderVatTuTable(items) {
             } else if (col.key === 'don_vi') {
                 cellContent = `<span class="vattu-unit-pill">${escapeHtml(item.don_vi || '-')}</span>`;
             } else if (col.key === 'ton_dau') {
-                cellContent = stats.ton_dau.toLocaleString('vi-VN');
+                cellContent = formatQuantity(stats.ton_dau);
             } else if (col.key === 'nhap' || col.key === 'so_luong_nhap') {
-                cellContent = stats.nhap.toLocaleString('vi-VN');
+                cellContent = formatQuantity(stats.nhap);
             } else if (col.key === 'xuat') {
-                cellContent = stats.xuat.toLocaleString('vi-VN');
+                cellContent = formatQuantity(stats.xuat);
             } else if (col.key === 'ton_cuoi' || col.key === 'so_luong_ton') {
                 const qtyTon = stats.ton_cuoi;
-                if (qtyTon < 0) cellContent = `<span class="badge-stock badge-stock-empty">Âm kho (${qtyTon})</span>`;
+                const formattedQtyTon = formatQuantity(qtyTon);
+                if (qtyTon < 0) cellContent = `<span class="badge-stock badge-stock-empty">Âm kho (${formattedQtyTon})</span>`;
                 else if (qtyTon === 0) cellContent = `<span class="badge-stock badge-stock-empty">Hết hàng (0)</span>`;
-                else if (qtyTon <= 10) cellContent = `<span class="badge-stock badge-stock-low">${qtyTon} (Sắp hết)</span>`;
-                else cellContent = `<span class="vattu-stock-val">${qtyTon.toLocaleString('vi-VN')}</span>`;
+                else if (qtyTon <= 10) cellContent = `<span class="badge-stock badge-stock-low">${formattedQtyTon} (Sắp hết)</span>`;
+                else cellContent = `<span class="vattu-stock-val">${formattedQtyTon}</span>`;
             } else if (col.key === 'gia_von_ton_kho_trung_binh') {
                 cellContent = `<span style="font-weight: 600;">${formatVND(giaVon)}</span>`;
             } else {
@@ -1665,13 +1666,13 @@ function renderVatTuTable(items) {
                     } else if (col.key === 'ten_hoa_don') {
                         cellContent = `<span class="subrow-empty">-</span>`;
                     } else if (col.key === 'ton_dau') {
-                        cellContent = `<span class="subrow-value">${dTonDau.toLocaleString('vi-VN')}</span>`;
+                        cellContent = `<span class="subrow-value">${formatQuantity(dTonDau)}</span>`;
                     } else if (col.key === 'nhap' || col.key === 'so_luong_nhap') {
-                        cellContent = `<span style="color: #10b981; font-weight: 700;">${(Number(d.tong_nhap)||0).toLocaleString('vi-VN')}</span>`;
+                        cellContent = `<span style="color: #10b981; font-weight: 700;">${formatQuantity(Number(d.tong_nhap)||0)}</span>`;
                     } else if (col.key === 'xuat') {
-                        cellContent = `<span style="color: #ef4444; font-weight: 700;">${(Number(d.tong_xuat)||0).toLocaleString('vi-VN')}</span>`;
+                        cellContent = `<span style="color: #ef4444; font-weight: 700;">${formatQuantity(Number(d.tong_xuat)||0)}</span>`;
                     } else if (col.key === 'ton_cuoi' || col.key === 'so_luong_ton') {
-                        cellContent = `<span style="font-weight: 800; color: #3b82f6;">${(Number(d.ton_kho)||0).toLocaleString('vi-VN')}</span>`;
+                        cellContent = `<span style="font-weight: 800; color: #3b82f6;">${formatQuantity(Number(d.ton_kho)||0)}</span>`;
                     } else {
                         cellContent = `<span class="subrow-empty">-</span>`;
                     }
@@ -1732,17 +1733,27 @@ function renderVatTuTable(items) {
 function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx) {
     const rangeTextEl = document.getElementById('vattu-page-range-text');
     const totalTextEl = document.getElementById('vattu-page-total-text');
+    const totalTonCuoiEl = document.getElementById('vattu-page-total-ton-cuoi');
     const btnsContainer = document.getElementById('vattu-page-btns-container');
 
     if (totalItems === 0) {
         if (rangeTextEl) rangeTextEl.textContent = '0 - 0';
         if (totalTextEl) totalTextEl.textContent = '0';
+        if (totalTonCuoiEl) totalTonCuoiEl.textContent = '0';
         if (btnsContainer) btnsContainer.innerHTML = '';
         return;
     }
 
     if (rangeTextEl) rangeTextEl.textContent = `${startIdx + 1} - ${endIdx}`;
     if (totalTextEl) totalTextEl.textContent = totalItems.toLocaleString('vi-VN');
+
+    if (totalTonCuoiEl) {
+        const totalTonCuoi = (filteredVatTuData || []).reduce((sum, item) => {
+            const stats = computeProductBranchStats(item);
+            return sum + (Number(stats.ton_cuoi) || 0);
+        }, 0);
+        totalTonCuoiEl.textContent = formatQuantity(totalTonCuoi);
+    }
 
     if (!btnsContainer) return;
     btnsContainer.innerHTML = '';
@@ -2775,6 +2786,13 @@ function showVatTuFieldError(id, msg) {
         }
     }
 }
+
+function formatQuantity(amount) {
+    const num = Number(amount);
+    if (isNaN(num)) return '0';
+    return num.toLocaleString('vi-VN', { maximumFractionDigits: 4, minimumFractionDigits: 0 });
+}
+window.formatQuantity = formatQuantity;
 
 function formatVND(amount) {
     const num = Number(amount) || 0;

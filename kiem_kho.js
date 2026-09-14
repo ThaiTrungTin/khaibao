@@ -2322,11 +2322,11 @@ function renderKiemKhoTable() {
                 <td>${escapeHtml(item.lot || '-')}</td>
                 <td>${escapeHtml(formatDate(item.date_expiry))}</td>
                 <td style="text-align: center; font-size: 15px; font-weight: 800; color: #10b981;">
-                    <input type="number" min="0" value="${item.so_luong_thuc_te}" onchange="updateKiemKhoItemQtyDirect('${item.key}', this.value)" style="width: 65px; text-align: center; font-weight: 800; font-size: 14px; background: rgba(0,0,0,0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #10b981; border-radius: 6px; padding: 4px 6px; outline: none;">
+                    <input type="number" min="0" step="any" value="${item.so_luong_thuc_te}" onchange="updateKiemKhoItemQtyDirect('${item.key}', this.value)" style="width: 70px; text-align: center; font-weight: 800; font-size: 14px; background: rgba(0,0,0,0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #10b981; border-radius: 6px; padding: 4px 6px; outline: none;">
                 </td>
                 ${systemQtyTd}
                 <td style="text-align: center; font-weight: 800; color: ${item.chenh_lech > 0 ? '#f59e0b' : (item.chenh_lech < 0 ? '#ef4444' : '#10b981')};">
-                    ${item.chenh_lech > 0 ? `+${item.chenh_lech}` : item.chenh_lech}
+                    ${item.chenh_lech > 0 ? `+${(typeof formatQuantity === 'function' ? formatQuantity(item.chenh_lech) : item.chenh_lech)}` : (typeof formatQuantity === 'function' ? formatQuantity(item.chenh_lech) : item.chenh_lech)}
                 </td>
                 <td style="text-align: center;">${statusBadge}</td>
                 ${scannerTdHtml}
@@ -2413,6 +2413,7 @@ function renderKiemKhoPaginationControls(totalFiltered, totalPages, startIdx, en
         btnsContainer.appendChild(pageBtn);
     }
 
+
     // Next Button
     const btnNext = document.createElement('button');
     btnNext.type = 'button';
@@ -2451,12 +2452,13 @@ function kiemKhoSearchFilter(query) {
 function updateKiemKhoItemQtyDirect(key, rawVal) {
     const item = kiemKhoItemsMap.get(key);
     if (!item) return;
-    const oldQty = item.so_luong_thuc_te;
-    const newQty = Math.max(0, parseInt(rawVal, 10) || 0);
-    const delta = newQty - oldQty;
+    const oldQty = Number(item.so_luong_thuc_te) || 0;
+    const parsed = parseFloat(rawVal);
+    const newQty = (isNaN(parsed) || parsed < 0) ? 0 : Math.round(parsed * 10000) / 10000;
+    const delta = Math.round((newQty - oldQty) * 10000) / 10000;
 
     item.so_luong_thuc_te = newQty;
-    item.chenh_lech = item.so_luong_thuc_te - item.so_luong_he_thong;
+    item.chenh_lech = Math.round((item.so_luong_thuc_te - item.so_luong_he_thong) * 10000) / 10000;
     item.trang_thai = getKiemKhoStatus(item.so_luong_thuc_te, item.so_luong_he_thong);
     item.time_scanned = new Date().toISOString();
     item.is_synced = false;
@@ -3199,11 +3201,11 @@ function renderCanBangKhoTable() {
                 <td><strong style="color: var(--text-primary, #f9fafb); font-family: monospace; font-size: 13px;">${escapeHtml(item.ma_vach)}</strong></td>
                 <td><div class="cell-truncate-wrap" title="${escapeHtml(item.ten_hang_hoa)}"><span class="cell-truncate-text" style="font-weight: 600; font-size: 12.5px;">${escapeHtml(item.ten_hang_hoa || 'Chưa có tên')}</span></div></td>
                 <td style="text-align: center;">
-                    <input type="number" min="0" class="canbang-input-gpet" value="${item.ton_gpet !== undefined ? item.ton_gpet : 0}" onchange="handleCanBangGpetQtyChange('${encodeURIComponent(key)}', this.value)" />
+                    <input type="number" min="0" step="any" class="canbang-input-gpet" value="${item.ton_gpet !== undefined ? item.ton_gpet : 0}" onchange="handleCanBangGpetQtyChange('${encodeURIComponent(key)}', this.value)" />
                 </td>
-                <td style="text-align: center;" class="cell-qty-ton-kho">${item.ton_kho}</td>
-                <td style="text-align: center;" class="cell-qty-thuc-te">${item.thuc_te}</td>
-                <td style="text-align: center;" class="${diffClass}">${item.chenh_lech > 0 ? '+' : ''}${item.chenh_lech}</td>
+                <td style="text-align: center;" class="cell-qty-ton-kho">${typeof formatQuantity === 'function' ? formatQuantity(item.ton_kho) : item.ton_kho}</td>
+                <td style="text-align: center;" class="cell-qty-thuc-te">${typeof formatQuantity === 'function' ? formatQuantity(item.thuc_te) : item.thuc_te}</td>
+                <td style="text-align: center;" class="${diffClass}">${item.chenh_lech > 0 ? '+' : ''}${typeof formatQuantity === 'function' ? formatQuantity(item.chenh_lech) : item.chenh_lech}</td>
                 <td style="text-align: center;">${badgeHtml}</td>
                 <td style="text-align: center;">
                     <button type="button" onclick="deleteCanBangKhoRow('${encodeURIComponent(key)}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 14px; opacity: 0.8;" title="Xóa dòng này">🗑️</button>

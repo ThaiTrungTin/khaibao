@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.nhap_xuat (
     file_url TEXT,
     user_name TEXT NOT NULL,
     chi_tiet_san_pham JSONB DEFAULT '[]'::jsonb,
-    tong_so_luong INT DEFAULT 0,
+    tong_so_luong NUMERIC(15, 4) DEFAULT 0,
     ngay_tao TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

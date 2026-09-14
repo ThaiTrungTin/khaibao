@@ -1463,6 +1463,17 @@
                                 <span>Hiển thị <strong id="vattu-page-range-text">0 - 0</strong> trong tổng số <strong
                                         id="vattu-page-total-text">0</strong> mặt hàng</span>
                             </div>
+                            <div class="vattu-pagination-summary" id="vattu-pagination-summary">
+                                <span class="vattu-summary-icon">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                    </svg>
+                                </span>
+                                <span class="vattu-summary-label">Tổng tồn cuối:</span>
+                                <strong id="vattu-page-total-ton-cuoi" class="vattu-summary-value">0</strong>
+                            </div>
                             <div class="vattu-pagination-controls">
                                 <div class="vattu-page-size-wrap">
                                     <label>Hiển thị:</label>
@@ -4253,19 +4264,19 @@
                 <div class="form-row-4" style="display: none;">
                     <div class="form-group">
                         <label>Tồn Đầu</label>
-                        <input type="number" id="input-vattu-ton-dau" placeholder="0" min="0" value="0">
+                        <input type="number" id="input-vattu-ton-dau" placeholder="0" min="0" step="any" value="0">
                     </div>
                     <div class="form-group">
                         <label>Nhập</label>
-                        <input type="number" id="input-vattu-nhap" placeholder="0" min="0" value="0">
+                        <input type="number" id="input-vattu-nhap" placeholder="0" min="0" step="any" value="0">
                     </div>
                     <div class="form-group">
                         <label>Xuất</label>
-                        <input type="number" id="input-vattu-xuat" placeholder="0" min="0" value="0">
+                        <input type="number" id="input-vattu-xuat" placeholder="0" min="0" step="any" value="0">
                     </div>
                     <div class="form-group">
                         <label>Tồn Cuối</label>
-                        <input type="number" id="input-vattu-ton-cuoi" placeholder="0" min="0" value="0">
+                        <input type="number" id="input-vattu-ton-cuoi" placeholder="0" min="0" step="any" value="0">
                     </div>
                     <div class="form-group">
                         <label>Giá Vốn TB (VNĐ)</label>

@@ -522,7 +522,8 @@ function renderTheKhoTable(items) {
                 cellContent = `<span class="badge-type ${isNhap ? 'badge-nhap' : 'badge-xuat'}">${isNhap ? '📥 Nhập' : '📤 Xuất'}</span>`;
             } else if (col.key === 'so_luong') {
                 const qty = Number(item.so_luong) || 0;
-                cellContent = `<span style="font-weight: 700; color: ${item.loai === 'Nhập' ? '#10b981' : '#f59e0b'};">${qty.toLocaleString('vi-VN')}</span>`;
+                const formattedQty = typeof formatQuantity === 'function' ? formatQuantity(qty) : qty.toLocaleString('vi-VN');
+                cellContent = `<span style="font-weight: 700; color: ${item.loai === 'Nhập' ? '#10b981' : '#f59e0b'};">${formattedQty}</span>`;
             } else if (col.key === 'muc_dich') {
                 cellContent = formatTruncateCell(item.muc_dich, '-');
             } else if (col.key === 'user_name') {
