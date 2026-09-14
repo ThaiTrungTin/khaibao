@@ -4,6 +4,7 @@ CREATE OR REPLACE VIEW public.view_vattu_tong_hop AS
 SELECT 
     sp.id,
     sp.ma_vach,
+    sp.anh,
     sp.ten_mat_hang,
     sp.ten_hoa_don,
     sp.nha_san_xuat,
@@ -26,6 +27,7 @@ LEFT JOIN public.ton_kho_detail tk
 GROUP BY 
     sp.id,
     sp.ma_vach,
+    sp.anh,
     sp.ten_mat_hang,
     sp.ten_hoa_don,
     sp.nha_san_xuat,

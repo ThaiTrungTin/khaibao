@@ -343,9 +343,15 @@ async function populateNxManagerBranches() {
         });
     }
 
-    // Khi tạo đơn mới: Bắt buộc Quản Lý phải chủ động chọn chi nhánh
+    // Khi hệ thống chỉ có 1 chi nhánh, quản lý không cần chọn tay nữa.
+    // Khi đã có nhiều chi nhánh, vẫn giữ hành vi bắt buộc chọn.
+    const branchOptions = Array.from(branchSelect.options).filter(opt => opt.value && opt.value !== '');
     if (isEditingNxOrder && window.currentManagerSelectedBranch && branchSelect.querySelector(`option[value="${window.currentManagerSelectedBranch}"]`)) {
         branchSelect.value = window.currentManagerSelectedBranch;
+    } else if (branchOptions.length === 1) {
+        branchSelect.value = branchOptions[0].value;
+        window.currentManagerSelectedBranch = branchOptions[0].value;
+        localStorage.setItem('gaia_nx_selected_branch', branchOptions[0].value);
     } else {
         branchSelect.value = "";
     }
@@ -366,9 +372,20 @@ function updateNxUserFieldWithBranch() {
     let selectedCN = '';
 
     if (isStrictManager) {
-        if (branchSelect && branchSelect.style.display !== 'none' && branchSelect.value) {
-            selectedCN = branchSelect.value;
-            window.currentManagerSelectedBranch = selectedCN;
+        if (branchSelect && branchSelect.style.display !== 'none') {
+            // Nếu dropdown chỉ có 1 option, tự chọn giá trị đó để tránh rơi mặc định CN1 / "Chưa chọn CN".
+            const branchOptions = Array.from(branchSelect.options || []).filter(opt => opt.value && opt.value !== '');
+            if (!branchSelect.value && branchOptions.length === 1) {
+                branchSelect.value = branchOptions[0].value;
+            }
+
+            if (branchSelect.value) {
+                selectedCN = branchSelect.value;
+                window.currentManagerSelectedBranch = selectedCN;
+                localStorage.setItem('gaia_nx_selected_branch', selectedCN);
+            } else {
+                selectedCN = '';
+            }
         } else {
             selectedCN = '';
         }
@@ -1108,12 +1125,17 @@ window.addEventListener('click', (e) => {
 
 async function logNxOrderAction(maDon, loaiDon, hanhDong, noiDung) {
     if (!maDon) return;
-    const userName = (document.getElementById('nx-input-user')?.value) || 'Thái Trung Tín - CN1';
+
+    const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
+    const rawName = loggedUser ? (loggedUser.full_name || loggedUser.email || 'Nhân viên') : 'Nhân viên';
+    const branchName = loggedUser ? (loggedUser.branch || '') : '';
+    const branchCode = extractCNCodeFromBranchString(branchName) || 'CN1';
+    const userName = `${rawName}${branchCode ? ` - ${branchCode}` : ''}`;
 
     const logPayload = {
         ma_don: maDon,
         loai_don: loaiDon || 'Nhập',
-        hanh_dong: hanhDong, 
+        hanh_dong: hanhDong,
         noi_dung: noiDung,
         user_name: userName,
         created_at: new Date().toISOString()
@@ -1134,7 +1156,11 @@ async function logNxOrderAction(maDon, loaiDon, hanhDong, noiDung) {
 
 async function logOrUpdateItemQtyLog(maDon, loaiDon, tenHangHoa, startQty, newQty) {
     if (!maDon || !tenHangHoa) return;
-    const userName = (document.getElementById('nx-input-user')?.value) || 'Thái Trung Tín - CN1';
+    const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
+    const rawName = loggedUser ? (loggedUser.full_name || loggedUser.email || 'Nhân viên') : 'Nhân viên';
+    const branchName = loggedUser ? (loggedUser.branch || '') : '';
+    const branchCode = extractCNCodeFromBranchString(branchName) || 'CN1';
+    const userName = `${rawName}${branchCode ? ` - ${branchCode}` : ''}`;
     const newText = `Quét trùng mã -> Tự động tăng số lượng [${tenHangHoa}] từ ${startQty} lên ${newQty}`;
 
     const existingLog = currentNxLogs.find(l => 
@@ -1522,11 +1548,6 @@ async function _doCreateNewNhapXuatOrderForm() {
 
     const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
     await populateNxManagerBranches();
-
-    const branchSelect = document.getElementById('nx-manager-branch-select');
-    if (branchSelect && branchSelect.style.display !== 'none') {
-        branchSelect.value = ''; 
-    }
 
     const userNameFormatted = updateNxUserFieldWithBranch();
 
@@ -3717,13 +3738,29 @@ async function processPdfFilesBatch(files, isAuto = false) {
     try {
         let userNameFormatted = updateNxUserFieldWithBranch();
         let branchCode = extractCNCodeFromBranchString(userNameFormatted);
-        if (!branchCode) {
-            const bSelect = document.getElementById('nx-manager-branch-select');
-            if (bSelect && bSelect.value) {
-                branchCode = extractCNCodeFromBranchString(bSelect.value);
-            }
+
+        const bSelect = document.getElementById('nx-manager-branch-select');
+        if (!branchCode && bSelect && bSelect.value) {
+            branchCode = extractCNCodeFromBranchString(bSelect.value);
         }
-        if (!branchCode) branchCode = 'CN1';
+
+        const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
+        const isStrictManager = isStrictManagerRole(loggedUser);
+        const managerBranchOptions = (bSelect && bSelect.options)
+            ? Array.from(bSelect.options).filter(opt => opt && opt.value && opt.value !== '')
+            : [];
+        const managerHasMultipleBranches = Boolean(
+            bSelect &&
+            bSelect.style.display !== 'none' &&
+            managerBranchOptions.length > 1
+        );
+
+        // Policy mới: quản lý với nhiều chi nhánh không được tự gán CN1 trong lúc quét PDF/Thư mục.
+        // Để dropdown ở dạng "-- Chọn Chi Nhánh --" và để người dùng chọn đúng chi nhánh khi lưu.
+        // Chỉ fallback CN1 khi không phải strict manager và không phải trường hợp nhiều chi nhánh.
+        if (!branchCode && !(isStrictManager && managerHasMultipleBranches)) {
+            branchCode = 'CN1';
+        }
 
         let allProducts = (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData) && window.vatTuData.length > 0) ? window.vatTuData : [];
         if (allProducts.length === 0) {
@@ -4176,7 +4213,7 @@ async function processPdfFilesBatch(files, isAuto = false) {
                 const dd = String(now.getDate()).padStart(2, '0');
                 const dateStr = `${yyyy}${mm}${dd}`;
                 const randomSuffix = generateRandom3Chars();
-                const maDon = `XK-${dateStr}-${branchCode}-${randomSuffix}`;
+                const maDon = branchCode ? `XK-${dateStr}-${branchCode}-${randomSuffix}` : `XK-${dateStr}-${randomSuffix}`;
 
                 const payload = {
                     ma_don: maDon,

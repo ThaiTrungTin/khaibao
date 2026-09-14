@@ -597,6 +597,25 @@ function deduplicateVatTuData(rawList) {
     return Array.from(map.values());
 }
 
+function enrichVatTuRowsWithImageData(mainRows, productRows) {
+    if (!Array.isArray(mainRows)) return [];
+    const productMap = new Map();
+    if (Array.isArray(productRows)) {
+        productRows.forEach(item => {
+            if (item && item.id != null) productMap.set(String(item.id), item);
+        });
+    }
+
+    return mainRows.map(item => {
+        if (!item || item.id == null) return item;
+        const productItem = productMap.get(String(item.id));
+        if (productItem && productItem.anh && !item.anh) {
+            return { ...item, anh: productItem.anh };
+        }
+        return item;
+    });
+}
+
 async function fetchVatTuData() {
     showVatTuLoading(true);
     const client = getVatTuSupabaseClient();
@@ -611,18 +630,21 @@ async function fetchVatTuData() {
     }
 
     try {
-
-        const [resView, resDetail] = await Promise.all([
+        const [resView, resDetail, resSp] = await Promise.all([
             client.from('view_vattu_tong_hop').select('*'),
-            client.from('ton_kho_detail').select('*')
+            client.from('ton_kho_detail').select('*'),
+            client.from('san_pham').select('id, anh').order('id', { ascending: false })
         ]);
 
         if (resView.error) {
             console.warn("GAIA VatTu: Could not fetch from view_vattu_tong_hop, falling back to san_pham:", resView.error.message);
-            const resSp = await client.from('san_pham').select('*').order('id', { ascending: false });
-            vatTuData = deduplicateVatTuData(resSp.data || []);
+            vatTuData = deduplicateVatTuData((resSp.data || []).map(row => ({ ...row })));
         } else {
-            vatTuData = deduplicateVatTuData(resView.data || []);
+            let viewRows = resView.data || [];
+            if (!resSp.error && Array.isArray(resSp.data)) {
+                viewRows = enrichVatTuRowsWithImageData(viewRows, resSp.data);
+            }
+            vatTuData = deduplicateVatTuData(viewRows);
         }
 
         if (resDetail.error) {
@@ -683,20 +705,22 @@ async function fetchVatTuDataSilently() {
     const client = getVatTuSupabaseClient();
     if (!client) return;
     try {
-        const [resView, resDetail] = await Promise.all([
+        const [resView, resDetail, resSp] = await Promise.all([
             client.from('view_vattu_tong_hop').select('*'),
-            client.from('ton_kho_detail').select('*')
+            client.from('ton_kho_detail').select('*'),
+            client.from('san_pham').select('*').order('id', { ascending: false })
         ]);
 
+        let viewRows = [];
         if (!resView.error && resView.data) {
-            vatTuData = deduplicateVatTuData(resView.data);
-            window.vatTuData = vatTuData;
-        } else {
-            const resSp = await client.from('san_pham').select('*').order('id', { ascending: false });
-            if (!resSp.error && resSp.data) {
-                vatTuData = deduplicateVatTuData(resSp.data);
-                window.vatTuData = vatTuData;
-            }
+            viewRows = resView.data;
+        }
+
+        const productRows = !resSp.error ? (resSp.data || []) : [];
+        if (viewRows.length > 0) {
+            vatTuData = deduplicateVatTuData(enrichVatTuRowsWithImageData(viewRows, productRows));
+        } else if (productRows.length > 0) {
+            vatTuData = deduplicateVatTuData(productRows);
         }
 
         if (!resDetail.error && resDetail.data) {
@@ -704,6 +728,7 @@ async function fetchVatTuDataSilently() {
             window.tonKhoDetailData = tonKhoDetailData;
         }
 
+        window.vatTuData = vatTuData;
         renderVatTuView(vatTuData);
     } catch (err) {
         console.error("GAIA VatTu: Error in silent realtime fetch:", err);
@@ -1491,11 +1516,15 @@ function renderVatTuTable(items) {
             let cellContent = '';
 
             if (col.key === 'anh') {
-                if (item.anh) {
+                const imageUrl = normalizeVatTuImageUrl(item.anh);
+                const imageName = item.ten_mat_hang || item.ma_vach || 'Ảnh mặt hàng';
+                const imageBarcode = item.ma_vach || '';
+
+                if (imageUrl) {
                     cellContent = `
                         <div class="vattu-img-cell-wrap">
-                            <div class="vattu-img-thumb-wrap" onclick="event.stopPropagation(); openVatTuImageLightbox('${escapeHtml(item.anh)}', '${escapeHtml(item.ten_mat_hang)}', '${escapeHtml(item.ma_vach)}', '${item.id}')" title="Click để xem ảnh lớn">
-                                <img src="${escapeHtml(item.anh)}" alt="" class="vattu-img-thumb" loading="lazy" />
+                            <div class="vattu-img-thumb-wrap" onclick="event.stopPropagation(); openVatTuImageLightbox(${toJsSingleQuotedString(imageUrl)}, ${toJsSingleQuotedString(imageName)}, ${toJsSingleQuotedString(imageBarcode)}, ${toJsSingleQuotedString(String(item.id))})" title="Click để xem ảnh lớn">
+                                <img src="${escapeHtml(imageUrl)}" alt="" class="vattu-img-thumb" loading="lazy" />
                             </div>
                         </div>
                     `;
@@ -1924,7 +1953,7 @@ function initVatTuComboboxes() {
             wrap.appendChild(input);
 
             const arrow = document.createElement('div');
-            arrow.innerHTML = `<svg class="custom-combobox-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"></path></svg>`;
+            arrow.innerHTML = `<svg class="custom-combobox-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 5-5M6 15l6-6 6 6"></path></svg>`;
             wrap.appendChild(arrow.firstChild);
 
             const dropdown = document.createElement('div');
@@ -2626,13 +2655,13 @@ function handleExcelImportFile(e) {
                         danh_muc: danh_muc || 'Thuốc',
                         nhom_hang: nhom_hang || null,
                         phan_loai: phan_loai || null,
-                        phong_ban: phong_ban || null,
+                        phong_ban: phongBan || null,
                         don_vi: don_vi || null,
                         cach_dung: cach_dung || null,
-                        ton_dau,
-                        nhap,
-                        xuat,
-                        ton_cuoi,
+                        ton_dau: ton_dau,
+                        nhap: nhap,
+                        xuat: xuat,
+                        ton_cuoi: ton_cuoi,
                         gia_von_ton_kho_trung_binh
                     }
                 };
@@ -2655,13 +2684,13 @@ function handleExcelImportFile(e) {
                 const maxDisplay = 8;
                 const displayList = invalidRowsInfo.slice(0, maxDisplay).join('<br>');
                 const moreCount = invalidRowsInfo.length - maxDisplay;
-                const moreText = moreCount > 0 ? `<br><i style="color:#9ca3af;">...và còn ${moreCount} dòng khác bị lỗi.</i>` : '';
+                const moreText = moreCount > 0 ? `<br><i style="color:#9ca3b8;">...và còn ${moreCount} dòng khác bị lỗi.</i>` : '';
 
                 showVatTuNoticeModal(
                     'error',
                     'Dữ Liệu Dòng Không Hợp Lệ',
                     `Không thể nạp file Excel do có ${invalidRowsInfo.length} dòng chứa dữ liệu nhưng bị thiếu thông tin bắt buộc:<br><br>` +
-                    `<div style="max-height: 180px; overflow-y: auto; text-align: left; background: rgba(0,0,0,0.25); border: 1px solid rgba(239, 68, 68, 0.3); padding: 10px 14px; border-radius: 8px; font-size: 13px; color: #fca5a5;">` +
+                    `<div style="max-height: 180px; overflow-y: auto; text-align: left; background: rgba(0,0,0,0.25); border: 1px solid rgba(239, 68, 68, 0.3); padding: 10px 14px; border-radius: 8px; font-size: 12px; color: #fca5a5;">` +
                     `${displayList}${moreText}</div><br>` +
                     `<i>Mã Vạch và Tên Mặt Hàng là 2 trường dữ liệu bắt buộc không được để trống.</i>`,
                     '',
@@ -2841,31 +2870,32 @@ function formatDate(dateStr) {
     return str;
 }
 
-function formatQrStringWithStandardDate(qrStr, dateExpiry) {
-    if (!qrStr) return '';
-    let str = String(qrStr).trim();
-
-    str = str.replace(/;-;?$/g, '').replace(/;-$/g, '');
-    if (!str.includes(';')) return str;
-    const parts = str.split(';');
-    if (parts.length >= 3) {
-        if (dateExpiry && dateExpiry !== '-' && dateExpiry !== 'null') {
-            parts[2] = formatDate(dateExpiry);
-        } else if (parts[2]) {
-            parts[2] = formatDate(parts[2]);
-        }
-        return parts.join(';');
-    }
-    return str;
-}
-
 function escapeHtml(str) {
     if (!str) return '';
     return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function normalizeVatTuImageUrl(rawUrl) {
+    if (rawUrl === null || rawUrl === undefined) return '';
+    const cleaned = String(rawUrl).trim();
+    if (!cleaned) return '';
+    if (cleaned.startsWith('data:') || cleaned.startsWith('blob:') || cleaned.startsWith('http://') || cleaned.startsWith('https://') || cleaned.startsWith('/')) {
+        return cleaned;
+    }
+    return cleaned;
+}
+
+function toJsSingleQuotedString(value) {
+    const safeValue = String(value ?? '');
+    return `'${safeValue
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r?\n/g, '\\n')}'`;
 }
 
 function showVatTuNoticeModal(type, title, message, codeSnippet = '', secondaryAction = null) {
@@ -2884,6 +2914,7 @@ function showVatTuNoticeModalWindow(type, title, message, codeSnippet = '', seco
         dialogOverlay = document.createElement('div');
         dialogOverlay.id = 'vattu-notice-dialog-overlay';
         dialogOverlay.className = 'modal-overlay';
+       
         dialogOverlay.style.cssText = 'display: none; z-index: 999999;';
         document.body.appendChild(dialogOverlay);
     }
@@ -3890,7 +3921,7 @@ function normalizeToDDMMYYYY(dateStr) {
             const y = dt.getFullYear();
             return `${d}/${m}/${y}`;
         }
-    } catch(e) {}
+    } catch (e) {}
 
     return str;
 }
@@ -4210,6 +4241,7 @@ function printVatTuQrLabels(labels) {
         </head>
         <body>
             ${pagesHtml}
+
             <script>
                 const labelsData = ${JSON.stringify(labels)};
                 window.onload = function() {
@@ -4238,24 +4270,3 @@ function printVatTuQrLabels(labels) {
     `);
     printWin.document.close();
 }
-
-window.downloadVatTuExcelTemplate = downloadVatTuExcelTemplate;
-window.openColumnConfigModal = openColumnConfigModal;
-window.closeColumnConfigModal = closeColumnConfigModal;
-window.saveColumnConfig = saveColumnConfig;
-window.openVatTuQrPrintModal = openVatTuQrPrintModal;
-window.closeVatTuQrPrintModal = closeVatTuQrPrintModal;
-window.addVatTuQrPrintRow = addVatTuQrPrintRow;
-window.removeVatTuQrPrintRow = removeVatTuQrPrintRow;
-window.clearVatTuQrPrintTable = clearVatTuQrPrintTable;
-window.executeVatTuQrBatchPrint = executeVatTuQrBatchPrint;
-window.handleQrPaperPresetChange = handleQrPaperPresetChange;
-window.resetQrSizeDefaults = resetQrSizeDefaults;
-window.saveQrMarginSettings = saveQrMarginSettings;
-window.loadQrMarginSettings = loadQrMarginSettings;
-window.getQrSettingsUserKey = getQrSettingsUserKey;
-window.formatLotWithLeadingEllipsis = formatLotWithLeadingEllipsis;
-window.addVatTuChildToQrPrint = addVatTuChildToQrPrint;
-window.handleSubrowQrButtonClick = handleSubrowQrButtonClick;
-window.handleVatTuQrQtyChange = handleVatTuQrQtyChange;
-window.updateAllQrCountBadges = updateAllQrCountBadges;
