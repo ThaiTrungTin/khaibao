@@ -3115,13 +3115,13 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
 }
 
 .btn-action-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
     border: none;
     display: inline-flex;
     align-items: center;
@@ -3148,6 +3148,37 @@ html, body {
 .btn-delete-vattu:hover {
     background: #ef4444;
     color: #ffffff;
+}
+
+.vattu-table th:last-child,
+.sticky-action-th {
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 15 !important;
+    width: 78px !important;
+    min-width: 72px !important;
+    max-width: 85px !important;
+    padding: 6px 4px !important;
+    text-align: center !important;
+    font-size: 12px !important;
+    background: #1e293b !important;
+    box-shadow: -4px 0 10px rgba(0, 0, 0, 0.4);
+    border-right: none !important;
+}
+
+.vattu-table td:last-child,
+.sticky-action-td {
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 8 !important;
+    width: 78px !important;
+    min-width: 72px !important;
+    max-width: 85px !important;
+    padding: 4px 2px !important;
+    text-align: center !important;
+    background: #0f172a !important;
+    box-shadow: -4px 0 10px rgba(0, 0, 0, 0.3);
+    border-right: none !important;
 }
 
 .btn-qr-subrow {
@@ -3387,6 +3418,12 @@ input.vattu-qr-input-qty {
     position: sticky !important;
     right: 0 !important;
     z-index: 15 !important;
+    width: 78px !important;
+    min-width: 72px !important;
+    max-width: 85px !important;
+    padding: 6px 4px !important;
+    text-align: center !important;
+    font-size: 12px !important;
     background: #1e293b !important;
     box-shadow: -4px 0 10px rgba(0, 0, 0, 0.4);
     border-right: none !important;
@@ -3397,6 +3434,11 @@ input.vattu-qr-input-qty {
     position: sticky !important;
     right: 0 !important;
     z-index: 8 !important;
+    width: 78px !important;
+    min-width: 72px !important;
+    max-width: 85px !important;
+    padding: 4px 2px !important;
+    text-align: center !important;
     background: #0f172a !important;
     box-shadow: -4px 0 10px rgba(0, 0, 0, 0.3);
     border-right: none !important;
@@ -7563,7 +7605,35 @@ mark.gs-hl {
 .cai-dat-form-group.is-focused input {
     border-color: #10b981 !important;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25) !important;
+}/* Order History Log Table in Modal */
+.nx-log-table {
+    table-layout: fixed !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
 }
 
+.nx-log-table th.col-time,
+.nx-log-table td.col-time {
+    width: 155px !important;
+    min-width: 150px !important;
+    max-width: 160px !important;
+    white-space: nowrap !important;
+}
 
+.nx-log-table th.col-action,
+.nx-log-table td.col-action {
+    width: 110px !important;
+    min-width: 100px !important;
+    max-width: 115px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+}
+
+.nx-log-table th.col-content,
+.nx-log-table td.col-content {
+    width: auto !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    line-height: 1.5 !important;
+}
 

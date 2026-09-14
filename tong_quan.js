@@ -167,7 +167,17 @@ async function initTongQuanBranchDropdown() {
         const sysBranches = window.getSystemBranchesDetailed();
         sysBranches.forEach(b => {
             if (b.code && b.code !== 'ALL') {
-                branchMap.set(b.code, b.name ? `${b.name} (${b.code})` : b.code);
+                const code = b.code.trim();
+                const name = (b.name || '').trim();
+                let displayLabel = name;
+                if (name && name !== code) {
+                    const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+                    const cleanName = name.replace(prefixRegex, '').trim();
+                    displayLabel = `${code} - ${cleanName}`;
+                } else {
+                    displayLabel = code;
+                }
+                branchMap.set(code, displayLabel);
             }
         });
     }
@@ -178,7 +188,9 @@ async function initTongQuanBranchDropdown() {
         if (rawBranch && rawBranch !== "Toàn hệ thống" && rawBranch.toLowerCase() !== "all") {
             const cnCode = extractBranchCode(s.cn || rawBranch);
             if (cnCode && cnCode !== "ALL" && !branchMap.has(cnCode)) {
-                branchMap.set(cnCode, rawBranch);
+                const prefixRegex = new RegExp(`^${cnCode}\\s*-\\s*`, 'i');
+                const cleanName = rawBranch.replace(prefixRegex, '').trim();
+                branchMap.set(cnCode, `${cnCode} - ${cleanName}`);
             }
         }
     });
@@ -186,12 +198,14 @@ async function initTongQuanBranchDropdown() {
     if (userBranchName && userBranchName !== "Toàn hệ thống" && userBranchName.toLowerCase() !== "all") {
         const cnCode = extractBranchCode(userBranchName);
         if (cnCode && cnCode !== "ALL" && !branchMap.has(cnCode)) {
-            branchMap.set(cnCode, userBranchName);
+            const prefixRegex = new RegExp(`^${cnCode}\\s*-\\s*`, 'i');
+            const cleanName = userBranchName.replace(prefixRegex, '').trim();
+            branchMap.set(cnCode, `${cnCode} - ${cleanName}`);
         }
     }
 
     if (branchMap.size === 0) {
-        branchMap.set("CN1", "Chi Nhánh 1 (CN1)");
+        branchMap.set("CN1", "CN1 - Chi Nhánh 1");
     }
 
     const currentSelection = branchSelect.value;
@@ -347,6 +361,14 @@ window.refreshTongQuanData = async function () {
             }
         }
 
+        if (typeof theKhoData === 'undefined' || !theKhoData || theKhoData.length === 0) {
+            const { data: tks } = await client.from('the_kho').select('*').order('created_at', { ascending: false }).limit(2000);
+            if (tks) {
+                if (typeof theKhoData !== 'undefined') theKhoData = tks;
+                window.theKhoData = tks;
+            }
+        }
+
         if (typeof nhapXuatData === 'undefined' || !nhapXuatData || nhapXuatData.length === 0) {
             const { data: nxs } = await client.from('nhap_xuat').select('*').order('created_at', { ascending: false }).limit(60);
             if (nxs) {
@@ -375,6 +397,14 @@ function setupTongQuanRealtime() {
                 if (tongQuanRefreshTimer) clearTimeout(tongQuanRefreshTimer);
                 tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 600);
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'the_kho' }, () => {
+                if (tongQuanRefreshTimer) clearTimeout(tongQuanRefreshTimer);
+                tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 600);
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'ton_kho_detail' }, () => {
+                if (tongQuanRefreshTimer) clearTimeout(tongQuanRefreshTimer);
+                tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 600);
+            })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'nhap_xuat' }, () => {
                 if (tongQuanRefreshTimer) clearTimeout(tongQuanRefreshTimer);
                 tongQuanRefreshTimer = setTimeout(() => refreshTongQuanData(), 600);
@@ -390,6 +420,7 @@ function setupTongQuanRealtime() {
 }
 
 function getProductStockForBranch(item, branch, details) {
+    if (!item || !branch) return 0;
     const rawBarcode = (item.ma_vach || '').trim().toLowerCase();
     const matching = (details || []).filter(d => {
         const dBarcode = (d.ma_vach || '').trim().toLowerCase();
@@ -409,6 +440,11 @@ function getProductStockForBranch(item, branch, details) {
         }
     }
 
+    const lowerBranch = branch.toLowerCase();
+    if (item[`so_luong_${lowerBranch}`] !== undefined && item[`so_luong_${lowerBranch}`] !== null) {
+        return Number(item[`so_luong_${lowerBranch}`]) || 0;
+    }
+
     if (branch === 'CN1') {
         if (item.so_luong_cn1 !== undefined && item.so_luong_cn1 !== null) return Number(item.so_luong_cn1) || 0;
         return Number(item.ton_cuoi ?? item.so_luong ?? 0);
@@ -416,13 +452,14 @@ function getProductStockForBranch(item, branch, details) {
         if (item.so_luong_cn2 !== undefined && item.so_luong_cn2 !== null) return Number(item.so_luong_cn2) || 0;
         return 0;
     }
-    return Number(item.ton_cuoi ?? item.so_luong ?? 0);
+    return 0;
 }
 
 window.renderTongQuanDashboard = function () {
     const rawIntakes = (typeof intakesData !== 'undefined' && Array.isArray(intakesData)) ? intakesData : (window.intakesData || []);
     const rawVatTu = (typeof vatTuData !== 'undefined' && Array.isArray(vatTuData)) ? vatTuData : (window.vatTuData || []);
     const rawDetails = (typeof tonKhoDetailData !== 'undefined' && Array.isArray(tonKhoDetailData)) ? tonKhoDetailData : (window.tonKhoDetailData || []);
+    const rawTheKho = (typeof theKhoData !== 'undefined' && Array.isArray(theKhoData)) ? theKhoData : (window.theKhoData || []);
     const rawNhapXuat = (typeof nhapXuatData !== 'undefined' && Array.isArray(nhapXuatData)) ? nhapXuatData : (window.nhapXuatData || []);
 
     const branch = tongQuanBranchFilter; 
@@ -448,108 +485,125 @@ window.renderTongQuanDashboard = function () {
     const todayCount = todayIntakesList.length;
     const newCount = todayIntakesList.filter(r => !r.trang_thai || r.trang_thai === 'new').length;
     const doneCount = todayIntakesList.filter(r => r.trang_thai === 'done' || r.trang_thai === 'kham_xong' || r.trang_thai === 'tiep_nhan').length;
-    const processingCount = todayIntakesList.filter(r => r.trang_thai === 'processing' || r.trang_thai === 'dang_kham').length;
+    const processingCount = todayIntakesList.filter(r => r.trang_thai === 'processing' || r.trang_thai === 'dang_kham' || r.trang_thai === 'can_lam_sang').length;
 
-    let lowStockItems = [];
-    let outOfStockItems = [];
-    let nearExpiryItems = [];
-    let expiredItems = [];
-
-    const now = new Date();
-    const sixtyDaysAhead = new Date();
-    sixtyDaysAhead.setDate(sixtyDaysAhead.getDate() + 60);
+    const outOfStockItems = [];
+    const lowStockItems = [];
+    const nearExpiryItems = [];
+    const expiredItems = [];
 
     rawVatTu.forEach(item => {
-        const ton = getProductStockForBranch(item, branch, rawDetails);
-        const minStock = Number(item.ton_kho_an_toan ?? 5);
+        const stock = getProductStockForBranch(item, branch, rawDetails);
+        const minStock = Number(item.ton_toi_thieu ?? item.min_stock ?? 5);
 
-        const itemWithComputedTon = { ...item, computedTon: ton };
-
-        if (ton <= 0) {
-            outOfStockItems.push(itemWithComputedTon);
-        } else if (ton <= minStock) {
-            lowStockItems.push(itemWithComputedTon);
+        if (stock <= 0) {
+            outOfStockItems.push({ ...item, computedTon: stock });
+        } else if (stock <= minStock) {
+            lowStockItems.push({ ...item, computedTon: stock });
         }
 
-        const dateStr = item.date || item.date_expiry || item.han_su_dung;
-        if (dateStr && dateStr !== '-' && dateStr !== 'null') {
-            const expDate = parseExpiryDate(dateStr);
-            if (expDate) {
-                if (expDate < now) {
-                    expiredItems.push({ ...itemWithComputedTon, expDate, daysLeft: Math.round((expDate - now) / (1000 * 60 * 60 * 24)) });
-                } else if (expDate <= sixtyDaysAhead) {
-                    nearExpiryItems.push({ ...itemWithComputedTon, expDate, daysLeft: Math.round((expDate - now) / (1000 * 60 * 60 * 24)) });
-                }
+        const expDate = parseExpiryDate(item.date_expiry || item.date || item.han_su_dung);
+        if (expDate && stock > 0) {
+            const diffDays = Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24));
+            if (diffDays < 0) {
+                expiredItems.push({ ...item, daysLeft: diffDays, computedTon: stock });
+            } else if (diffDays <= 60) {
+                nearExpiryItems.push({ ...item, daysLeft: diffDays, computedTon: stock });
             }
         }
     });
 
-    nearExpiryItems.sort((a, b) => a.daysLeft - b.daysLeft);
-    expiredItems.sort((a, b) => a.daysLeft - b.daysLeft);
-
     const recentOrdersCount = nhapXuatList.length;
 
-    const rawTheKho = (typeof theKhoData !== 'undefined' && Array.isArray(theKhoData)) ? theKhoData : (window.theKhoData || []);
-    const exportMap = {};
-    rawTheKho.forEach(tk => {
-        if ((tk.loai || '').toLowerCase() !== 'xuất') return;
-
-        if (branch !== 'all') {
-            const tkBranch = extractBranchCode(tk.user_name || '');
-            if (tkBranch && tkBranch !== branch) return;
-        }
-        const key = tk.ma_vach || tk.ten_hang_hoa || '';
-        if (!key) return;
-        if (!exportMap[key]) {
-            exportMap[key] = {
-                ma_vach: tk.ma_vach || '',
-                ten_mat_hang: tk.ten_hang_hoa || tk.ten_mat_hang || key,
-                don_vi: tk.don_vi || 'cái',
-                tongXuat: 0
-            };
-        }
-        exportMap[key].tongXuat += Number(tk.so_luong) || 0;
+    // Tra cứu tên chuẩn từ bảng vật tư (san_pham)
+    const vatTuNameMap = new Map();
+    (rawVatTu || []).forEach(v => {
+        const k = (v.ma_vach || '').trim().toLowerCase();
+        const name = (v.ten_mat_hang || v.ten_san_pham || v.ten_hang_hoa || '').trim();
+        if (k && name) vatTuNameMap.set(k, name);
     });
 
-    if (Object.keys(exportMap).length === 0) {
+    const exportMap = {};
+
+    // 1. Tính xuất kho từ bảng the_kho
+    if (rawTheKho.length > 0) {
+        rawTheKho.forEach(tk => {
+            const loai = (tk.loai || tk.loai_don || '').toLowerCase().trim();
+            if (loai !== 'xuất') return;
+
+            if (branch !== 'all') {
+                const tkBranch = extractBranchCode(tk.user_name || tk.chi_nhanh || tk.branch || '');
+                if (tkBranch && tkBranch !== branch) return;
+            }
+
+            const rawKey = (tk.ma_vach || tk.ma_qr || '').trim();
+            if (!rawKey) return;
+            const keyLower = rawKey.toLowerCase();
+
+            const nameFromVatTu = vatTuNameMap.get(keyLower);
+            const name = nameFromVatTu || (tk.ten_hang_hoa || tk.ten_mat_hang || '').trim() || rawKey;
+            const qty = Number(tk.so_luong) || 0;
+            if (qty <= 0) return;
+
+            if (!exportMap[rawKey]) {
+                exportMap[rawKey] = {
+                    ma_vach: rawKey,
+                    ten_mat_hang: name,
+                    don_vi: tk.don_vi || 'cái',
+                    tongXuat: 0
+                };
+            } else if (nameFromVatTu && exportMap[rawKey].ten_mat_hang === rawKey) {
+                exportMap[rawKey].ten_mat_hang = nameFromVatTu;
+            }
+            exportMap[rawKey].tongXuat += qty;
+        });
+    }
+
+    // 2. Bổ sung từ đơn xuất kho trong nhap_xuat (nếu có đơn xuất chưa vào thẻ kho)
+    if (rawNhapXuat.length > 0) {
         rawNhapXuat.forEach(ord => {
-            if ((ord.loai_don || '').toLowerCase() !== 'xuất') return;
+            const loai = (ord.loai_don || '').toLowerCase().trim();
+            if (loai !== 'xuất' || ord.trang_thai === 'Đã hủy') return;
+
             if (branch !== 'all') {
                 const ordBranch = extractOrderBranchCode(ord);
                 if (ordBranch && ordBranch !== branch) return;
             }
+
             const items = ord.chi_tiet_san_pham || [];
             items.forEach(it => {
-                const key = it.ma_vach || it.ten_hang_hoa || '';
-                if (!key) return;
-                if (!exportMap[key]) {
-                    exportMap[key] = {
-                        ma_vach: it.ma_vach || '',
-                        ten_mat_hang: it.ten_hang_hoa || key,
+                const rawKey = (it.ma_vach || it.ten_hang_hoa || '').trim();
+                if (!rawKey) return;
+                const keyLower = rawKey.toLowerCase();
+
+                const nameFromVatTu = vatTuNameMap.get(keyLower);
+                const name = nameFromVatTu || (it.ten_hang_hoa || it.ten_mat_hang || '').trim() || rawKey;
+                const qty = Number(it.so_luong) || 0;
+                if (qty <= 0) return;
+
+                if (!exportMap[rawKey]) {
+                    exportMap[rawKey] = {
+                        ma_vach: it.ma_vach || rawKey,
+                        ten_mat_hang: name,
                         don_vi: it.don_vi || 'cái',
                         tongXuat: 0
                     };
                 }
-                exportMap[key].tongXuat += Number(it.so_luong) || 0;
+                // Nếu chưa có trong thẻ kho thì cộng từ đơn xuất
+                if (rawTheKho.length === 0) {
+                    exportMap[rawKey].tongXuat += qty;
+                }
             });
         });
     }
+
     const topExportItems = Object.values(exportMap)
+        .filter(x => x.tongXuat > 0)
         .sort((a, b) => b.tongXuat - a.tongXuat)
         .slice(0, 8);
 
     const loggedUserForRender = getTongQuanLoggedUser();
     const isManagerForRender = isTongQuanManager(loggedUserForRender);
-
-    const cn1IntakesCount = rawIntakes.filter(r => extractIntakeBranchCode(r) === 'CN1' && (r.created_at || '').substring(0, 10) === todayStr).length;
-    const cn2IntakesCount = rawIntakes.filter(r => extractIntakeBranchCode(r) === 'CN2' && (r.created_at || '').substring(0, 10) === todayStr).length;
-
-    let cn1StockSum = 0;
-    let cn2StockSum = 0;
-    rawVatTu.forEach(item => {
-        cn1StockSum += getProductStockForBranch(item, 'CN1', rawDetails);
-        cn2StockSum += getProductStockForBranch(item, 'CN2', rawDetails);
-    });
 
     const branchComparisonWidget = document.getElementById('tq-widget-branch-comparison');
     if (branchComparisonWidget) {
@@ -567,20 +621,30 @@ window.renderTongQuanDashboard = function () {
         expiryTotal: nearExpiryItems.length + expiredItems.length,
         nearExpiryCount: nearExpiryItems.length,
         expiredCount: expiredItems.length,
-        recentOrdersCount
+        recentOrdersCount: nhapXuatList.length
     });
 
     renderRecentIntakesTable(intakes.slice(0, 6));
     renderTopExportList(topExportItems, rawVatTu, rawDetails, branch);
     renderExpiryWatchlist([...expiredItems, ...nearExpiryItems].slice(0, 6));
     renderRecentWarehouseTimeline(nhapXuatList.slice(0, 5));
+
     if (isManagerForRender) {
-        renderBranchComparisonBars({
-            cn1Intakes: cn1IntakesCount,
-            cn2Intakes: cn2IntakesCount,
-            cn1Stock: cn1StockSum,
-            cn2Stock: cn2StockSum
+        const compBranches = getTongQuanComparisonBranches(rawIntakes, rawDetails, rawVatTu);
+        const compData = compBranches.map(b => {
+            const bIntakesCount = rawIntakes.filter(r => extractIntakeBranchCode(r) === b.code && (r.created_at || '').substring(0, 10) === todayStr).length;
+            let bStockSum = 0;
+            rawVatTu.forEach(item => {
+                bStockSum += getProductStockForBranch(item, b.code, rawDetails);
+            });
+            return {
+                code: b.code,
+                name: b.name,
+                intakesCount: bIntakesCount,
+                stockSum: bStockSum
+            };
         });
+        renderDynamicBranchComparison(compData);
     }
 };
 
@@ -983,42 +1047,214 @@ function renderRecentWarehouseTimeline(orders) {
     container.innerHTML = html;
 }
 
+const BRANCH_PALETTES = [
+    { color: '#10b981', gradient: 'linear-gradient(90deg, #10b981, #059669)' },
+    { color: '#6366f1', gradient: 'linear-gradient(90deg, #6366f1, #4f46e5)' },
+    { color: '#f59e0b', gradient: 'linear-gradient(90deg, #f59e0b, #d97706)' },
+    { color: '#ec4899', gradient: 'linear-gradient(90deg, #ec4899, #db2777)' },
+    { color: '#06b6d4', gradient: 'linear-gradient(90deg, #06b6d4, #0891b2)' },
+    { color: '#8b5cf6', gradient: 'linear-gradient(90deg, #8b5cf6, #7c3aed)' },
+    { color: '#14b8a6', gradient: 'linear-gradient(90deg, #14b8a6, #0d9488)' },
+    { color: '#f97316', gradient: 'linear-gradient(90deg, #f97316, #ea580c)' }
+];
+
+function getTongQuanComparisonBranches(rawIntakes, rawDetails, rawVatTu) {
+    const map = new Map();
+
+    // 1. Từ danh sách cấu hình chi nhánh hệ thống
+    if (typeof window.getSystemBranchesDetailed === 'function') {
+        try {
+            const sys = window.getSystemBranchesDetailed();
+            if (Array.isArray(sys) && sys.length > 0) {
+                sys.forEach(b => {
+                    const code = (b.code || '').trim().toUpperCase();
+                    if (code && code !== 'ALL' && !map.has(code)) {
+                        map.set(code, {
+                            code: code,
+                            name: b.name || code,
+                            fullName: b.name ? `${b.name} (${code})` : code
+                        });
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("GAIA TongQuan: Error getting system branches for comparison:", e);
+        }
+    }
+
+    // 2. Từ dữ liệu tồn kho chi tiết
+    if (Array.isArray(rawDetails)) {
+        rawDetails.forEach(d => {
+            const code = extractBranchCode(d.chi_nhanh);
+            if (code && code !== 'ALL' && !map.has(code)) {
+                map.set(code, {
+                    code: code,
+                    name: (d.chi_nhanh || code).trim(),
+                    fullName: `${(d.chi_nhanh || code).trim()} (${code})`
+                });
+            }
+        });
+    }
+
+    // 3. Từ ca khám
+    if (Array.isArray(rawIntakes)) {
+        rawIntakes.forEach(r => {
+            const code = extractIntakeBranchCode(r);
+            if (code && code !== 'ALL' && !map.has(code)) {
+                map.set(code, {
+                    code: code,
+                    name: code,
+                    fullName: code
+                });
+            }
+        });
+    }
+
+    if (map.size === 0) {
+        map.set('CN1', { code: 'CN1', name: 'Chi Nhánh 1', fullName: 'Chi Nhánh 1 (CN1)' });
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+}
+
+function renderDynamicBranchComparison(branchesData) {
+    const container = document.getElementById("tq-branch-comparison-container");
+    const titleEl = document.getElementById("tq-widget-branch-title");
+    const subtitleEl = document.getElementById("tq-widget-branch-subtitle");
+
+    if (!container || !Array.isArray(branchesData) || branchesData.length === 0) return;
+
+    const branchCount = branchesData.length;
+
+    // Cập nhật tiêu đề linh hoạt theo số lượng chi nhánh thực tế
+    if (titleEl) {
+        if (branchCount === 1) {
+            titleEl.textContent = `Tổng Quan: ${branchesData[0].name || branchesData[0].code}`;
+        } else if (branchCount === 2) {
+            titleEl.textContent = `Tương Quan ${branchesData[0].code} vs ${branchesData[1].code}`;
+        } else {
+            titleEl.textContent = `Tương Quan Các Chi Nhánh (${branchCount} Chi Nhánh)`;
+        }
+    }
+
+    if (subtitleEl) {
+        if (branchCount === 1) {
+            subtitleEl.textContent = `Số liệu ca khám hôm nay & tổng tồn kho`;
+        } else {
+            subtitleEl.textContent = `Tỷ lệ ca khám & tồn kho thực tế`;
+        }
+    }
+
+    // Tính tổng để chia %
+    const totalIntakes = branchesData.reduce((sum, b) => sum + (b.intakesCount || 0), 0);
+    const totalStock = branchesData.reduce((sum, b) => sum + (b.stockSum || 0), 0);
+
+    const calculated = branchesData.map((b, idx) => {
+        const palette = BRANCH_PALETTES[idx % BRANCH_PALETTES.length];
+        let intakePct = 0;
+        let stockPct = 0;
+
+        if (totalIntakes > 0) {
+            intakePct = Math.round(((b.intakesCount || 0) / totalIntakes) * 100);
+        } else {
+            intakePct = Math.round(100 / branchCount);
+        }
+
+        if (totalStock > 0) {
+            stockPct = Math.round(((b.stockSum || 0) / totalStock) * 100);
+        } else {
+            stockPct = Math.round(100 / branchCount);
+        }
+
+        return {
+            ...b,
+            palette,
+            intakePct,
+            stockPct
+        };
+    });
+
+    // Điều chỉnh làm tròn sao cho tổng % = 100% nếu có từ 2 chi nhánh trở lên
+    if (branchCount >= 2) {
+        const sumIntakePct = calculated.reduce((s, b) => s + b.intakePct, 0);
+        if (sumIntakePct > 0 && sumIntakePct !== 100) {
+            calculated[calculated.length - 1].intakePct += (100 - sumIntakePct);
+        }
+        const sumStockPct = calculated.reduce((s, b) => s + b.stockPct, 0);
+        if (sumStockPct > 0 && sumStockPct !== 100) {
+            calculated[calculated.length - 1].stockPct += (100 - sumStockPct);
+        }
+    }
+
+    // 1. Render Ca Khám
+    const intakeValuesHtml = calculated.map(b => `
+        <span style="color: ${b.palette.color}; font-weight: 700;">${escapeHtml(b.code)}: ${b.intakesCount || 0} ca ${branchCount > 1 ? `(${b.intakePct}%)` : ''}</span>
+    `).join(' <span style="color: var(--text-muted); opacity: 0.5;">•</span> ');
+
+    const intakeBarsHtml = calculated.map(b => `
+        <div class="tq-bar-segment" style="width: ${b.intakePct}%; background: ${b.palette.gradient};" title="${escapeHtml(b.name)}: ${b.intakesCount || 0} ca (${b.intakePct}%)"></div>
+    `).join('');
+
+    // 2. Render Tồn Kho
+    const stockValuesHtml = calculated.map(b => `
+        <span style="color: ${b.palette.color}; font-weight: 700;">${escapeHtml(b.code)}: ${(b.stockSum || 0).toLocaleString('vi-VN')} đv ${branchCount > 1 ? `(${b.stockPct}%)` : ''}</span>
+    `).join(' <span style="color: var(--text-muted); opacity: 0.5;">•</span> ');
+
+    const stockBarsHtml = calculated.map(b => `
+        <div class="tq-bar-segment" style="width: ${b.stockPct}%; background: ${b.palette.gradient};" title="${escapeHtml(b.name)}: ${(b.stockSum || 0).toLocaleString('vi-VN')} đv (${b.stockPct}%)"></div>
+    `).join('');
+
+    // 3. Legend (nếu có từ 2 chi nhánh trở lên)
+    let legendHtml = '';
+    if (branchCount >= 2) {
+        legendHtml = `
+            <div class="tq-comp-legend-row" style="display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--card-border, rgba(255,255,255,0.08)); font-size: 11.5px; color: var(--text-secondary, #94a3b8);">
+                ${calculated.map(b => `
+                    <div style="display: inline-flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: ${b.palette.color}; box-shadow: 0 0 6px ${b.palette.color}66;"></span>
+                        <strong style="color: var(--text-primary, #f1f5f9);">${escapeHtml(b.code)}</strong>: <span>${escapeHtml(b.name)}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    container.innerHTML = `
+        <div class="tq-comp-item">
+            <div class="tq-comp-label-row">
+                <span>Ca Khám Hôm Nay</span>
+                <div class="tq-comp-values" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                    ${intakeValuesHtml}
+                </div>
+            </div>
+            <div class="tq-comp-bar-container" style="display: flex; overflow: hidden; height: 10px; border-radius: 6px; background: var(--input-bg, #0f172a); border: 1px solid var(--card-border, rgba(255,255,255,0.08)); margin-top: 6px;">
+                ${intakeBarsHtml}
+            </div>
+        </div>
+
+        <div class="tq-comp-item" style="margin-top: 16px;">
+            <div class="tq-comp-label-row">
+                <span>Tổng Số Lượng Tồn Kho</span>
+                <div class="tq-comp-values" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                    ${stockValuesHtml}
+                </div>
+            </div>
+            <div class="tq-comp-bar-container" style="display: flex; overflow: hidden; height: 10px; border-radius: 6px; background: var(--input-bg, #0f172a); border: 1px solid var(--card-border, rgba(255,255,255,0.08)); margin-top: 6px;">
+                ${stockBarsHtml}
+            </div>
+        </div>
+
+        ${legendHtml}
+    `;
+}
+
 function renderBranchComparisonBars(data) {
-    const totalIntakes = (data.cn1Intakes || 0) + (data.cn2Intakes || 0);
-    let cn1IntakePct = 50;
-    let cn2IntakePct = 50;
-    if (totalIntakes > 0) {
-        cn1IntakePct = Math.round(((data.cn1Intakes || 0) / totalIntakes) * 100);
-        cn2IntakePct = 100 - cn1IntakePct;
-    }
-
-    const totalStock = (data.cn1Stock || 0) + (data.cn2Stock || 0);
-    let cn1StockPct = 50;
-    let cn2StockPct = 50;
-    if (totalStock > 0) {
-        cn1StockPct = Math.round(((data.cn1Stock || 0) / totalStock) * 100);
-        cn2StockPct = 100 - cn1StockPct;
-    }
-
-    const elIntakeCn1 = document.getElementById("tq-bar-intake-cn1");
-    const elIntakeCn2 = document.getElementById("tq-bar-intake-cn2");
-    const elIntakeTxtCn1 = document.getElementById("tq-txt-intake-cn1");
-    const elIntakeTxtCn2 = document.getElementById("tq-txt-intake-cn2");
-
-    if (elIntakeCn1) elIntakeCn1.style.width = `${cn1IntakePct}%`;
-    if (elIntakeCn2) elIntakeCn2.style.width = `${cn2IntakePct}%`;
-    if (elIntakeTxtCn1) elIntakeTxtCn1.textContent = `CN1: ${data.cn1Intakes || 0} ca (${cn1IntakePct}%)`;
-    if (elIntakeTxtCn2) elIntakeTxtCn2.textContent = `CN2: ${data.cn2Intakes || 0} ca (${cn2IntakePct}%)`;
-
-    const elStockCn1 = document.getElementById("tq-bar-stock-cn1");
-    const elStockCn2 = document.getElementById("tq-bar-stock-cn2");
-    const elStockTxtCn1 = document.getElementById("tq-txt-stock-cn1");
-    const elStockTxtCn2 = document.getElementById("tq-txt-stock-cn2");
-
-    if (elStockCn1) elStockCn1.style.width = `${cn1StockPct}%`;
-    if (elStockCn2) elStockCn2.style.width = `${cn2StockPct}%`;
-    if (elStockTxtCn1) elStockTxtCn1.textContent = `CN1: ${(data.cn1Stock || 0).toLocaleString('vi-VN')} đv (${cn1StockPct}%)`;
-    if (elStockTxtCn2) elStockTxtCn2.textContent = `CN2: ${(data.cn2Stock || 0).toLocaleString('vi-VN')} đv (${cn2StockPct}%)`;
+    if (!data) return;
+    // Hỗ trợ hàm cũ nếu có nơi nào gọi
+    renderDynamicBranchComparison([
+        { code: 'CN1', name: 'Chi Nhánh 1', intakesCount: data.cn1Intakes || 0, stockSum: data.cn1Stock || 0 },
+        { code: 'CN2', name: 'Chi Nhánh 2', intakesCount: data.cn2Intakes || 0, stockSum: data.cn2Stock || 0 }
+    ]);
 }
 
 window.jumpToView = function (viewName) {

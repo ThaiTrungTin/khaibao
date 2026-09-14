@@ -513,7 +513,16 @@ function initBranchFilterDropdown() {
         Array.from(cnMap.keys()).sort().forEach(cnCode => {
             const opt = document.createElement("option");
             opt.value = cnCode;
-            opt.textContent = `📍 ${cnMap.get(cnCode)} (${cnCode})`;
+            const rawName = (cnMap.get(cnCode) || '').trim();
+            let displayLabel = rawName;
+            if (rawName && rawName !== cnCode) {
+                const prefixRegex = new RegExp(`^${cnCode}\\s*-\\s*`, 'i');
+                const cleanName = rawName.replace(prefixRegex, '').trim();
+                displayLabel = `${cnCode} - ${cleanName}`;
+            } else {
+                displayLabel = cnCode;
+            }
+            opt.textContent = `📍 ${displayLabel}`;
             selectEl.appendChild(opt);
         });
 

@@ -49,11 +49,11 @@
             <form id="login-form" class="login-form-body">
                 <div class="form-group">
                     <label>Địa Chỉ Gmail / Email <span class="required">*</span></label>
-                    <input type="email" id="login-email" placeholder="admin@gaia.vn hoặc email@gmail.com" required>
+                    <input type="email" id="login-email" required>
                 </div>
                 <div class="form-group">
                     <label>Mật Khẩu <span class="required">*</span></label>
-                    <input type="password" id="login-pass" placeholder="Nhập mật khẩu..." required>
+                    <input type="password" id="login-pass" required>
                 </div>
 
                 <div id="login-error-msg" class="login-error-alert" style="display: none;"></div>
@@ -639,50 +639,14 @@
                                             </svg>
                                         </div>
                                         <div>
-                                            <h3 class="tq-widget-title">Tương Quan CN1 vs CN2</h3>
-                                            <p class="tq-widget-subtitle">Tỷ lệ ca khám & tồn kho thực tế</p>
+                                            <h3 class="tq-widget-title" id="tq-widget-branch-title">Tương Quan Các Chi Nhánh</h3>
+                                            <p class="tq-widget-subtitle" id="tq-widget-branch-subtitle">Tỷ lệ ca khám & tồn kho thực tế</p>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="tq-widget-body">
-                                    <div class="tq-branch-comparison-wrap">
-
-                                        <div class="tq-comp-item">
-                                            <div class="tq-comp-label-row">
-                                                <span>Ca Khám Hôm Nay</span>
-                                                <div class="tq-comp-values">
-                                                    <span id="tq-txt-intake-cn1"
-                                                        style="color: #10b981; font-weight: 700;">CN1: 0 ca</span> •
-                                                    <span id="tq-txt-intake-cn2"
-                                                        style="color: #6366f1; font-weight: 700;">CN2: 0 ca</span>
-                                                </div>
-                                            </div>
-                                            <div class="tq-comp-bar-container">
-                                                <div id="tq-bar-intake-cn1" class="tq-bar-segment is-cn1"
-                                                    style="width: 50%;"></div>
-                                                <div id="tq-bar-intake-cn2" class="tq-bar-segment is-cn2"
-                                                    style="width: 50%;"></div>
-                                            </div>
-                                        </div>
-
-                                        <div class="tq-comp-item" style="margin-top: 16px;">
-                                            <div class="tq-comp-label-row">
-                                                <span>Tổng Số Lượng Tồn Kho</span>
-                                                <div class="tq-comp-values">
-                                                    <span id="tq-txt-stock-cn1"
-                                                        style="color: #10b981; font-weight: 700;">CN1: 0 đv</span> •
-                                                    <span id="tq-txt-stock-cn2"
-                                                        style="color: #6366f1; font-weight: 700;">CN2: 0 đv</span>
-                                                </div>
-                                            </div>
-                                            <div class="tq-comp-bar-container">
-                                                <div id="tq-bar-stock-cn1" class="tq-bar-segment is-cn1"
-                                                    style="width: 50%;"></div>
-                                                <div id="tq-bar-stock-cn2" class="tq-bar-segment is-cn2"
-                                                    style="width: 50%;"></div>
-                                            </div>
-                                        </div>
-
+                                    <div class="tq-branch-comparison-wrap" id="tq-branch-comparison-container">
+                                        <!-- Nội dung thống kê chi nhánh được render tự động linh hoạt -->
                                     </div>
                                 </div>
                             </div>
@@ -1484,7 +1448,7 @@
                                             </div>
                                             <div class="col-resizer"></div>
                                         </th>
-                                        <th style="width: 110px; min-width: 90px; text-align: center;"
+                                        <th style="width: 78px; min-width: 72px; text-align: center; padding: 6px 4px;"
                                             class="sticky-action-th">Thao Tác</th>
                                     </tr>
                                 </thead>
@@ -1812,20 +1776,7 @@
                                             </div>
 
                                             <!-- Action Footer -->
-                                            <div class="cai-dat-actions-bar">
-                                                <button type="button" class="btn-cai-dat-reset"
-                                                    onclick="handleResetCaiDatForm()">
-                                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                                        stroke="currentColor" stroke-width="2">
-                                                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8">
-                                                        </path>
-                                                        <path d="M21 3v5h-5"></path>
-                                                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16">
-                                                        </path>
-                                                        <path d="M8 16H3v5"></path>
-                                                    </svg>
-                                                    <span>Khôi phục mặc định</span>
-                                                </button>
+                                            <div class="cai-dat-actions-bar" style="justify-content: flex-end;">
                                                 <button type="submit" class="btn-cai-dat-save">
                                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                                                         stroke="currentColor" stroke-width="2.2">
@@ -4722,11 +4673,16 @@
                 <div class="vattu-table-wrapper"
                     style="border: 1px solid var(--card-border); border-radius: 8px; overflow-x: hidden;">
                     <table class="vattu-table nx-log-table" style="table-layout: fixed; width: 100%;">
+                        <colgroup>
+                            <col style="width: 155px;">
+                            <col style="width: 110px;">
+                            <col style="width: auto;">
+                        </colgroup>
                         <thead>
                             <tr>
-                                <th style="width: 140px; white-space: nowrap;">THỜI GIAN & USER</th>
-                                <th style="width: 90px; white-space: nowrap; text-align: center;">HÀNH ĐỘNG</th>
-                                <th style="width: auto;">NỘI DUNG CHI TIẾT</th>
+                                <th class="col-time" style="width: 155px; white-space: nowrap;">THỜI GIAN & USER</th>
+                                <th class="col-action" style="width: 110px; white-space: nowrap; text-align: center;">HÀNH ĐỘNG</th>
+                                <th class="col-content" style="width: auto;">NỘI DUNG CHI TIẾT</th>
                             </tr>
                         </thead>
                         <tbody id="nx-log-modal-table-body">

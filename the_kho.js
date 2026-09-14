@@ -219,45 +219,69 @@ async function initTheKhoBranchFilterForManager() {
         return;
     }
 
-    let branches = [];
-    if (typeof fetchBranchesFromStaffTable === 'function') {
-        branches = await fetchBranchesFromStaffTable();
-    } else {
-        try {
-            const saved = localStorage.getItem('gaia_staff_list');
-            if (saved) {
-                const list = JSON.parse(saved);
-                (list || []).forEach(s => {
-                    if (s.branch && s.branch !== 'Toàn hệ thống') branches.push(s.branch.trim());
-                });
-            }
-        } catch (e) {}
+    let branchItems = [];
+    if (typeof window.getSystemBranchesDetailed === 'function') {
+        branchItems = window.getSystemBranchesDetailed();
     }
 
-    const uniqueBranches = Array.from(new Set(branches));
-
     filterBranchSelect.innerHTML = `<option value="all">🏢 Tất cả chi nhánh</option>`;
-    uniqueBranches.forEach(bStr => {
-        let code = bStr;
-        if (typeof extractCNCodeFromBranchString === 'function') {
-            code = extractCNCodeFromBranchString(bStr);
-        }
 
-        let labelText = bStr.trim();
-        if (code) {
-            const doublePrefixRegex = new RegExp(`^(${code}\\s*-\\s*)+`, 'i');
-            labelText = labelText.replace(doublePrefixRegex, `${code} - `);
-            if (!labelText.toUpperCase().startsWith(code.toUpperCase())) {
-                labelText = `${code} - ${labelText}`;
+    if (branchItems.length > 0) {
+        branchItems.forEach(item => {
+            const code = item.code;
+            const name = item.name || code;
+            let displayLabel = name;
+            if (name && name !== code) {
+                const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+                const cleanName = name.replace(prefixRegex, '').trim();
+                displayLabel = `${code} - ${cleanName}`;
+            } else {
+                displayLabel = code;
             }
+            const optionEl = document.createElement('option');
+            optionEl.value = code;
+            optionEl.dataset.fullBranch = name;
+            optionEl.textContent = `📍 ${displayLabel}`;
+            optionEl.title = displayLabel;
+            filterBranchSelect.appendChild(optionEl);
+        });
+    } else {
+        let branches = [];
+        if (typeof fetchBranchesFromStaffTable === 'function') {
+            branches = await fetchBranchesFromStaffTable();
+        } else {
+            try {
+                const saved = localStorage.getItem('gaia_staff_list');
+                if (saved) {
+                    const list = JSON.parse(saved);
+                    (list || []).forEach(s => {
+                        if (s.branch && s.branch !== 'Toàn hệ thống') branches.push(s.branch.trim());
+                    });
+                }
+            } catch (e) {}
         }
 
-        const optionEl = document.createElement('option');
-        optionEl.value = code || bStr;
-        optionEl.textContent = `📍 ${labelText}`;
-        optionEl.title = bStr;
-        filterBranchSelect.appendChild(optionEl);
-    });
+        const uniqueBranches = Array.from(new Set(branches));
+        uniqueBranches.forEach(bStr => {
+            let code = bStr;
+            if (typeof extractCNCodeFromBranchString === 'function') {
+                code = extractCNCodeFromBranchString(bStr);
+            }
+
+            let labelText = bStr.trim();
+            if (code) {
+                const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+                const cleanName = labelText.replace(prefixRegex, '').trim();
+                labelText = `${code} - ${cleanName}`;
+            }
+
+            const optionEl = document.createElement('option');
+            optionEl.value = code || bStr;
+            optionEl.textContent = `📍 ${labelText}`;
+            optionEl.title = bStr;
+            filterBranchSelect.appendChild(optionEl);
+        });
+    }
 
     filterBranchSelect.style.display = 'inline-block';
 }

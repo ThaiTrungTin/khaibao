@@ -149,7 +149,6 @@ function updateCaiDatRolePermissions() {
     const branchSelect = document.getElementById('cai-dat-branch-select');
     const bannerSub = document.querySelector('.cai-dat-banner-sub');
     const btnSave = document.querySelector('.btn-cai-dat-save');
-    const btnReset = document.querySelector('.btn-cai-dat-reset');
     const btnAddBranch = document.getElementById('btn-add-cai-dat-branch');
     const btnDelBranch = document.getElementById('btn-delete-cai-dat-branch');
 
@@ -173,7 +172,16 @@ function updateCaiDatRolePermissions() {
                     const item = caiDatBranchConfigs[code];
                     const opt = document.createElement("option");
                     opt.value = code;
-                    opt.textContent = `🏢 ${item.ten_chi_nhanh || code} (${code})`;
+                    const rawName = (item.ten_chi_nhanh || '').trim();
+                    let displayLabel = rawName;
+                    if (rawName && rawName !== code) {
+                        const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+                        const cleanName = rawName.replace(prefixRegex, '').trim();
+                        displayLabel = `${code} - ${cleanName}`;
+                    } else {
+                        displayLabel = code;
+                    }
+                    opt.textContent = `🏢 ${displayLabel}`;
                     branchSelect.appendChild(opt);
                 });
 
@@ -191,7 +199,6 @@ function updateCaiDatRolePermissions() {
             bannerSub.innerHTML = 'Tùy chỉnh Logo, Tên Menu, Header, Địa chỉ và Thông tin liên hệ cho từng chi nhánh <i>(Quyền Quản lý toàn hệ thống)</i>';
         }
         if (btnSave) btnSave.style.display = branchKeys.length > 0 ? "inline-flex" : "none";
-        if (btnReset) btnReset.style.display = branchKeys.length > 0 ? "inline-flex" : "none";
 
     } else if (isAdmin) {
         // Admin: Chỉ xuất hiện và sửa đúng chi nhánh của mình
@@ -206,7 +213,15 @@ function updateCaiDatRolePermissions() {
             const opt = document.createElement("option");
             opt.value = currentCaiDatBranch;
             const currentItem = caiDatBranchConfigs[currentCaiDatBranch] || caiDatBranchConfigs[cleanCode];
-            const displayTitle = currentItem?.ten_chi_nhanh ? `${currentItem.ten_chi_nhanh} (${currentCaiDatBranch})` : (userBranch || currentCaiDatBranch);
+            const rawName = (currentItem?.ten_chi_nhanh || userBranch || '').trim();
+            let displayTitle = rawName;
+            if (rawName && rawName !== currentCaiDatBranch) {
+                const prefixRegex = new RegExp(`^${currentCaiDatBranch}\\s*-\\s*`, 'i');
+                const cleanName = rawName.replace(prefixRegex, '').trim();
+                displayTitle = `${currentCaiDatBranch} - ${cleanName}`;
+            } else {
+                displayTitle = currentCaiDatBranch;
+            }
             opt.textContent = `🏢 ${displayTitle}`;
             branchSelect.appendChild(opt);
             branchSelect.value = currentCaiDatBranch;
@@ -219,7 +234,6 @@ function updateCaiDatRolePermissions() {
             bannerSub.innerHTML = `<span style="color: #f59e0b; font-weight: 700;">🔒 Phân quyền Admin:</span> Bạn chỉ có quyền xem và cấu hình thông tin thương hiệu của <b>${userBranch || 'chi nhánh của bạn'}</b>.`;
         }
         if (btnSave) btnSave.style.display = "inline-flex";
-        if (btnReset) btnReset.style.display = "inline-flex";
 
     } else {
         // Nhân viên thông thường: Không có quyền sửa
@@ -242,7 +256,6 @@ function updateCaiDatRolePermissions() {
             bannerSub.innerHTML = `<span style="color: #94a3b8;">👁️ Chế độ chỉ xem: Nhân viên không có quyền thay đổi thông tin cài đặt thương hiệu.</span>`;
         }
         if (btnSave) btnSave.style.display = "none";
-        if (btnReset) btnReset.style.display = "none";
     }
 }
 
@@ -1054,29 +1067,7 @@ async function handleSaveCaiDatForm(e) {
     }
 }
 
-// Reset form values to default
-function handleResetCaiDatForm() {
-    const { isEmployee } = getLoggedUserInfo();
-    if (isEmployee) return;
 
-    const confirmed = confirm('Bạn có chắc chắn muốn làm trống các thông tin cài đặt cho chi nhánh này?');
-    if (!confirmed) return;
-
-    resetCaiDatLogoToDefault();
-    const tenChiNhanhInput = document.getElementById('cai-dat-ten-chi-nhanh');
-    if (tenChiNhanhInput) tenChiNhanhInput.value = '';
-    document.getElementById('cai-dat-menu-title').value = '';
-    document.getElementById('cai-dat-menu-subtitle').value = '';
-    document.getElementById('cai-dat-header-title').value = '';
-    document.getElementById('cai-dat-dia-chi').value = '';
-    document.getElementById('cai-dat-maps-url').value = '';
-    document.getElementById('cai-dat-sdt-zalo').value = '';
-    document.getElementById('cai-dat-website').value = '';
-
-    if (typeof showToast === 'function') {
-        showToast('info', 'Đã Xóa Trống', 'Đã đặt lại các trường về trống. Nhấn "Lưu Cài Đặt" để áp dụng!');
-    }
-}
 
 // Hệ thống hiệu ứng phát sáng trực quan (Live Glow Highlight) khi đang chỉnh sửa
 function initLiveEditHighlightSystem() {
@@ -1234,7 +1225,6 @@ window.handleCaiDatLogoDrop = handleCaiDatLogoDrop;
 window.handleCaiDatLogoPaste = handleCaiDatLogoPaste;
 window.resetCaiDatLogoToDefault = resetCaiDatLogoToDefault;
 window.handleSaveCaiDatForm = handleSaveCaiDatForm;
-window.handleResetCaiDatForm = handleResetCaiDatForm;
 window.applyBranchBranding = applyBranchBranding;
 window.fetchAllCaiDatSettings = fetchAllCaiDatSettings;
 window.initCaiDatRealtime = initCaiDatRealtime;

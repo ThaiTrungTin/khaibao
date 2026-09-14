@@ -161,8 +161,15 @@ function initVatTuFixedColsConfig() {
 }
 initVatTuFixedColsConfig();
 
+function getEffectiveFixedColsCount(visibleCols) {
+    if (vattuFixedColsCount === 0) return 0;
+    const hasAnhAtStart = visibleCols && visibleCols.length > 0 && visibleCols[0].key === 'anh';
+    return vattuFixedColsCount + (hasAnhAtStart ? 1 : 0);
+}
+
 function getStickyColMeta(visIdx, visibleCols, isHeader = false) {
-    if (visIdx >= vattuFixedColsCount) {
+    const effectiveFixedCount = getEffectiveFixedColsCount(visibleCols);
+    if (visIdx >= effectiveFixedCount) {
         return { style: '', className: '' };
     }
 
@@ -172,7 +179,7 @@ function getStickyColMeta(visIdx, visibleCols, isHeader = false) {
         left += colWidth;
     }
 
-    const isLastSticky = (visIdx === vattuFixedColsCount - 1) || (visIdx === visibleCols.length - 1);
+    const isLastSticky = (visIdx === effectiveFixedCount - 1) || (visIdx === visibleCols.length - 1);
     const className = `is-sticky-col ${isLastSticky ? 'is-sticky-col-last' : ''}`;
     const zIndex = isHeader ? 30 : 15;
     const style = `position: sticky; left: ${left}px; z-index: ${zIndex};`;
@@ -459,10 +466,18 @@ async function initVatTuBranchFilterForManager() {
     branchList.forEach(item => {
         const code = item.code || item.name;
         const name = item.name || item.code;
+        let displayLabel = name;
+        if (name && code && name !== code) {
+            const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+            const cleanName = name.replace(prefixRegex, '').trim();
+            displayLabel = `${code} - ${cleanName}`;
+        } else {
+            displayLabel = code || name;
+        }
         const optionEl = document.createElement('option');
         optionEl.value = code;
-        optionEl.textContent = `📍 ${name} (${code})`;
-        optionEl.title = name;
+        optionEl.textContent = `📍 ${displayLabel}`;
+        optionEl.title = displayLabel;
         filterBranchSelect.appendChild(optionEl);
     });
 
@@ -1425,7 +1440,7 @@ function renderVatTuTableHeader() {
         `;
     });
 
-    trHtml += `<th style="width: 110px; min-width: 90px; text-align: center;" class="sticky-action-th">Thao Tác</th>`;
+    trHtml += `<th style="width: 78px; min-width: 72px; text-align: center; padding: 6px 4px;" class="sticky-action-th">Thao Tác</th>`;
     trHtml += '</tr>';
 
     thead.innerHTML = trHtml;
@@ -1779,6 +1794,7 @@ function renderVatTuPaginationControls(totalItems, totalPages, startIdx, endIdx)
 
 function syncVatTuStickyColumnPositions() {
     const visibleCols = currentVatTuCols.filter(c => c.visible);
+    const effectiveFixedCount = getEffectiveFixedColsCount(visibleCols);
     let leftOffset = 0;
 
     visibleCols.forEach((col, visIdx) => {
@@ -1787,7 +1803,7 @@ function syncVatTuStickyColumnPositions() {
         if (th) {
             th.style.width = `${colWidth}px`;
             th.style.minWidth = `${col.minWidth || '60px'}`;
-            if (visIdx < vattuFixedColsCount) {
+            if (visIdx < effectiveFixedCount) {
                 th.style.left = `${leftOffset}px`;
             }
         }
@@ -1798,13 +1814,13 @@ function syncVatTuStickyColumnPositions() {
             if (td && !td.classList.contains('sticky-action-td')) {
                 td.style.width = `${colWidth}px`;
                 td.style.minWidth = `${col.minWidth || '60px'}`;
-                if (visIdx < vattuFixedColsCount) {
+                if (visIdx < effectiveFixedCount) {
                     td.style.left = `${leftOffset}px`;
                 }
             }
         });
 
-        if (visIdx < vattuFixedColsCount) {
+        if (visIdx < effectiveFixedCount) {
             leftOffset += colWidth;
         }
     });
@@ -3277,12 +3293,13 @@ function renderColConfigList() {
     freezeHeader.style.cssText = 'margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--card-border); display: flex; align-items: center; justify-content: space-between;';
     freezeHeader.innerHTML = `
         <label style="font-size: 13px; font-weight: 600; color: var(--text-color); display: flex; align-items: center; gap: 6px;">
-            📌 Số cột ghim cố định khi cuộn ngang:
+            📌 Số cột ghim cố định (không tính Ảnh):
         </label>
         <select id="vattu-fixed-cols-select" style="padding: 5px 10px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-color); font-weight: 600; font-size: 12px; cursor: pointer;">
             <option value="0" ${vattuFixedColsCount === 0 ? 'selected' : ''}>0 cột (Không ghim)</option>
-            <option value="1" ${vattuFixedColsCount === 1 ? 'selected' : ''}>1 cột cố định</option>
-            <option value="2" ${vattuFixedColsCount === 2 ? 'selected' : ''}>2 cột cố định (Mặc định)</option>
+            <option value="1" ${vattuFixedColsCount === 1 ? 'selected' : ''}>1 cột (Mã Vạch)</option>
+            <option value="2" ${vattuFixedColsCount === 2 ? 'selected' : ''}>2 cột (Mã Vạch + Tên Mặt Hàng - Mặc định)</option>
+            <option value="3" ${vattuFixedColsCount === 3 ? 'selected' : ''}>3 cột (Mã Vạch + Tên MH + Tên HĐ)</option>
         </select>
     `;
     listEl.appendChild(freezeHeader);

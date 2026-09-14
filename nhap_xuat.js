@@ -311,8 +311,16 @@ async function populateNxManagerBranches() {
             const optionEl = document.createElement('option');
             optionEl.value = code;
             optionEl.dataset.fullBranch = name;
-            optionEl.textContent = `📍 ${name} (${code})`;
-            optionEl.title = name;
+            let displayLabel = name;
+            if (name && name !== code) {
+                const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+                const cleanName = name.replace(prefixRegex, '').trim();
+                displayLabel = `${code} - ${cleanName}`;
+            } else {
+                displayLabel = code;
+            }
+            optionEl.textContent = `📍 ${displayLabel}`;
+            optionEl.title = displayLabel;
             branchSelect.appendChild(optionEl);
         });
     } else {
@@ -323,9 +331,11 @@ async function populateNxManagerBranches() {
             optionEl.value = code || bStr;
             optionEl.dataset.fullBranch = bStr;
 
-            let labelText = bStr;
-            if (labelText.length > 28) {
-                labelText = labelText.substring(0, 25) + '...';
+            let labelText = bStr.trim();
+            if (code) {
+                const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+                const cleanName = labelText.replace(prefixRegex, '').trim();
+                labelText = `${code} - ${cleanName}`;
             }
             optionEl.textContent = `📍 ${labelText}`;
             optionEl.title = bStr;
@@ -333,13 +343,11 @@ async function populateNxManagerBranches() {
         });
     }
 
-    const activeBranch = window.currentManagerSelectedBranch || localStorage.getItem('gaia_nx_selected_branch') || "";
-    if (activeBranch && branchSelect.querySelector(`option[value="${activeBranch}"]`)) {
-        branchSelect.value = activeBranch;
-    } else if (branchSelect.options.length > 1) {
-        branchSelect.selectedIndex = 1;
-        window.currentManagerSelectedBranch = branchSelect.value;
-        localStorage.setItem('gaia_nx_selected_branch', branchSelect.value);
+    // Khi tạo đơn mới: Bắt buộc Quản Lý phải chủ động chọn chi nhánh
+    if (isEditingNxOrder && window.currentManagerSelectedBranch && branchSelect.querySelector(`option[value="${window.currentManagerSelectedBranch}"]`)) {
+        branchSelect.value = window.currentManagerSelectedBranch;
+    } else {
+        branchSelect.value = "";
     }
     branchSelect.style.display = 'inline-block';
 }
@@ -361,14 +369,9 @@ function updateNxUserFieldWithBranch() {
         if (branchSelect && branchSelect.style.display !== 'none' && branchSelect.value) {
             selectedCN = branchSelect.value;
             window.currentManagerSelectedBranch = selectedCN;
-            localStorage.setItem('gaia_nx_selected_branch', selectedCN);
-        } else if (window.currentManagerSelectedBranch) {
-            selectedCN = window.currentManagerSelectedBranch;
-            if (branchSelect && branchSelect.querySelector(`option[value="${selectedCN}"]`)) {
-                branchSelect.value = selectedCN;
-            }
+        } else {
+            selectedCN = '';
         }
-
     } else {
 
         let userBranchStr = loggedUser ? (loggedUser.branch || '') : '';
@@ -377,12 +380,14 @@ function updateNxUserFieldWithBranch() {
             userBranchStr = window.getUserBranch(loggedUser.full_name || loggedUser.email) || '';
         }
 
-        selectedCN = extractCNCodeFromBranchString(userBranchStr);
+        selectedCN = extractCNCodeFromBranchString(userBranchStr) || 'CN1';
     }
 
     let formattedUser = rawName;
     if (selectedCN) {
         formattedUser = `${rawName} - ${selectedCN}`;
+    } else {
+        formattedUser = `${rawName} (Chưa chọn CN)`;
     }
 
     userInput.value = formattedUser;
@@ -457,23 +462,51 @@ async function initNhapXuatBranchFilterForManager() {
         return;
     }
 
-    const rawBranches = await fetchBranchesFromStaffTable();
+    let branchItems = [];
+    if (typeof window.getSystemBranchesDetailed === 'function') {
+        branchItems = window.getSystemBranchesDetailed();
+    }
 
     filterBranchSelect.innerHTML = `<option value="all">🏢 Tất cả chi nhánh</option>`;
-    rawBranches.forEach(bStr => {
-        const code = extractCNCodeFromBranchString(bStr);
-        const optionEl = document.createElement('option');
-        optionEl.value = code || bStr;
-        optionEl.dataset.fullBranch = bStr;
 
-        let labelText = bStr;
-        if (labelText.length > 25) {
-            labelText = labelText.substring(0, 22) + '...';
-        }
-        optionEl.textContent = `📍 ${labelText}`;
-        optionEl.title = bStr;
-        filterBranchSelect.appendChild(optionEl);
-    });
+    if (branchItems.length > 0) {
+        branchItems.forEach(item => {
+            const code = item.code;
+            const name = item.name || code;
+            let displayLabel = name;
+            if (name && name !== code) {
+                const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+                const cleanName = name.replace(prefixRegex, '').trim();
+                displayLabel = `${code} - ${cleanName}`;
+            } else {
+                displayLabel = code;
+            }
+            const optionEl = document.createElement('option');
+            optionEl.value = code;
+            optionEl.dataset.fullBranch = name;
+            optionEl.textContent = `📍 ${displayLabel}`;
+            optionEl.title = displayLabel;
+            filterBranchSelect.appendChild(optionEl);
+        });
+    } else {
+        const rawBranches = await fetchBranchesFromStaffTable();
+        rawBranches.forEach(bStr => {
+            const code = extractCNCodeFromBranchString(bStr);
+            const optionEl = document.createElement('option');
+            optionEl.value = code || bStr;
+            optionEl.dataset.fullBranch = bStr;
+
+            let labelText = bStr.trim();
+            if (code) {
+                const prefixRegex = new RegExp(`^${code}\\s*-\\s*`, 'i');
+                const cleanName = labelText.replace(prefixRegex, '').trim();
+                labelText = `${code} - ${cleanName}`;
+            }
+            optionEl.textContent = `📍 ${labelText}`;
+            optionEl.title = bStr;
+            filterBranchSelect.appendChild(optionEl);
+        });
+    }
 
     filterBranchSelect.style.display = 'inline-block';
 }
@@ -702,22 +735,102 @@ window.resetNxFilters = resetNxFilters;
 let originalOrderStateSnapshot = null;
 
 function getAvailableStockInNx(ma_vach, lot, date_expiry, branchCode, excludeMaDon) {
-    if (typeof theKhoData === 'undefined') return 999999; 
-    let currentStock = 0;
-    const dateStr = date_expiry ? parseDateToYyyyMmDd(date_expiry) : null;
-    const lotStr = lot || '-';
-    for (const tk of theKhoData) {
-        if (tk.ma_don === excludeMaDon) continue;
-        if (extractCNCodeFromBranchString(tk.user_name) !== branchCode) continue;
-        if (tk.ma_vach === ma_vach && (tk.lot || '-') === lotStr) {
-            const tkDate = tk.date_expiry ? parseDateToYyyyMmDd(tk.date_expiry) : null;
-            if (tkDate === dateStr) {
-                if (tk.loai === 'Nhập') currentStock += Number(tk.so_luong);
-                else if (tk.loai === 'Xuất') currentStock -= Number(tk.so_luong);
+    if (!ma_vach) return 0;
+
+    const bCode = branchCode ? extractCNCodeFromBranchString(branchCode) : (extractCNCodeFromBranchString(document.getElementById('nx-input-user')?.value || '') || 'CN1');
+    const rawBarcode = String(ma_vach).trim().toLowerCase();
+    const cleanLot = (lot && lot !== 'null' && lot !== 'undefined' && String(lot).trim() !== '') ? String(lot).trim() : '-';
+    const cleanDate = date_expiry ? (formatDateForNx(date_expiry) || null) : null;
+    const cleanDateYmd = date_expiry ? parseDateToYyyyMmDd(date_expiry) : null;
+
+    const allDetails = (typeof window.tonKhoDetailData !== 'undefined' && Array.isArray(window.tonKhoDetailData)) 
+        ? window.tonKhoDetailData 
+        : (typeof tonKhoDetailData !== 'undefined' && Array.isArray(tonKhoDetailData) ? tonKhoDetailData : []);
+
+    const allVatTu = (typeof window.vatTuData !== 'undefined' && Array.isArray(window.vatTuData))
+        ? window.vatTuData
+        : (typeof vatTuData !== 'undefined' && Array.isArray(vatTuData) ? vatTuData : []);
+
+    if (allDetails.length === 0 && allVatTu.length === 0) {
+        return 999999;
+    }
+
+    let currentStock = null;
+
+    // 1. Look up in ton_kho_detail for exact or branch matches
+    if (allDetails.length > 0) {
+        const branchDetails = allDetails.filter(d => {
+            const dBarcode = (d.ma_vach || '').trim().toLowerCase();
+            const dQr = (d.ma_qr || '').trim().toLowerCase();
+            const isMatch = (dBarcode && dBarcode === rawBarcode) || (dQr && dQr === rawBarcode) || (dQr && dQr.startsWith(rawBarcode + ';'));
+            if (!isMatch) return false;
+
+            if (bCode && bCode !== 'all') {
+                const dBranch = extractCNCodeFromBranchString(d.chi_nhanh);
+                return dBranch === bCode;
+            }
+            return true;
+        });
+
+        if (branchDetails.length > 0) {
+            // Check if specific LOT / Date matches
+            if (cleanLot !== '-' || cleanDate) {
+                const lotMatches = branchDetails.filter(d => {
+                    const dLot = (d.lot || '-').trim();
+                    const dDateStr = d.date_expiry ? formatDateForNx(d.date_expiry) : (d.date ? formatDateForNx(d.date) : null);
+                    const dDateYmd = d.date_expiry ? parseDateToYyyyMmDd(d.date_expiry) : (d.date ? parseDateToYyyyMmDd(d.date) : null);
+
+                    const lotOk = (cleanLot === '-' || dLot === cleanLot);
+                    const dateOk = (!cleanDate || dDateStr === cleanDate || (cleanDateYmd && dDateYmd === cleanDateYmd));
+                    return lotOk && dateOk;
+                });
+
+                if (lotMatches.length > 0) {
+                    currentStock = lotMatches.reduce((sum, r) => sum + (Number(r.ton_kho ?? r.ton_cuoi ?? 0)), 0);
+                }
+            }
+
+            if (currentStock === null) {
+                if (cleanLot === '-') {
+                    const defaultLotMatch = branchDetails.filter(d => (d.lot || '-').trim() === '-');
+                    if (defaultLotMatch.length > 0) {
+                        currentStock = defaultLotMatch.reduce((sum, r) => sum + (Number(r.ton_kho ?? r.ton_cuoi ?? 0)), 0);
+                    } else {
+                        currentStock = branchDetails.reduce((sum, r) => sum + (Number(r.ton_kho ?? r.ton_cuoi ?? 0)), 0);
+                    }
+                } else {
+                    currentStock = 0;
+                }
             }
         }
     }
-    return currentStock;
+
+    // 2. Fallback to vatTuData (san_pham)
+    if (currentStock === null) {
+        const matchedProduct = allVatTu.find(p => {
+            const pBarcode = (p.ma_vach || '').trim().toLowerCase();
+            return pBarcode === rawBarcode || String(p.id) === String(ma_vach);
+        });
+
+        if (matchedProduct) {
+            const lowerBranch = (bCode || 'cn1').toLowerCase();
+            if (matchedProduct[`so_luong_${lowerBranch}`] !== undefined && matchedProduct[`so_luong_${lowerBranch}`] !== null) {
+                currentStock = Number(matchedProduct[`so_luong_${lowerBranch}`]) || 0;
+            } else if (bCode === 'CN1') {
+                currentStock = Number(matchedProduct.so_luong_cn1 ?? matchedProduct.ton_cuoi ?? matchedProduct.so_luong ?? 0);
+            } else if (bCode === 'CN2') {
+                currentStock = Number(matchedProduct.so_luong_cn2 ?? 0);
+            } else if (bCode === 'all') {
+                currentStock = Number(matchedProduct.ton_cuoi ?? matchedProduct.so_luong ?? 0);
+            } else {
+                currentStock = Number(matchedProduct.ton_cuoi ?? matchedProduct.so_luong ?? 0);
+            }
+        } else {
+            currentStock = 0;
+        }
+    }
+
+    return Number(currentStock) || 0;
 }
 
 function validateNxDraftStock() {
@@ -773,6 +886,30 @@ function updateNxSaveButtonState(hasChanges = true) {
     }
 }
 
+function getNxOrderCurrentStateSnapshot() {
+    const loai_don = document.getElementById('nx-input-loai')?.value || '';
+    const muc_dich = (document.getElementById('nx-input-mucdich')?.value || '').trim();
+
+    const items = (currentDraftNxItems || []).map(it => ({
+        ma_vach: String(it.ma_vach || '').trim(),
+        lot: (it.lot && it.lot !== 'null' && it.lot !== 'undefined') ? String(it.lot).trim() : '-',
+        date_expiry: it.date_expiry ? (formatDateForNx(it.date_expiry) || String(it.date_expiry).trim()) : '',
+        so_luong: Number(it.so_luong) || 0
+    }));
+
+    const attachments = (currentNxAttachments || []).map(att => ({
+        name: String(att.name || '').trim(),
+        url: String(att.url || '').trim()
+    }));
+
+    return JSON.stringify({
+        loai_don,
+        muc_dich,
+        items,
+        attachments
+    });
+}
+
 function checkNxOrderModified() {
     if (selectedNxOrderId === null) {
         updateNxSaveButtonState(true);
@@ -784,12 +921,7 @@ function checkNxOrderModified() {
         return;
     }
 
-    const currentState = JSON.stringify({
-        loai_don: document.getElementById('nx-input-loai')?.value || '',
-        muc_dich: document.getElementById('nx-input-mucdich')?.value || '',
-        items: currentDraftNxItems
-    });
-
+    const currentState = getNxOrderCurrentStateSnapshot();
     const isModified = currentState !== originalOrderStateSnapshot;
     updateNxSaveButtonState(isModified);
 }
@@ -1098,12 +1230,12 @@ function renderNxOrderLogs(logs) {
             }
 
             tr.innerHTML = `
-                <td style="font-size: 11px; color: var(--text-muted); vertical-align: top; padding: 10px 8px; line-height: 1.35; white-space: normal; word-break: break-word;">
+                <td class="col-time" style="font-size: 11px; color: var(--text-muted); vertical-align: top; padding: 10px 8px; line-height: 1.35; width: 155px; max-width: 160px;">
                     <div>${formatNxDateTime(log.created_at)}</div>
                     <div style="color: #60a5fa; font-weight: 500; font-size: 11px; margin-top: 3px;">👤 ${escapeHtml(log.user_name || '-')}</div>
                 </td>
-                <td style="vertical-align: top; padding-top: 10px; text-align: center;">${actionBadge}</td>
-                <td style="font-size: 11.5px; color: var(--text-primary); font-weight: 500; white-space: normal !important; word-break: break-word !important; line-height: 1.5; padding: 10px 8px;">
+                <td class="col-action" style="vertical-align: top; padding-top: 10px; text-align: center; width: 110px; max-width: 115px;">${actionBadge}</td>
+                <td class="col-content" style="font-size: 12px; color: var(--text-primary); font-weight: 500; white-space: normal !important; word-break: break-word !important; line-height: 1.5; padding: 10px 14px;">
                     ${escapeHtml(log.noi_dung)}
                 </td>
             `;
@@ -1115,21 +1247,13 @@ function renderNxOrderLogs(logs) {
 
 function hasUnsavedNxChanges() {
     if (selectedNxOrderId === null) {
-
-        const loai = document.getElementById('nx-input-loai')?.value || '';
-        const mucDich = document.getElementById('nx-input-mucdich')?.value?.trim() || '';
         const hasItems = currentDraftNxItems && currentDraftNxItems.length > 0;
+        const mucDich = document.getElementById('nx-input-mucdich')?.value?.trim() || '';
         const hasAttachments = currentNxAttachments && currentNxAttachments.length > 0;
-        return !!(loai || mucDich || hasItems || hasAttachments);
+        return !!(hasItems || mucDich || hasAttachments);
     } else {
-
         if (!originalOrderStateSnapshot) return false;
-        const currentState = JSON.stringify({
-            loai_don: document.getElementById('nx-input-loai')?.value || '',
-            muc_dich: document.getElementById('nx-input-mucdich')?.value || '',
-            items: currentDraftNxItems,
-            attachments: currentNxAttachments
-        });
+        const currentState = getNxOrderCurrentStateSnapshot();
         return currentState !== originalOrderStateSnapshot;
     }
 }
@@ -1309,12 +1433,7 @@ async function _doSelectNxOrderForView(order) {
     }
     renderNxAttachmentsUI();
 
-    originalOrderStateSnapshot = JSON.stringify({
-        loai_don: order.loai_don || '',
-        muc_dich: order.muc_dich || '',
-        items: currentDraftNxItems,
-        attachments: currentNxAttachments
-    });
+    originalOrderStateSnapshot = getNxOrderCurrentStateSnapshot();
 
     currentDraftOrder = JSON.parse(JSON.stringify(order));
 
@@ -1324,8 +1443,8 @@ async function _doSelectNxOrderForView(order) {
     updateNxSaveButtonState(false); 
 }
 
-function createNewNhapXuatOrderForm(restoreSavedDraft = false, onApproved = null) {
-    if (hasUnsavedNxChanges()) {
+function createNewNhapXuatOrderForm(restoreSavedDraft = false, onApproved = null, force = false) {
+    if (!force && hasUnsavedNxChanges()) {
         const currentMaDon = document.getElementById('nx-input-madon')?.value || 'ĐƠN-NHÁP';
         showGenericConfirmModal(
             '⚠️ CẢNH BÁO',
@@ -2791,7 +2910,7 @@ function removeNxDraftItem(idx) {
 
 function resetNxOrderForm() {
     clearNxDraftStorage();
-    createNewNhapXuatOrderForm();
+    _doCreateNewNhapXuatOrderForm();
 }
 
 function showGenericConfirmModal(badgeText, title, textHtml, subtextHtml, badgeColor, okBtnText, onConfirmCallback) {
@@ -2873,17 +2992,19 @@ async function saveNxOrderToSystem() {
 
     const managerBranchSelect = document.getElementById('nx-manager-branch-select');
     const loggedUser = (typeof window.getCurrentLoggedUser === 'function') ? window.getCurrentLoggedUser() : null;
-    const isManager = (typeof window.isManagerRole === 'function') ? window.isManagerRole(loggedUser) : false;
+    const isManager = isStrictManagerRole(loggedUser) || (typeof window.isManagerRole === 'function' ? window.isManagerRole(loggedUser) : false);
 
     if (selectedNxOrderId === null && isManager && managerBranchSelect && managerBranchSelect.style.display !== 'none' && !managerBranchSelect.value) {
         if (typeof showVatTuNoticeModal === 'function') {
-            showVatTuNoticeModal('warning', 'Chưa Chọn Chi Nhánh', 'Vui lòng chọn Chi Nhánh thực hiện đơn kho trước khi lưu!');
+            showVatTuNoticeModal('warning', 'Bắt Buộc Chọn Chi Nhánh', 'Bạn đang đăng nhập quyền <strong>Quản Lý</strong>.<br>Vui lòng <strong>chọn Chi Nhánh</strong> thực hiện đơn kho trước khi lưu!');
         } else if (typeof showToast === 'function') {
-            showToast('warning', 'Chưa Chọn Chi Nhánh', 'Vui lòng chọn Chi Nhánh thực hiện đơn kho trước khi lưu!');
+            showToast('warning', 'Bắt Buộc Chọn Chi Nhánh', 'Vui lòng chọn Chi Nhánh thực hiện đơn kho trước khi lưu!');
         } else {
             alert('Vui lòng chọn Chi Nhánh thực hiện đơn kho trước khi lưu!');
         }
         managerBranchSelect.focus();
+        managerBranchSelect.style.borderColor = '#ef4444';
+        managerBranchSelect.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.5)';
         return;
     }
 
@@ -2936,46 +3057,18 @@ async function saveNxOrderToSystem() {
 
     if (loaiDon === 'Xuất' && currentDraftNxItems.length > 0) {
         const branchCode = extractCNCodeFromBranchString(userName);
-        const client = getNhapXuatSupabaseClient();
-        if (client) {
-            const maVachList = currentDraftNxItems.map(x => x.ma_vach).filter(Boolean);
-            if (maVachList.length > 0) {
-                const { data: theKhoDataDb, error: tkError } = await client
-                    .from('the_kho')
-                    .select('ma_don, ma_vach, lot, date_expiry, loai, so_luong, user_name')
-                    .in('ma_vach', maVachList);
+        for (const item of currentDraftNxItems) {
+            const scannedQty = Number(item.so_luong) || 0;
+            if (scannedQty <= 0) continue;
 
-                if (!tkError && theKhoDataDb) {
-                    const branchData = theKhoDataDb.filter(x => extractCNCodeFromBranchString(x.user_name) === branchCode && x.ma_don !== maDon);
-
-                    for (const item of currentDraftNxItems) {
-                        const scannedQty = Number(item.so_luong) || 0;
-                        if (scannedQty <= 0) continue;
-
-                        const lot = item.lot || '-';
-                        const date_expiry = item.date_expiry ? parseDateToYyyyMmDd(item.date_expiry) : null;
-
-                        let currentStock = 0;
-                        for (const tk of branchData) {
-                            if (tk.ma_vach === item.ma_vach && (tk.lot || '-') === lot) {
-                                const tkDate = tk.date_expiry ? parseDateToYyyyMmDd(tk.date_expiry) : null;
-                                if (tkDate === date_expiry) {
-                                    if (tk.loai === 'Nhập') currentStock += Number(tk.so_luong);
-                                    else if (tk.loai === 'Xuất') currentStock -= Number(tk.so_luong);
-                                }
-                            }
-                        }
-
-                        if (currentStock < scannedQty) {
-                            if (typeof showVatTuNoticeModal === 'function') {
-                                showVatTuNoticeModal('error', 'Lỗi Xuất Âm', `Mã <strong>${item.ma_vach}</strong> (LOT: ${lot}) chỉ còn tồn <strong>${currentStock}</strong> ở ${branchCode}, không thể xuất <strong>${scannedQty}</strong>!`);
-                            } else {
-                                alert(`Mã ${item.ma_vach} (LOT: ${lot}) chỉ còn tồn ${currentStock} ở ${branchCode}, không thể xuất ${scannedQty}!`);
-                            }
-                            return;
-                        }
-                    }
+            const currentStock = getAvailableStockInNx(item.ma_vach, item.lot, item.date_expiry, branchCode, maDon);
+            if (currentStock < scannedQty) {
+                if (typeof showVatTuNoticeModal === 'function') {
+                    showVatTuNoticeModal('error', 'Lỗi Xuất Âm', `Mã <strong>${item.ma_vach}</strong> (LOT: ${item.lot || '-'}) chỉ còn tồn <strong>${currentStock}</strong> ở ${branchCode}, không thể xuất <strong>${scannedQty}</strong>!`);
+                } else {
+                    alert(`Mã ${item.ma_vach} (LOT: ${item.lot || '-'}) chỉ còn tồn ${currentStock} ở ${branchCode}, không thể xuất ${scannedQty}!`);
                 }
+                return;
             }
         }
     }
@@ -3001,7 +3094,7 @@ async function saveNxOrderToSystem() {
         chi_tiet_san_pham: currentDraftNxItems,
         tong_so_luong: tongSoLuong,
         file_url: finalFileUrl,
-        trang_thai: isAllZeroQty ? 'Chờ' : 'Hoàn thành'
+        trang_thai: isAllZeroQty ? 'Chờ' : 'Done'
     };
 
     const client = getNhapXuatSupabaseClient();
@@ -3090,11 +3183,7 @@ async function saveNxOrderToSystem() {
                         );
                     }
 
-                    originalOrderStateSnapshot = JSON.stringify({
-                        loai_don: loaiDon,
-                        muc_dich: mucDich,
-                        items: currentDraftNxItems
-                    });
+                    originalOrderStateSnapshot = getNxOrderCurrentStateSnapshot();
 
                     renderNxDraftItemsTable();
                     applyNhapXuatFilters();
@@ -3151,7 +3240,7 @@ async function saveNxOrderToSystem() {
 
             clearNxDraftStorage();
             applyNhapXuatFilters();
-            createNewNhapXuatOrderForm();
+            _doCreateNewNhapXuatOrderForm();
         }
     }
 }
@@ -3401,7 +3490,7 @@ async function hardDeleteNxOrder() {
                     showToast('success', 'Đã Xóa', `Đã xóa vĩnh viễn đơn ${maDon}.`);
                 }
 
-                createNewNhapXuatOrderForm();
+                _doCreateNewNhapXuatOrderForm();
 
             } catch (err) {
                 console.error("Lỗi khi xóa vĩnh viễn đơn:", err);
